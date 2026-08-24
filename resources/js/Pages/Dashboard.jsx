@@ -1,0 +1,2 @@
+import React from 'react'; import { Head,usePage } from '@inertiajs/react'; import Layout from '../Layouts/AuthenticatedLayout';
+export default function Dashboard(){const {auth}=usePage().props;return <Layout><Head title="Dashboard"/><div className="card"><h1 className="text-2xl font-bold">Welcome, {auth.user.name}</h1><p className="mt-2 text-slate-600">Phase 1 administration foundation is ready. Academic modules are intentionally deferred.</p></div></Layout>}
