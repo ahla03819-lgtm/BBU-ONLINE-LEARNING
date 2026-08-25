@@ -1,0 +1,2 @@
+import React from 'react'; import { Head,Link } from '@inertiajs/react'; import Guest from '../../Layouts/GuestLayout';
+export default function Page(){return <Guest title="Verify your email before continuing"><Head title="Verify email"/><p className="mb-4 text-sm">Use the link sent to your email address. Administrators can resend onboarding verification when necessary.</p><Link href="/email/verification-notification" method="post" as="button" className="btn w-full">Resend verification email</Link></Guest>}
