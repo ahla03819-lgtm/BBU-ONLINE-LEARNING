@@ -50,4 +50,9 @@ class SchoolClass extends Model
     {
         return $this->hasMany(Channel::class);
     }
+
+    public function meetings(): HasMany
+    {
+        return $this->hasMany(Meeting::class);
+    }
 }
