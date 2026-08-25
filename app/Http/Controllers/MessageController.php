@@ -14,6 +14,7 @@ use App\Models\Channel;
 use App\Models\ChannelReadState;
 use App\Models\Message;
 use App\Models\SchoolClass;
+use App\Services\Attachments\AttachmentInspector;
 use App\Support\MessagePayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,38 +44,41 @@ class MessageController extends Controller
         $latestVisibleId = $channel->messages()->max('id');
         $unreadCount = $latestVisibleId ? $channel->messages()->where('id', '>', $state?->last_read_message_id ?? 0)->count() : 0;
 
-        return response()->json(['messages' => $messages->map(fn (Message $message) => MessagePayload::make($message))->values(), 'has_more' => $hasMore, 'read_state' => ['last_read_message_id' => $state?->last_read_message_id, 'unread_count' => $unreadCount]]);
+        return response()->json(['messages' => $messages->map(fn (Message $message) => MessagePayload::make($message, $request->user()))->values(), 'has_more' => $hasMore, 'read_state' => ['last_read_message_id' => $state?->last_read_message_id, 'unread_count' => $unreadCount]]);
     }
 
-    public function store(StoreMessageRequest $request, SchoolClass $schoolClass, Channel $channel, SendMessage $action): JsonResponse
+    public function store(StoreMessageRequest $request, SchoolClass $schoolClass, Channel $channel, SendMessage $action, AttachmentInspector $inspector): JsonResponse
     {
         $this->ensureChannel($schoolClass, $channel);
         $reply = $request->validated('reply_to_id') ? $channel->messages()->find($request->validated('reply_to_id')) : null;
         abort_if($request->validated('reply_to_id') && ! $reply, 422, 'The reply target must belong to this channel.');
-        $message = $action->handle($channel, $request->user(), $request->validated('client_uuid'), $request->validated('body'), $reply);
+        $files = $request->file('attachments', []);
+        $uuids = $request->validated('attachment_client_uuids', []);
+        $attachments = array_map(fn ($file, $position) => $inspector->inspect($file, $uuids[$position], $position), $files, array_keys($files));
+        $message = $action->handle($channel, $request->user(), $request->validated('client_uuid'), $request->validated('body'), $reply, $attachments);
 
-        return response()->json(['message' => MessagePayload::make($message)], $message->wasRecentlyCreated ? 201 : 200);
+        return response()->json(['message' => MessagePayload::make($message, $request->user())], $message->wasRecentlyCreated ? 201 : 200);
     }
 
     public function update(UpdateMessageRequest $request, SchoolClass $schoolClass, Channel $channel, Message $message, UpdateMessage $action): JsonResponse
     {
         $this->ensureMessage($schoolClass, $channel, $message);
 
-        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->validated('body')))]);
+        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->validated('body')), $request->user())]);
     }
 
     public function hide(HideMessageRequest $request, SchoolClass $schoolClass, Channel $channel, Message $message, HideMessage $action): JsonResponse
     {
         $this->ensureMessage($schoolClass, $channel, $message);
 
-        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->user()))]);
+        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->user()), $request->user())]);
     }
 
     public function moderate(ModerateMessageRequest $request, SchoolClass $schoolClass, Channel $channel, Message $message, ModerateMessage $action): JsonResponse
     {
         $this->ensureMessage($schoolClass, $channel, $message);
 
-        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->user(), $request->validated('reason')))]);
+        return response()->json(['message' => MessagePayload::make($action->handle($message, $request->user(), $request->validated('reason')), $request->user())]);
     }
 
     private function ensureChannel(SchoolClass $class, Channel $channel): void

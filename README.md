@@ -26,6 +26,16 @@ The initial deployment target is one Reverb node and does not require Redis. Pro
 
 Tests: `php artisan test`. Production frontend: `npm run build`.
 
+## Message attachments and reactions
+
+Messages support up to five private attachments, 10 MB per file and 25 MB combined. Supported formats are JPEG, PNG, WebP, PDF, DOCX, XLSX, PPTX, TXT, and CSV. Files are validated on the server, stored under generated private object keys on `MESSAGE_ATTACHMENT_DISK` (the private `local` disk by default), and delivered only through relationship-scoped authorized routes. They are never exposed through `public/storage` or permanent public URLs. Production may select a private S3-compatible disk after installing and configuring the appropriate Laravel filesystem adapter.
+
+Attachment-only messages are supported. Attachment objects are immutable and retained with hidden messages; ordinary hidden-message payloads expose no attachment metadata. Administrators require the explicit `attachments.view-hidden` permission to access retained hidden binaries. Malware scanning is intentionally deferred and must be added as production infrastructure before treating uploads as scanned content.
+
+Old orphaned objects can be inspected with `php artisan attachments:reconcile-orphans --dry-run` and removed with `php artisan attachments:reconcile-orphans`. The command ignores fresh objects; its minimum age defaults to 24 hours and can be configured with `MESSAGE_ATTACHMENT_ORPHAN_HOURS` or the `--hours` option.
+
+Reactions use the fixed catalog `like`, `love`, `laugh`, `surprised`, `sad`, and `celebrate`. HTTP and the database remain authoritative; Reverb delivers versioned aggregate-count updates without reactor identities. Run Reverb and a queue worker as described above for live synchronization.
+
 ## Authentication and account policy
 
 The first-party web client uses Laravel sessions. There is no public registration. Administrators create accounts and the application sends Laravel's email-verification notification. Protected application routes require an active and verified account. Configure a real mail service through environment variables outside Git.

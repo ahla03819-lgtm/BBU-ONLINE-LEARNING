@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::before(function (User $user, string $ability, array $arguments) {
-            $messagePolicy = collect($arguments)->contains(fn ($argument) => $argument === Message::class || $argument instanceof Message);
+            $messagePolicy = collect($arguments)->contains(fn ($argument) => $argument === Message::class || $argument instanceof Message || $argument instanceof MessageAttachment);
 
             return $user->isActive() && $user->hasRole('Super Admin') && ! $messagePolicy ? true : null;
         });
@@ -34,5 +35,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('messages-mutate', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id));
         RateLimiter::for('messages-read', fn (Request $request) => Limit::perMinute(60)->by($request->user()->id));
         RateLimiter::for('broadcast-auth', fn (Request $request) => Limit::perMinute(60)->by(($request->user()?->id ?? 'guest').'|'.$request->ip()));
+        RateLimiter::for('attachments-upload', fn (Request $request) => $request->hasFile('attachments')
+            ? Limit::perMinute(10)->by($request->user()->id.'|'.data_get($request->route('channel'), 'id', $request->route('channel')))
+            : Limit::none());
+        RateLimiter::for('attachments-download', fn (Request $request) => Limit::perMinute(120)->by($request->user()->id));
+        RateLimiter::for('reactions', fn (Request $request) => Limit::perMinute(60)->by($request->user()->id.'|'.data_get($request->route('channel'), 'id', $request->route('channel'))));
     }
 }

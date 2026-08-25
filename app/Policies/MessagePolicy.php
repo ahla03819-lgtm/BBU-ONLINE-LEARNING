@@ -62,4 +62,24 @@ class MessagePolicy
         return $this->access->isCurrentClassTeacher($user, $message->channel->schoolClass)
             && $this->access->canAccessChannel($user, $message->channel);
     }
+
+    public function viewReactions(User $user, Message $message): bool
+    {
+        return $user->can('reactions.view') && $this->view($user, $message);
+    }
+
+    public function setReaction(User $user, Message $message): bool
+    {
+        return $user->can('reactions.create') && ! $message->isHidden() && ! $message->isSystem() && $this->create($user, $message->channel);
+    }
+
+    public function updateOwn(User $user, Message $message): bool
+    {
+        return $user->can('reactions.update-own') && $this->setReaction($user, $message);
+    }
+
+    public function deleteOwn(User $user, Message $message): bool
+    {
+        return $user->can('reactions.delete-own') && $this->setReaction($user, $message);
+    }
 }
