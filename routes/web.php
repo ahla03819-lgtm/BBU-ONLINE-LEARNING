@@ -7,7 +7,9 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -73,4 +75,12 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('collaboration.announcements.publish');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/archive', [AnnouncementController::class, 'archive'])->name('collaboration.announcements.archive');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/restore', [AnnouncementController::class, 'restore'])->name('collaboration.announcements.restore');
+    Route::scopeBindings()->group(function () {
+        Route::get('/collaboration/classes/{schoolClass}/channels/{channel}/messages', [MessageController::class, 'index'])->name('collaboration.messages.index');
+        Route::post('/collaboration/classes/{schoolClass}/channels/{channel}/messages', [MessageController::class, 'store'])->middleware('throttle:messages-create')->name('collaboration.messages.store');
+        Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/messages/{message}', [MessageController::class, 'update'])->middleware('throttle:messages-mutate')->name('collaboration.messages.update');
+        Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/messages/{message}/hide', [MessageController::class, 'hide'])->middleware('throttle:messages-mutate')->name('collaboration.messages.hide');
+        Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/messages/{message}/moderate', [MessageController::class, 'moderate'])->middleware('throttle:messages-mutate')->name('collaboration.messages.moderate');
+        Route::put('/collaboration/classes/{schoolClass}/channels/{channel}/read-state', [ChannelReadStateController::class, 'update'])->middleware('throttle:messages-read')->name('collaboration.read-state.update');
+    });
 });

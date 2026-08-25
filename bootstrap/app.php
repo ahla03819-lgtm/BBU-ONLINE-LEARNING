@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withBroadcasting(__DIR__.'/../routes/channels.php', ['middleware' => ['web', 'auth', 'account.active', 'verified', 'throttle:broadcast-auth']])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [HandleInertiaRequests::class, SecurityHeaders::class]);
         $middleware->alias(['account.active' => EnsureAccountIsActive::class]);

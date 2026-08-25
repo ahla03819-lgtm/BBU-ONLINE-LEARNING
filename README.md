@@ -11,6 +11,19 @@ Laravel 13 modular-monolith foundation using PHP 8.3+, React, Inertia, Tailwind,
 5. Create the initial production administrator interactively with `php artisan edway:create-super-admin`. Never seed or script a production password.
 6. Run `composer run dev`, or run the Laravel and Vite development processes separately.
 
+## Realtime messaging
+
+Phase 4 uses MySQL as the message source of truth and Laravel Reverb only for realtime delivery. Configure the `REVERB_*` and `VITE_REVERB_*` values documented in `.env.example`. Never expose `REVERB_APP_SECRET` through a `VITE_` variable.
+
+For local realtime development, run these supervised processes in addition to the web and Vite processes:
+
+```shell
+php artisan reverb:start
+php artisan queue:work
+```
+
+The initial deployment target is one Reverb node and does not require Redis. Production must use TLS, a restricted `REVERB_ALLOWED_ORIGINS` value, supervised Reverb and queue workers, and deployment-specific credentials. Redis should be introduced before horizontal Reverb scaling. If realtime delivery is interrupted, clients recover missed messages from the authorized HTTP timeline using message-ID cursors.
+
 Tests: `php artisan test`. Production frontend: `npm run build`.
 
 ## Authentication and account policy
