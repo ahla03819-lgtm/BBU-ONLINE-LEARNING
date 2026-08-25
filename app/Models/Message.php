@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['channel_id', 'sender_id', 'client_uuid', 'type', 'body', 'reply_to_id', 'edited_at', 'hidden_at', 'hidden_by', 'hidden_reason'])]
+#[Fillable(['channel_id', 'sender_id', 'client_uuid', 'type', 'body', 'reply_to_id', 'edited_at', 'hidden_at', 'hidden_by', 'hidden_reason', 'reactions_version'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -44,6 +44,16 @@ class Message extends Model
     public function hider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'hidden_by');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class)->orderBy('position');
+    }
+
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(MessageReaction::class);
     }
 
     public function isHidden(): bool

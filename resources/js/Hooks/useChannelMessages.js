@@ -1,5 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {echo} from '../realtime/echo';
+import uploadRequest from '../Support/uploadRequest';
+import useMessageReactions from './useMessageReactions';
 
 const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content;
 const request = async (url, options = {}) => {
@@ -31,6 +33,7 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
     const messagesRef = useRef([]);
     const lastTypingSent = useRef(0);
     const typingTimers = useRef({});
+    const reactions = useMessageReactions({base, setMessages});
 
     const load = useCallback(async (query = '') => {
         const data = await request(`${base}/messages${query}`);
@@ -61,6 +64,7 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
             .listen('.message.sent', event => setMessages(current => mergeMessages(current, [event.message])))
             .listen('.message.updated', event => setMessages(current => mergeMessages(current, [event.message])))
             .listen('.message.hidden', event => setMessages(current => mergeMessages(current, [event.message])))
+            .listen('.message.reactions.changed', event => reactions.applyReactionEvent(event.reactions))
             .listenForWhisper('typing', member => {
                 if (!member || String(member.id) === String(user.id)) return;
                 setTyping(current => ({...current, [member.id]: member.name}));
@@ -78,13 +82,14 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
             socket.unbind('connected', connected); socket.unbind('connecting', connecting); socket.unbind('unavailable', connecting); socket.unbind('disconnected', connecting);
             echo.leave(name); channelRef.current = null; setTyping({}); setMembers([]);
         };
-    }, [channelId, recover, user.id]);
+    }, [channelId, reactions.applyReactionEvent, recover, user.id]);
 
-    const send = useCallback(async ({body, replyTo = null, clientUuid = crypto.randomUUID()}) => {
-        const optimistic = {id: `pending:${clientUuid}`, channel_id: channelId, client_uuid: clientUuid, type: 'text', body, sender: {id: user.id, name: user.name}, reply_to: replyTo, edited_at: null, hidden_at: null, created_at: new Date().toISOString(), pending: true};
+    const send = useCallback(async ({body, replyTo = null, attachments = [], clientUuid = crypto.randomUUID()}) => {
+        const optimistic = {id: `pending:${clientUuid}`, channel_id: channelId, client_uuid: clientUuid, type: 'text', body: body || null, attachments: attachments.map(item => ({...item, display_name: item.file.name, size_bytes: item.file.size})), _attachmentFiles: attachments, reactions: {version: 0, counts: {}, current_user: null}, sender: {id: user.id, name: user.name}, reply_to: replyTo, edited_at: null, hidden_at: null, created_at: new Date().toISOString(), pending: true, uploadProgress: attachments.length ? 0 : undefined};
         setMessages(current => mergeMessages(current, [optimistic]));
         try {
-            const data = await request(`${base}/messages`, {method: 'POST', body: JSON.stringify({client_uuid: clientUuid, body, reply_to_id: replyTo?.id})});
+            const data = attachments.length ? await uploadRequest(`${base}/messages`, {client_uuid: clientUuid, body, reply_to_id: replyTo?.id, attachments}, progress => setMessages(current => current.map(message => message.client_uuid === clientUuid ? {...message, uploadProgress: progress} : message))) : await request(`${base}/messages`, {method: 'POST', body: JSON.stringify({client_uuid: clientUuid, body, reply_to_id: replyTo?.id})});
+            attachments.forEach(item => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
             setMessages(current => mergeMessages(current, [data.message]));
         } catch (error) {
             setMessages(current => current.map(message => message.client_uuid === clientUuid ? {...message, pending: false, failed: true, error: error.message} : message));
@@ -116,5 +121,5 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
         return first ? load(`?before_id=${first.id}`) : Promise.resolve();
     }, [load, messages]);
 
-    return useMemo(() => ({messages, hasMore, loading, loadError, connection, members, typing: Object.values(typing), send, retry: message => send({body: message.body, replyTo: message.reply_to, clientUuid: message.client_uuid}), update: (message, body) => mutate(message, '', {body}), hide: message => mutate(message, '/hide'), moderate: (message, reason) => mutate(message, '/moderate', {reason}), loadOlder, whisperTyping}), [messages, hasMore, loading, loadError, connection, members, typing, send, mutate, loadOlder, whisperTyping]);
+    return useMemo(() => ({messages, hasMore, loading, loadError, connection, members, typing: Object.values(typing), send, retry: message => send({body: message.body, replyTo: message.reply_to, attachments: message._attachmentFiles || [], clientUuid: message.client_uuid}), update: (message, body) => mutate(message, '', {body}), hide: message => mutate(message, '/hide'), moderate: (message, reason) => mutate(message, '/moderate', {reason}), setReaction: reactions.setReaction, loadOlder, whisperTyping}), [messages, hasMore, loading, loadError, connection, members, typing, send, mutate, reactions.setReaction, loadOlder, whisperTyping]);
 }

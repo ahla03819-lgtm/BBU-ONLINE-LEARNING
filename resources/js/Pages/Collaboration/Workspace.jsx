@@ -7,7 +7,7 @@ import AnnouncementList from '../../Components/Collaboration/AnnouncementList';
 import MessagingPanel from '../../Components/Collaboration/Messaging/MessagingPanel';
 
 export default function Workspace({schoolClass, channels, channel, announcements, canCreateChannel, canCreateAnnouncement, canCreateMessage, canModerateMessages, isAdministrator}) {
-    const currentUser = usePage().props.auth.user;
+    const auth = usePage().props.auth; const currentUser = auth.user;
     return <Layout>
         <Head title={`${schoolClass.name} collaboration`}/>
         <div className="mb-6"><Link className="text-sm text-indigo-600" href="/collaboration">← All classes</Link><h1 className="mt-2 text-2xl font-bold">{schoolClass.name} {schoolClass.section}</h1><p className="text-slate-500">{schoolClass.grade_level.name} · {schoolClass.academic_year.name}</p></div>
@@ -15,7 +15,7 @@ export default function Workspace({schoolClass, channels, channel, announcements
             <ChannelSidebar schoolClass={schoolClass} channels={channels} selected={channel}/>
             <main><div className="mb-4 flex items-center justify-between"><div><h2 className="text-xl font-semibold"># {channel?.name || 'No channel'}</h2><p className="text-sm text-slate-500">{channel?.description}</p></div>{canCreateAnnouncement && <Link className="btn" href={`/collaboration/classes/${schoolClass.id}/channels/${channel.id}/announcements/create`}>New announcement</Link>}</div>
                 {channel && ['announcement', 'subject'].includes(channel.type) && <AnnouncementList schoolClass={schoolClass} channel={channel} announcements={announcements} isAdministrator={isAdministrator}/>}
-                {channel && <MessagingPanel key={channel.id} schoolClass={schoolClass} channel={channel} currentUser={currentUser} canCreate={canCreateMessage} canModerate={canModerateMessages}/>}
+                {channel && <MessagingPanel key={channel.id} schoolClass={schoolClass} channel={channel} currentUser={currentUser} canCreate={canCreateMessage} canModerate={canModerateMessages} canUpload={auth.permissions.includes('attachments.upload')} canReact={canCreateMessage && auth.permissions.includes('reactions.create')}/>}
             </main>
             <ChannelManager schoolClass={schoolClass} channel={channel} canCreate={canCreateChannel}/>
         </div>
