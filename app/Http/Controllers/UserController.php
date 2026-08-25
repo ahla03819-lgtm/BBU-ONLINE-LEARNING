@@ -77,7 +77,7 @@ class UserController extends Controller
             $user->sendEmailVerificationNotification();
         }
 
-return back()->with('success', 'Verification link sent.');
+        return back()->with('success', 'Verification link sent.');
     }
 
     public function destroy(User $user, EnsureSuperAdminContinuity $guard, AuditLogger $audit): RedirectResponse

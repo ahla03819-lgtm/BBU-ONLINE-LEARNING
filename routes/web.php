@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\AcademicController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,4 +35,24 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::patch('/users/{user}/status', [UserController::class, 'status'])->name('users.status');
     Route::patch('/users/{user}/role', [UserController::class, 'role'])->middleware('password.confirm')->name('users.role');
     Route::post('/users/{user}/verification', [UserController::class, 'resendVerification'])->name('users.verification');
+    Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
+    Route::post('/academic-years', [AcademicController::class, 'storeYear'])->name('academic-years.store');
+    Route::patch('/academic-years/{academicYear}', [AcademicController::class, 'updateYear'])->name('academic-years.update');
+    Route::post('/grade-levels', [AcademicController::class, 'storeGrade'])->name('grade-levels.store');
+    Route::patch('/grade-levels/{gradeLevel}', [AcademicController::class, 'updateGrade'])->name('grade-levels.update');
+    Route::post('/subjects', [AcademicController::class, 'storeSubject'])->name('subjects.store');
+    Route::patch('/subjects/{subject}', [AcademicController::class, 'updateSubject'])->name('subjects.update');
+    Route::post('/school-classes', [AcademicController::class, 'storeClass'])->name('school-classes.store');
+    Route::patch('/school-classes/{schoolClass}', [AcademicController::class, 'updateClass'])->name('school-classes.update');
+    Route::put('/school-classes/{schoolClass}/subjects', [AcademicController::class, 'syncSubjects'])->name('school-classes.subjects');
+    Route::get('/people', [PeopleController::class, 'index'])->name('people.index');
+    Route::post('/teacher-profiles', [PeopleController::class, 'storeTeacher'])->name('teacher-profiles.store');
+    Route::patch('/teacher-profiles/{teacherProfile}', [PeopleController::class, 'updateTeacher'])->name('teacher-profiles.update');
+    Route::post('/student-profiles', [PeopleController::class, 'storeStudent'])->name('student-profiles.store');
+    Route::patch('/student-profiles/{studentProfile}', [PeopleController::class, 'updateStudent'])->name('student-profiles.update');
+    Route::post('/student-profiles/{studentProfile}/enrollments', [PeopleController::class, 'enroll'])->name('enrollments.store');
+    Route::patch('/enrollments/{enrollment}/end', [PeopleController::class, 'end'])->name('enrollments.end');
+    Route::post('/enrollments/{enrollment}/transfer', [PeopleController::class, 'transfer'])->name('enrollments.transfer');
+    Route::post('/school-classes/{schoolClass}/teacher', [PeopleController::class, 'assignClass'])->name('teacher-class-assignments.store');
+    Route::post('/class-subjects/{classSubject}/teacher', [PeopleController::class, 'assignSubject'])->name('teacher-class-subject-assignments.store');
 });
