@@ -48,6 +48,16 @@ class Channel extends Model
         return $this->hasMany(Announcement::class);
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
+
+    public function readStates(): HasMany
+    {
+        return $this->hasMany(ChannelReadState::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', ChannelStatus::Active->value);

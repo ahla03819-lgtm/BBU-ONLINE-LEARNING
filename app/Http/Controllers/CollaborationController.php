@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Announcement;
 use App\Models\Channel;
+use App\Models\Message;
 use App\Models\SchoolClass;
 use App\Services\CollaborationAccess;
 use Inertia\Inertia;
@@ -33,6 +34,6 @@ class CollaborationController extends Controller
             $announcements = $access->isAdministrator(auth()->user()) ? $query->get() : $query->activeFeed()->get();
         }
 
-        return Inertia::render('Collaboration/Workspace', ['schoolClass' => $schoolClass->load('academicYear:id,name,status', 'gradeLevel:id,name'), 'channels' => $channels, 'channel' => $selected, 'announcements' => $announcements, 'canCreateChannel' => auth()->user()->can('create', [Channel::class, $schoolClass]), 'canCreateAnnouncement' => $selected ? auth()->user()->can('create', [Announcement::class, $selected]) : false, 'isAdministrator' => $access->isAdministrator(auth()->user())]);
+        return Inertia::render('Collaboration/Workspace', ['schoolClass' => $schoolClass->load('academicYear:id,name,status', 'gradeLevel:id,name'), 'channels' => $channels, 'channel' => $selected, 'announcements' => $announcements, 'canCreateChannel' => auth()->user()->can('create', [Channel::class, $schoolClass]), 'canCreateAnnouncement' => $selected ? auth()->user()->can('create', [Announcement::class, $selected]) : false, 'canCreateMessage' => $selected ? auth()->user()->can('create', [Message::class, $selected]) : false, 'canModerateMessages' => $selected ? auth()->user()->can('messages.moderate') && ($access->isAdministrator(auth()->user()) || $access->isCurrentClassTeacher(auth()->user(), $schoolClass)) : false, 'isAdministrator' => $access->isAdministrator(auth()->user())]);
     }
 }
