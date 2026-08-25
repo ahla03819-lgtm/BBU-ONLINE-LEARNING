@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Meeting;
+use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
@@ -27,9 +29,15 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::before(function (User $user, string $ability, array $arguments) {
-            $messagePolicy = collect($arguments)->contains(fn ($argument) => $argument === Message::class || $argument instanceof Message || $argument instanceof MessageAttachment);
+            $domainPolicyRequiresExplicitOverride = collect($arguments)->contains(fn ($argument) => $argument === Message::class
+                || $argument instanceof Message
+                || $argument instanceof MessageAttachment
+                || $argument === Meeting::class
+                || $argument instanceof Meeting
+                || $argument === MeetingParticipant::class
+                || $argument instanceof MeetingParticipant);
 
-            return $user->isActive() && $user->hasRole('Super Admin') && ! $messagePolicy ? true : null;
+            return $user->isActive() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
         });
         RateLimiter::for('messages-create', fn (Request $request) => [Limit::perMinute(20)->by($request->user()->id.'|'.$request->route('channel')), Limit::perSecond(5, 10)->by('burst|'.$request->user()->id.'|'.$request->route('channel'))]);
         RateLimiter::for('messages-mutate', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id));
