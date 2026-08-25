@@ -240,6 +240,46 @@ class AttachmentsAndReactionsTest extends TestCase
         $this->assertArrayNotHasKey('user_id', $event->broadcastWith()['reactions']);
     }
 
+    public function test_teacher_and_student_same_reaction_remain_distinct_and_aggregate_authoritatively(): void
+    {
+        Event::fake([MessageReactionsChanged::class]);
+        [, $class, $channel] = $this->context();
+        $teacher = User::factory()->create();
+        $teacher->assignRole('Teacher');
+        app(AssignTeacherToClass::class)->handle(TeacherProfile::factory()->create(['user_id' => $teacher]), $class, '2026-09-01');
+        $student = User::factory()->create();
+        $student->assignRole('Student');
+        app(EnrollStudent::class)->handle(StudentProfile::factory()->create(['user_id' => $student]), $class, '2026-09-01');
+        $message = Message::factory()->create(['channel_id' => $channel, 'sender_id' => $teacher]);
+        $url = $this->url($class, $channel, "/{$message->id}/reaction");
+
+        $this->actingAs($teacher)->putJson($url, ['reaction' => 'like'])
+            ->assertOk()->assertJsonPath('reactions.version', 1)->assertJsonPath('reactions.counts.like', 1);
+        $this->actingAs($student)->putJson($url, ['reaction' => 'like'])
+            ->assertOk()->assertJsonPath('reactions.version', 2)->assertJsonPath('reactions.counts.like', 2);
+        $this->assertDatabaseHas('message_reactions', ['message_id' => $message->id, 'user_id' => $teacher->id, 'reaction' => 'like']);
+        $this->assertDatabaseHas('message_reactions', ['message_id' => $message->id, 'user_id' => $student->id, 'reaction' => 'like']);
+        $this->assertSame(2, MessageReaction::query()->where('message_id', $message->id)->where('reaction', 'like')->count());
+
+        $this->actingAs($teacher)->deleteJson($url)
+            ->assertOk()->assertJsonPath('reactions.version', 3)->assertJsonPath('reactions.counts.like', 1)->assertJsonPath('reactions.current_user', null);
+        $this->assertDatabaseMissing('message_reactions', ['message_id' => $message->id, 'user_id' => $teacher->id]);
+        $this->assertDatabaseHas('message_reactions', ['message_id' => $message->id, 'user_id' => $student->id, 'reaction' => 'like']);
+
+        $this->actingAs($student)->deleteJson($url)
+            ->assertOk()->assertJsonPath('reactions.version', 4)->assertJsonPath('reactions.counts', [])->assertJsonPath('reactions.current_user', null);
+        $this->assertDatabaseCount('message_reactions', 0);
+
+        $versions = Event::dispatched(MessageReactionsChanged::class)
+            ->map(fn (array $dispatch) => (int) $dispatch[0]->message->reactions_version)
+            ->all();
+        $this->assertSame([1, 2, 3, 4], $versions);
+        $realtime = (new MessageReactionsChanged($message->fresh()))->broadcastWith()['reactions'];
+        $this->assertSame(4, $realtime['version']);
+        $this->assertSame([], $realtime['counts']);
+        $this->assertNull($realtime['current_user']);
+    }
+
     public function test_reactions_deny_hidden_system_historical_and_cross_scope_messages(): void
     {
         [$student, $class, $channel] = $this->context('Student');

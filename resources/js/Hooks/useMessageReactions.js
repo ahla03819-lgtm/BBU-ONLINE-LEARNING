@@ -3,7 +3,8 @@ import {useCallback} from 'react';
 const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content;
 
 export default function useMessageReactions({base, setMessages}) {
-    const apply = useCallback(reactions => setMessages(current => current.map(message => String(message.id) === String(reactions.message_id) && Number(reactions.version) >= Number(message.reactions?.version || 0) ? {...message, reactions: {...reactions, current_user: reactions.current_user ?? message.reactions?.current_user ?? null}} : message)), [setMessages]);
+    const applyResponse = useCallback(reactions => setMessages(current => current.map(message => String(message.id) === String(reactions.message_id) && Number(reactions.version) >= Number(message.reactions?.version || 0) ? {...message, reactions: {...reactions, current_user: reactions.current_user ?? null}} : message)), [setMessages]);
+    const applyReactionEvent = useCallback(reactions => setMessages(current => current.map(message => String(message.id) === String(reactions.message_id) && Number(reactions.version) > Number(message.reactions?.version || 0) ? {...message, reactions: {...reactions, current_user: message.reactions?.current_user ?? null}} : message)), [setMessages]);
     const mutate = useCallback(async (message, reaction) => {
         if (message._reactionPending) return;
         const before = message.reactions || {version: 0, counts: {}, current_user: null};
@@ -14,12 +15,12 @@ export default function useMessageReactions({base, setMessages}) {
         const response = await fetch(`${base}/messages/${message.id}/reaction`, {method: reaction ? 'PUT' : 'DELETE', credentials: 'same-origin', headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf()}, body: reaction ? JSON.stringify({reaction}) : undefined});
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            setMessages(current => current.map(item => String(item.id) === String(message.id) ? {...item, _reactionPending: false, reactions: before} : item));
+            setMessages(current => current.map(item => String(item.id) === String(message.id) ? {...item, _reactionPending: false, reactions: Number(item.reactions?.version || 0) === Number(before.version || 0) ? before : item.reactions} : item));
             throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'Reaction failed.');
         }
-        apply(data.reactions);
+        applyResponse(data.reactions);
         setMessages(current => current.map(item => String(item.id) === String(message.id) ? {...item, _reactionPending: false} : item));
-    }, [apply, base, setMessages]);
+    }, [applyResponse, base, setMessages]);
 
-    return {setReaction: mutate, applyReactionEvent: apply};
+    return {setReaction: mutate, applyReactionEvent};
 }
