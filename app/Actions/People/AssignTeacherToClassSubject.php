@@ -2,6 +2,7 @@
 
 namespace App\Actions\People;
 
+use App\Enums\ClassSubjectStatus;
 use App\Models\ClassSubject;
 use App\Models\TeacherClassSubjectAssignment;
 use App\Models\TeacherProfile;
@@ -14,6 +15,11 @@ class AssignTeacherToClassSubject
 
     public function handle(TeacherProfile $teacher, ClassSubject $subject, string $date): TeacherClassSubjectAssignment
     {
+        $subject->refresh();
+        if ($subject->status !== ClassSubjectStatus::Active) {
+            throw new \DomainException('Teachers cannot be assigned to an archived class subject.');
+        }
+
         return DB::transaction(function () use ($teacher, $subject, $date) {
             $current = TeacherClassSubjectAssignment::query()->where('class_subject_id', $subject->id)->where('current_slot', 1)->lockForUpdate()->first();
             if ($current) {

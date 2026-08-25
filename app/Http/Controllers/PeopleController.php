@@ -8,6 +8,7 @@ use App\Actions\People\EndEnrollment;
 use App\Actions\People\EnrollStudent;
 use App\Actions\People\SaveProfile;
 use App\Actions\People\TransferStudent;
+use App\Enums\ClassSubjectStatus;
 use App\Http\Requests\People\AssignTeacherRequest;
 use App\Http\Requests\People\EndEnrollmentRequest;
 use App\Http\Requests\People\EnrollStudentRequest;
@@ -55,7 +56,7 @@ class PeopleController extends Controller
             'teachers' => $canManage ? TeacherProfile::query()->with('user:id,name,email')->orderBy('employee_number')->get() : collect(),
             'users' => $canManage ? User::query()->whereDoesntHave('teacherProfile')->whereDoesntHave('studentProfile')->orderBy('name')->get(['id', 'name', 'email']) : collect(),
             'classes' => $classes->orderBy('name')->get(),
-            'classSubjects' => auth()->user()->can('teachers.assign-subject') ? ClassSubject::query()->with(['schoolClass:id,name', 'subject:id,name'])->get() : collect(),
+            'classSubjects' => auth()->user()->can('teachers.assign-subject') ? ClassSubject::query()->where('status', ClassSubjectStatus::Active)->with(['schoolClass:id,name', 'subject:id,name'])->get() : collect(),
         ]);
     }
 
