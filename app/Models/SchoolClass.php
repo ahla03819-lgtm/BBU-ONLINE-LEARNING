@@ -45,4 +45,9 @@ class SchoolClass extends Model
     {
         return $this->hasMany(TeacherClassAssignment::class);
     }
+
+    public function channels(): HasMany
+    {
+        return $this->hasMany(Channel::class);
+    }
 }

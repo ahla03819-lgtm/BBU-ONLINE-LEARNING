@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Academics\SaveAcademicResource;
 use App\Actions\Academics\SaveAcademicYear;
 use App\Actions\Academics\SyncClassSubjects;
+use App\Actions\Collaboration\CreateSchoolClass;
 use App\Enums\AcademicYearStatus;
 use App\Enums\SchoolClassStatus;
 use App\Http\Requests\Academics\SaveAcademicYearRequest;
@@ -17,6 +18,7 @@ use App\Models\GradeLevel;
 use App\Models\SchoolClass;
 use App\Models\Subject;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -79,9 +81,9 @@ class AcademicController extends Controller
         return back()->with('success', 'Subject updated.');
     }
 
-    public function storeClass(SaveSchoolClassRequest $r, SaveAcademicResource $a): RedirectResponse
+    public function storeClass(SaveSchoolClassRequest $r, CreateSchoolClass $a): RedirectResponse
     {
-        $a->handle(new SchoolClass, $r->validated(), 'school-class');
+        $a->handle($r->validated());
 
         return back()->with('success', 'Class created.');
     }
@@ -95,7 +97,11 @@ class AcademicController extends Controller
 
     public function syncSubjects(SyncClassSubjectsRequest $r, SchoolClass $schoolClass, SyncClassSubjects $a): RedirectResponse
     {
-        $a->handle($schoolClass, $r->validated('subject_ids', []));
+        try {
+            $a->handle($schoolClass, $r->validated('subject_ids', []), $r->validated('effective_on'));
+        } catch (\DomainException $exception) {
+            throw ValidationException::withMessages(['effective_on' => $exception->getMessage()]);
+        }
 
         return back()->with('success', 'Class subjects updated.');
     }

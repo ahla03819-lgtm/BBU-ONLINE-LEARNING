@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\AcademicController;
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\CollaborationController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -55,4 +58,19 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::post('/enrollments/{enrollment}/transfer', [PeopleController::class, 'transfer'])->name('enrollments.transfer');
     Route::post('/school-classes/{schoolClass}/teacher', [PeopleController::class, 'assignClass'])->name('teacher-class-assignments.store');
     Route::post('/class-subjects/{classSubject}/teacher', [PeopleController::class, 'assignSubject'])->name('teacher-class-subject-assignments.store');
+    Route::get('/collaboration', [CollaborationController::class, 'index'])->name('collaboration.index');
+    Route::get('/collaboration/classes/{schoolClass}', [CollaborationController::class, 'workspace'])->name('collaboration.classes.show');
+    Route::get('/collaboration/classes/{schoolClass}/channels/{channel}', [CollaborationController::class, 'workspace'])->name('collaboration.channels.show');
+    Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}', [ChannelController::class, 'update'])->name('collaboration.channels.update');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/archive', [ChannelController::class, 'archive'])->name('collaboration.channels.archive');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/restore', [ChannelController::class, 'restore'])->name('collaboration.channels.restore');
+    Route::get('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/create', [AnnouncementController::class, 'create'])->name('collaboration.announcements.create');
+    Route::post('/collaboration/classes/{schoolClass}/channels/{channel}/announcements', [AnnouncementController::class, 'store'])->name('collaboration.announcements.store');
+    Route::get('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/edit', [AnnouncementController::class, 'edit'])->name('collaboration.announcements.edit');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}', [AnnouncementController::class, 'update'])->name('collaboration.announcements.update');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/schedule', [AnnouncementController::class, 'schedule'])->name('collaboration.announcements.schedule');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('collaboration.announcements.publish');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/archive', [AnnouncementController::class, 'archive'])->name('collaboration.announcements.archive');
+    Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/{announcement}/restore', [AnnouncementController::class, 'restore'])->name('collaboration.announcements.restore');
 });

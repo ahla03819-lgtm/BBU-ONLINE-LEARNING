@@ -13,6 +13,6 @@ class SyncClassSubjectsRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['subject_ids' => ['array'], 'subject_ids.*' => ['integer', 'distinct', 'exists:subjects,id']];
+        return ['subject_ids' => ['array'], 'subject_ids.*' => ['integer', 'distinct', 'exists:subjects,id'], 'effective_on' => ['required', 'date']];
     }
 }
