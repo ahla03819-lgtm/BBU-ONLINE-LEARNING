@@ -8,7 +8,13 @@ use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
-use App\Services\Meetings\NoopMeetingLifecycleProvider;
+use App\Services\LiveKit\LiveKitRoomManager;
+use App\Services\LiveKit\LiveKitTokenIssuer;
+use App\Services\LiveKit\LiveKitWebhookVerifier;
+use App\Services\LiveKit\SdkLiveKitRoomManager;
+use App\Services\LiveKit\SdkLiveKitTokenIssuer;
+use App\Services\LiveKit\SdkLiveKitWebhookVerifier;
+use App\Services\Meetings\LiveKitMeetingLifecycleProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -22,7 +28,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(MeetingLifecycleProvider::class, NoopMeetingLifecycleProvider::class);
+        $this->app->singleton(LiveKitTokenIssuer::class, SdkLiveKitTokenIssuer::class);
+        $this->app->singleton(LiveKitRoomManager::class, SdkLiveKitRoomManager::class);
+        $this->app->singleton(LiveKitWebhookVerifier::class, SdkLiveKitWebhookVerifier::class);
+        $this->app->singleton(MeetingLifecycleProvider::class, LiveKitMeetingLifecycleProvider::class);
     }
 
     /**
@@ -50,5 +59,9 @@ class AppServiceProvider extends ServiceProvider
             : Limit::none());
         RateLimiter::for('attachments-download', fn (Request $request) => Limit::perMinute(120)->by($request->user()->id));
         RateLimiter::for('reactions', fn (Request $request) => Limit::perMinute(60)->by($request->user()->id.'|'.data_get($request->route('channel'), 'id', $request->route('channel'))));
+        RateLimiter::for('meeting-tokens', fn (Request $request) => [
+            Limit::perMinute(12)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))),
+            Limit::perMinute(30)->by('ip|'.$request->ip()),
+        ]);
     }
 }

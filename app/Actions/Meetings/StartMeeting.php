@@ -56,6 +56,10 @@ class StartMeeting
         }
 
         if ($state !== MeetingProviderState::Active) {
+            if ($state === MeetingProviderState::Ended) {
+                return $this->recordDefinitiveFailure($authoritative, $attemptUuid);
+            }
+
             return $authoritative->fresh();
         }
 
@@ -96,6 +100,25 @@ class StartMeeting
 
             $locked->update(['last_provider_error' => $reason]);
             $this->audit->log('meeting.start-failed', $locked, [], ['status' => $locked->status, 'lifecycle_version' => $locked->lifecycle_version, 'reason' => $reason]);
+
+            return $locked;
+        });
+    }
+
+    private function recordDefinitiveFailure(Meeting $meeting, string $attemptUuid): Meeting
+    {
+        return DB::transaction(function () use ($meeting, $attemptUuid) {
+            $locked = Meeting::query()->lockForUpdate()->findOrFail($meeting->id);
+            if ($locked->status !== MeetingStatus::Starting || ! hash_equals((string) $locked->start_attempt_uuid, $attemptUuid)) {
+                return $locked;
+            }
+            $before = $locked->only('status', 'lifecycle_version');
+            $locked->update([
+                'status' => MeetingStatus::Scheduled,
+                'lifecycle_version' => $locked->lifecycle_version + 1,
+                'last_provider_error' => 'Meeting provider definitively rejected room creation.',
+            ]);
+            $this->audit->log('meeting.start-failed', $locked, $before, $locked->only('status', 'lifecycle_version', 'last_provider_error'));
 
             return $locked;
         });

@@ -33,13 +33,14 @@ class ReconcileMeetingLifecycle
 
             $before = $locked->only('status', 'lifecycle_version');
             if ($locked->status === MeetingStatus::Starting) {
+                $active = $providerState === MeetingProviderState::Active;
                 $locked->update([
-                    'status' => MeetingStatus::Active,
-                    'actual_start_at' => $locked->actual_start_at ?? now(),
+                    'status' => $active ? MeetingStatus::Active : MeetingStatus::Scheduled,
+                    'actual_start_at' => $active ? ($locked->actual_start_at ?? now()) : null,
                     'lifecycle_version' => $locked->lifecycle_version + 1,
-                    'last_provider_error' => null,
+                    'last_provider_error' => $active ? null : 'Meeting room does not exist at the provider.',
                 ]);
-                $event = 'meeting.start-recovered';
+                $event = $active ? 'meeting.start-recovered' : 'meeting.start-failed';
             } else {
                 $locked->update([
                     'status' => MeetingStatus::Ended,
@@ -59,7 +60,7 @@ class ReconcileMeetingLifecycle
     {
         return ($meeting->status === MeetingStatus::Starting
                 && $meeting->start_attempt_uuid
-                && $providerState === MeetingProviderState::Active)
+                && in_array($providerState, [MeetingProviderState::Active, MeetingProviderState::Ended], true))
             || ($meeting->status === MeetingStatus::Ending
                 && $providerState === MeetingProviderState::Ended);
     }
