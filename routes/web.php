@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
+use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageReactionController;
@@ -65,6 +66,15 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::get('/collaboration', [CollaborationController::class, 'index'])->name('collaboration.index');
     Route::get('/collaboration/classes/{schoolClass}', [CollaborationController::class, 'workspace'])->name('collaboration.classes.show');
     Route::get('/collaboration/classes/{schoolClass}/channels/{channel}', [CollaborationController::class, 'workspace'])->name('collaboration.channels.show');
+    Route::scopeBindings()->group(function () {
+        Route::get('/school-classes/{schoolClass}/meetings', [MeetingController::class, 'index'])->name('meetings.index');
+        Route::get('/school-classes/{schoolClass}/meetings/create', [MeetingController::class, 'create'])->name('meetings.create');
+        Route::post('/school-classes/{schoolClass}/meetings', [MeetingController::class, 'store'])->name('meetings.store');
+        Route::get('/school-classes/{schoolClass}/meetings/{meeting}', [MeetingController::class, 'show'])->name('meetings.show');
+        Route::get('/school-classes/{schoolClass}/meetings/{meeting}/edit', [MeetingController::class, 'edit'])->name('meetings.edit');
+        Route::patch('/school-classes/{schoolClass}/meetings/{meeting}', [MeetingController::class, 'update'])->name('meetings.update');
+        Route::patch('/school-classes/{schoolClass}/meetings/{meeting}/cancel', [MeetingController::class, 'cancel'])->name('meetings.cancel');
+    });
     Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}', [ChannelController::class, 'update'])->name('collaboration.channels.update');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/archive', [ChannelController::class, 'archive'])->name('collaboration.channels.archive');

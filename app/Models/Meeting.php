@@ -18,6 +18,11 @@ class Meeting extends Model
     /** @use HasFactory<MeetingFactory> */
     use HasFactory;
 
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Meeting $meeting): void {

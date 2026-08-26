@@ -34,7 +34,7 @@ class MeetingPolicy
     public function cancel(User $user, Meeting $meeting): bool
     {
         return $user->can('meetings.cancel')
-            && $meeting->status === MeetingStatus::Scheduled
+            && in_array($meeting->status, [MeetingStatus::Scheduled, MeetingStatus::Cancelled], true)
             && $this->access->canManageMeeting($user, $meeting);
     }
 
