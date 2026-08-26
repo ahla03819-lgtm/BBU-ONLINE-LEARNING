@@ -7,6 +7,7 @@ use App\Models\Channel;
 use App\Models\Message;
 use App\Models\SchoolClass;
 use App\Services\CollaborationAccess;
+use App\Services\MeetingAccess;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +21,7 @@ class CollaborationController extends Controller
         return Inertia::render('Collaboration/Index', ['classes' => $classes]);
     }
 
-    public function workspace(SchoolClass $schoolClass, CollaborationAccess $access, ?Channel $channel = null): Response
+    public function workspace(SchoolClass $schoolClass, CollaborationAccess $access, MeetingAccess $meetingAccess, ?Channel $channel = null): Response
     {
         abort_unless(auth()->user()->can('channels.view') && $access->canAccessClass(auth()->user(), $schoolClass), 403);
         if ($channel) {
@@ -34,6 +35,6 @@ class CollaborationController extends Controller
             $announcements = $access->isAdministrator(auth()->user()) ? $query->get() : $query->activeFeed()->get();
         }
 
-        return Inertia::render('Collaboration/Workspace', ['schoolClass' => $schoolClass->load('academicYear:id,name,status', 'gradeLevel:id,name'), 'channels' => $channels, 'channel' => $selected, 'announcements' => $announcements, 'canCreateChannel' => auth()->user()->can('create', [Channel::class, $schoolClass]), 'canCreateAnnouncement' => $selected ? auth()->user()->can('create', [Announcement::class, $selected]) : false, 'canCreateMessage' => $selected ? auth()->user()->can('create', [Message::class, $selected]) : false, 'canModerateMessages' => $selected ? auth()->user()->can('messages.moderate') && ($access->isAdministrator(auth()->user()) || $access->isCurrentClassTeacher(auth()->user(), $schoolClass)) : false, 'isAdministrator' => $access->isAdministrator(auth()->user())]);
+        return Inertia::render('Collaboration/Workspace', ['schoolClass' => $schoolClass->load('academicYear:id,name,status', 'gradeLevel:id,name'), 'channels' => $channels, 'channel' => $selected, 'announcements' => $announcements, 'canViewMeetings' => auth()->user()->can('meetings.view') && $meetingAccess->canAccessClass(auth()->user(), $schoolClass), 'canCreateChannel' => auth()->user()->can('create', [Channel::class, $schoolClass]), 'canCreateAnnouncement' => $selected ? auth()->user()->can('create', [Announcement::class, $selected]) : false, 'canCreateMessage' => $selected ? auth()->user()->can('create', [Message::class, $selected]) : false, 'canModerateMessages' => $selected ? auth()->user()->can('messages.moderate') && ($access->isAdministrator(auth()->user()) || $access->isCurrentClassTeacher(auth()->user(), $schoolClass)) : false, 'isAdministrator' => $access->isAdministrator(auth()->user())]);
     }
 }
