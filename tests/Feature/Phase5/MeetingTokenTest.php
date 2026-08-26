@@ -29,7 +29,12 @@ class MeetingTokenTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->issuer = new FakeLiveKitTokenIssuer;
         $this->app->instance(LiveKitTokenIssuer::class, $this->issuer);
-        config(['livekit.url' => 'wss://public.example.test']);
+        config([
+            'livekit.url' => 'wss://public.example.test',
+            'livekit.api_url' => 'https://provider.example.test',
+            'livekit.api_key' => 'server-key',
+            'livekit.api_secret' => 'server-secret',
+        ]);
     }
 
     public function test_current_student_receives_safe_room_token_response_and_durable_participant(): void
@@ -46,6 +51,9 @@ class MeetingTokenTest extends TestCase
         ])->assertJsonPath('token', 'safe-test-token')
             ->assertJsonPath('server_url', 'wss://public.example.test')
             ->assertJsonPath('lifecycle_version', 7)
+            ->assertJsonMissingPath('api_url')
+            ->assertJsonMissingPath('api_key')
+            ->assertJsonMissingPath('api_secret')
             ->assertJsonMissingPath('participant.livekit_identity');
         $this->assertDatabaseHas('meeting_participants', ['meeting_id' => $meeting->id, 'user_id' => $student->id]);
         $this->assertDatabaseCount('meeting_attendance_sessions', 0);

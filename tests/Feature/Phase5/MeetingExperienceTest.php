@@ -22,6 +22,17 @@ class MeetingExperienceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_browser_room_handles_initial_connection_failure_without_unsupported_handlers_or_raw_errors(): void
+    {
+        $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+
+        $this->assertStringContainsString("onError={() => setConnectionError('Unable to join the meeting. Please try again.')}", $component);
+        $this->assertStringContainsString('if (connected.current) onLeave()', $component);
+        $this->assertStringContainsString('useConnectionState', $component);
+        $this->assertStringNotContainsString('onReconnecting=', $component);
+        $this->assertStringNotContainsString('problem.message', $component);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

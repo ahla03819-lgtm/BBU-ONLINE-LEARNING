@@ -29,7 +29,8 @@ class LiveKitSdkContractTest extends TestCase
         $this->assertTrue($video['canPublish']);
         $this->assertTrue($video['canSubscribe']);
         $this->assertFalse($video['canPublishData']);
-        $this->assertSame([1, 2], $video['canPublishSources']);
+        $this->assertSame(['camera', 'microphone'], $video['canPublishSources']);
+        $this->assertNotSame([1, 2], $video['canPublishSources']);
         $this->assertArrayNotHasKey('roomAdmin', $video);
         $this->assertSame('2026-08-26T12:05:00+00:00', $issued->expiresAt->toIso8601String());
         CarbonImmutable::setTestNow();

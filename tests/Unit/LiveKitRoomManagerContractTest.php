@@ -6,12 +6,14 @@ use Agence104\LiveKit\RoomCreateOptions;
 use Agence104\LiveKit\RoomServiceClient;
 use App\Enums\MeetingProviderState;
 use App\Services\LiveKit\SdkLiveKitRoomManager;
+use Illuminate\Support\Facades\Log;
 use Livekit\DeleteRoomResponse;
 use Livekit\ListRoomsResponse;
 use Livekit\RemoveParticipantResponse;
 use Livekit\Room;
 use Livekit\TwirpError;
 use Mockery;
+use ReflectionClass;
 use RuntimeException;
 use Tests\TestCase;
 use Twirp\ErrorCode;
@@ -21,7 +23,38 @@ class LiveKitRoomManagerContractTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['livekit.url' => 'https://provider.test', 'livekit.api_key' => 'key', 'livekit.api_secret' => 'secret']);
+        config([
+            'livekit.url' => 'wss://public.example.test',
+            'livekit.api_url' => 'https://provider.example.test',
+            'livekit.api_key' => 'key',
+            'livekit.api_secret' => 'secret',
+        ]);
+    }
+
+    public function test_backend_client_uses_only_the_https_api_url(): void
+    {
+        $manager = new SdkLiveKitRoomManager;
+        $managerReflection = new ReflectionClass($manager);
+        $clientMethod = $managerReflection->getMethod('client');
+        $client = $clientMethod->invoke($manager);
+        $clientReflection = new ReflectionClass($client);
+        $host = $clientReflection->getParentClass()->getProperty('host');
+
+        $this->assertSame('https://provider.example.test', $host->getValue($client));
+        $this->assertNotSame(config('livekit.url'), $host->getValue($client));
+    }
+
+    public function test_invalid_backend_scheme_fails_safely_without_calling_the_sdk(): void
+    {
+        config(['livekit.api_url' => 'wss://provider.example.test']);
+        Log::shouldReceive('warning')->once()->with(
+            'LiveKit Room Service is not safely configured.',
+            ['operation' => 'create'],
+        );
+        $client = Mockery::mock(RoomServiceClient::class);
+        $client->shouldNotReceive('createRoom');
+
+        $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($client))->create('opaque-room', 42));
     }
 
     public function test_create_passes_opaque_name_and_capacity_and_success_is_active(): void
@@ -88,6 +121,32 @@ class LiveKitRoomManagerContractTest extends TestCase
         $unknown = Mockery::mock(RoomServiceClient::class);
         $unknown->shouldReceive('removeParticipant')->andThrow(new RuntimeException('transport detail'));
         $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($unknown))->removeParticipant('opaque-room', 'opaque-identity'));
+    }
+
+    public function test_transport_failure_logging_never_contains_provider_details(): void
+    {
+        Log::shouldReceive('warning')->once()->with(
+            'LiveKit Room Service operation failed.',
+            Mockery::on(fn (array $context) => $context === [
+                'operation' => 'inspect',
+                'exception_class' => RuntimeException::class,
+                'provider_code' => null,
+            ]),
+        );
+        $client = Mockery::mock(RoomServiceClient::class);
+        $client->shouldReceive('listRooms')->andThrow(new RuntimeException('secret technical-room authorization-header'));
+
+        $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($client))->inspect('technical-room'));
+    }
+
+    public function test_environment_example_contains_placeholders_without_credentials(): void
+    {
+        $example = file_get_contents(base_path('.env.example'));
+
+        $this->assertStringContainsString('LIVEKIT_URL=wss://your-project.livekit.cloud', $example);
+        $this->assertStringContainsString('LIVEKIT_API_URL=https://your-project.livekit.cloud', $example);
+        $this->assertMatchesRegularExpression('/^LIVEKIT_API_KEY=$/m', $example);
+        $this->assertMatchesRegularExpression('/^LIVEKIT_API_SECRET=$/m', $example);
     }
 
     private function twirpError(string $code): TwirpError

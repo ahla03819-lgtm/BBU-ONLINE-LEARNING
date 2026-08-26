@@ -61,7 +61,7 @@ class StartMeeting
                 return $this->recordDefinitiveFailure($authoritative, $attemptUuid);
             }
 
-            return $authoritative->fresh();
+            return $this->recordFailure($authoritative, $attemptUuid, 'Meeting provider start failed.');
         }
 
         return $this->complete($authoritative, $attemptUuid);

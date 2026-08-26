@@ -223,6 +223,20 @@ class MeetingLifecycleTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'meeting.start-failed', 'target_id' => $meeting->id]);
     }
 
+    public function test_unknown_start_state_records_only_a_generic_error_and_remains_reconcilable(): void
+    {
+        $class = $this->activeClass();
+        $host = $this->classTeacher($class);
+        $meeting = Meeting::factory()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id]);
+        $this->provider->startState = MeetingProviderState::Unknown;
+
+        $result = $this->actingAs($host)->app->make(StartMeeting::class)->handle($host, $meeting);
+
+        $this->assertSame(MeetingStatus::Starting, $result->status);
+        $this->assertSame('Meeting provider start failed.', $result->last_provider_error);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'meeting.start-failed', 'target_id' => $meeting->id]);
+    }
+
     public function test_end_failure_is_sanitized_and_can_be_reconciled_from_known_state(): void
     {
         $class = $this->activeClass();

@@ -28,7 +28,7 @@ Tests: `php artisan test`. Production frontend: `npm run build`.
 
 ## LiveKit meeting runtime
 
-Configure `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and backend-only `LIVEKIT_API_SECRET` for LiveKit Cloud or a compatible self-hosted server. Never add the secret to a `VITE_` variable. The participant token remains in browser memory only and expires after five minutes; an established LiveKit connection is not terminated merely because its original join token expires.
+Configure the browser WebSocket endpoint as `LIVEKIT_URL=wss://...`, the backend Room Service endpoint as `LIVEKIT_API_URL=https://...`, and provide `LIVEKIT_API_KEY` plus the backend-only `LIVEKIT_API_SECRET` for LiveKit Cloud or a compatible self-hosted server. Never add the API endpoint, key, or secret to a `VITE_` variable. The participant token remains in browser memory only and expires after five minutes; an established LiveKit connection is not terminated merely because its original join token expires.
 
 For local meeting development, run the HTTP server, queue worker, scheduler, Reverb, and Vite as separate supervised processes:
 
@@ -40,7 +40,7 @@ php artisan reverb:start
 npm run dev
 ```
 
-LiveKit must be reachable from the browser at `LIVEKIT_URL`, and LiveKit webhooks must target `POST /integrations/livekit/webhook`. Camera and microphone permissions are requested only after an explicit action in the meeting lobby. A real two-user media test requires valid LiveKit credentials, HTTPS or localhost browser media access, and separate Teacher and Student browser sessions.
+LiveKit must be reachable from the browser at `LIVEKIT_URL`, while Laravel must reach the HTTPS Room Service API at `LIVEKIT_API_URL`. LiveKit webhooks must target `POST /integrations/livekit/webhook`. Camera and microphone permissions are requested only after an explicit action in the meeting lobby. A real two-user media test requires valid LiveKit credentials, HTTPS or localhost browser media access, and separate Teacher and Student browser sessions.
 
 ## Message attachments and reactions
 
