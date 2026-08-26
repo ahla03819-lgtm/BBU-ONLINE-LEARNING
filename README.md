@@ -42,6 +42,25 @@ npm run dev
 
 LiveKit must be reachable from the browser at `LIVEKIT_URL`, while Laravel must reach the HTTPS Room Service API at `LIVEKIT_API_URL`. LiveKit webhooks must target `POST /integrations/livekit/webhook`. Camera and microphone permissions are requested only after an explicit action in the meeting lobby. A real two-user media test requires valid LiveKit credentials, HTTPS or localhost browser media access, and separate Teacher and Student browser sessions.
 
+Local meeting development requires each long-running process in a separate terminal:
+
+```bash
+php artisan serve
+php artisan queue:work
+php artisan schedule:work
+php artisan reverb:start
+npm run dev
+```
+
+After deployment, synchronize and verify meeting RBAC without doing permission work on web requests:
+
+```bash
+php artisan db:seed --class=RolePermissionSeeder --force
+php artisan meetings:verify-permissions
+```
+
+LiveKit Cloud must deliver signed webhooks to a publicly reachable HTTPS `POST /integrations/livekit/webhook` endpoint for attendance sessions to be recorded. A Cloudflare quick tunnel is suitable only for local testing because its hostname is temporary. Production must use a stable public HTTPS endpoint. Keep `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` backend-only, never expose them through `VITE_` variables, and never commit real credentials.
+
 ## Message attachments and reactions
 
 Messages support up to five private attachments, 10 MB per file and 25 MB combined. Supported formats are JPEG, PNG, WebP, PDF, DOCX, XLSX, PPTX, TXT, and CSV. Files are validated on the server, stored under generated private object keys on `MESSAGE_ATTACHMENT_DISK` (the private `local` disk by default), and delivered only through relationship-scoped authorized routes. They are never exposed through `public/storage` or permanent public URLs. Production may select a private S3-compatible disk after installing and configuring the appropriate Laravel filesystem adapter.

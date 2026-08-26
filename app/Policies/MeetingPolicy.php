@@ -89,6 +89,21 @@ class MeetingPolicy
             && ! $this->isRemoved($user, $meeting);
     }
 
+    public function reconcile(User $user, Meeting $meeting): bool
+    {
+        if (! in_array($meeting->status, [MeetingStatus::Starting, MeetingStatus::Ending], true)
+            || ! $this->access->canManageMeeting($user, $meeting)) {
+            return false;
+        }
+
+        if ($this->access->isAdministrator($user)) {
+            return $user->can($meeting->status === MeetingStatus::Starting ? 'meetings.start' : 'meetings.end');
+        }
+
+        return $this->access->isAssignedEligibleHost($user, $meeting)
+            && $user->can($meeting->status === MeetingStatus::Starting ? 'meetings.start' : 'meetings.end');
+    }
+
     private function isRemoved(User $user, Meeting $meeting): bool
     {
         return $meeting->participants()

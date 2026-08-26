@@ -33,6 +33,8 @@ class MeetingController extends Controller
                 'can_cancel' => auth()->user()->can('cancel', $meeting),
                 'can_start' => auth()->user()->can('start', $meeting),
                 'can_end' => auth()->user()->can('end', $meeting),
+                'can_join' => auth()->user()->can('join', $meeting),
+                'can_reconcile' => auth()->user()->can('reconcile', $meeting),
             ]);
 
         return Inertia::render('Meetings/Index', [
@@ -53,6 +55,8 @@ class MeetingController extends Controller
                 'can_cancel' => auth()->user()->can('cancel', $meeting),
                 'can_start' => auth()->user()->can('start', $meeting),
                 'can_end' => auth()->user()->can('end', $meeting),
+                'can_join' => auth()->user()->can('join', $meeting),
+                'can_reconcile' => auth()->user()->can('reconcile', $meeting),
             ],
         ]);
     }
