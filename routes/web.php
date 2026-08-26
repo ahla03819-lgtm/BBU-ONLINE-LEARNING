@@ -10,6 +10,7 @@ use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingLifecycleController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageReactionController;
@@ -74,6 +75,8 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
         Route::get('/school-classes/{schoolClass}/meetings/{meeting}/edit', [MeetingController::class, 'edit'])->name('meetings.edit');
         Route::patch('/school-classes/{schoolClass}/meetings/{meeting}', [MeetingController::class, 'update'])->name('meetings.update');
         Route::patch('/school-classes/{schoolClass}/meetings/{meeting}/cancel', [MeetingController::class, 'cancel'])->name('meetings.cancel');
+        Route::post('/school-classes/{schoolClass}/meetings/{meeting}/start', [MeetingLifecycleController::class, 'start'])->name('meetings.start');
+        Route::post('/school-classes/{schoolClass}/meetings/{meeting}/end', [MeetingLifecycleController::class, 'end'])->name('meetings.end');
     });
     Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}', [ChannelController::class, 'update'])->name('collaboration.channels.update');

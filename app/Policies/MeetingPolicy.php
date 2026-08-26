@@ -41,7 +41,7 @@ class MeetingPolicy
     public function start(User $user, Meeting $meeting): bool
     {
         return $user->can('meetings.start')
-            && $meeting->status === MeetingStatus::Scheduled
+            && in_array($meeting->status, [MeetingStatus::Scheduled, MeetingStatus::Starting, MeetingStatus::Active], true)
             && $this->access->canManageMeeting($user, $meeting)
             && $this->access->isAssignedEligibleHost($user, $meeting);
     }
@@ -49,7 +49,7 @@ class MeetingPolicy
     public function end(User $user, Meeting $meeting): bool
     {
         return $user->can('meetings.end')
-            && in_array($meeting->status, [MeetingStatus::Starting, MeetingStatus::Active, MeetingStatus::Ending], true)
+            && in_array($meeting->status, [MeetingStatus::Active, MeetingStatus::Ending, MeetingStatus::Ended], true)
             && $this->access->canManageMeeting($user, $meeting)
             && $this->access->isAssignedEligibleHost($user, $meeting);
     }

@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Contracts\MeetingLifecycleProvider;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\Meetings\NoopMeetingLifecycleProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -20,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(MeetingLifecycleProvider::class, NoopMeetingLifecycleProvider::class);
     }
 
     /**

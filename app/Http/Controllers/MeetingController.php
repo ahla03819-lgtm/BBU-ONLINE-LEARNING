@@ -31,6 +31,8 @@ class MeetingController extends Controller
             ->map(fn (Meeting $meeting) => [...$this->meetingData($meeting),
                 'can_update' => auth()->user()->can('update', $meeting),
                 'can_cancel' => auth()->user()->can('cancel', $meeting),
+                'can_start' => auth()->user()->can('start', $meeting),
+                'can_end' => auth()->user()->can('end', $meeting),
             ]);
 
         return Inertia::render('Meetings/Index', [
@@ -49,6 +51,8 @@ class MeetingController extends Controller
             'meeting' => [...$this->meetingData($meeting->load(['classSubject.subject:id,code,name', 'host:id,name'])),
                 'can_update' => auth()->user()->can('update', $meeting),
                 'can_cancel' => auth()->user()->can('cancel', $meeting),
+                'can_start' => auth()->user()->can('start', $meeting),
+                'can_end' => auth()->user()->can('end', $meeting),
             ],
         ]);
     }
