@@ -11,6 +11,7 @@ use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingExperienceController;
 use App\Http\Controllers\MeetingLifecycleController;
 use App\Http\Controllers\MeetingParticipantController;
 use App\Http\Controllers\MeetingTokenController;
@@ -84,6 +85,8 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/start', [MeetingLifecycleController::class, 'start'])->name('meetings.start');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/end', [MeetingLifecycleController::class, 'end'])->name('meetings.end');
         Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/token', [MeetingTokenController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.token');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/lobby', [MeetingExperienceController::class, 'lobby'])->name('meetings.lobby');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/room', [MeetingExperienceController::class, 'room'])->name('meetings.room');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants', [MeetingParticipantController::class, 'index'])->name('meetings.participants.index');
         Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}', [MeetingParticipantController::class, 'destroy'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.destroy');
     });
