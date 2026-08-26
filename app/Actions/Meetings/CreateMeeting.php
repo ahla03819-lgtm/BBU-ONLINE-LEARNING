@@ -4,6 +4,7 @@ namespace App\Actions\Meetings;
 
 use App\Enums\MeetingJoinPolicy;
 use App\Enums\MeetingStatus;
+use App\Events\MeetingScheduled;
 use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Models\SchoolClass;
@@ -46,6 +47,7 @@ class CreateMeeting
             if ($this->access->isSuperAdministrator($creator)) {
                 $this->audit->log('meeting.super-admin-override', $meeting, [], ['operation' => 'create', 'host_user_id' => $host->id]);
             }
+            MeetingScheduled::dispatch($meeting);
 
             return $meeting;
         });

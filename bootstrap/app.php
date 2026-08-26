@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withBroadcasting(__DIR__.'/../routes/channels.php', ['middleware' => ['web', 'auth', 'account.active', 'verified', 'throttle:broadcast-auth']])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [HandleInertiaRequests::class, SecurityHeaders::class]);
+        $middleware->validateCsrfTokens(except: ['integrations/livekit/webhook']);
         $middleware->alias(['account.active' => EnsureAccountIsActive::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -3,6 +3,7 @@
 namespace App\Actions\Meetings;
 
 use App\Enums\MeetingStatus;
+use App\Events\MeetingCancelled;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -34,6 +35,7 @@ class CancelMeeting
             if ($this->access->isSuperAdministrator($actor)) {
                 $this->audit->log('meeting.super-admin-override', $locked, [], ['operation' => 'cancel']);
             }
+            MeetingCancelled::dispatch($locked);
 
             return $locked;
         });

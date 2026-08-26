@@ -9,8 +9,10 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
+use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingLifecycleController;
+use App\Http\Controllers\MeetingParticipantController;
 use App\Http\Controllers\MeetingTokenController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
@@ -19,6 +21,9 @@ use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::post('/integrations/livekit/webhook', LiveKitWebhookController::class)
+    ->middleware('throttle:livekit-webhooks')->name('integrations.livekit.webhook');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -79,6 +84,8 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/start', [MeetingLifecycleController::class, 'start'])->name('meetings.start');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/end', [MeetingLifecycleController::class, 'end'])->name('meetings.end');
         Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/token', [MeetingTokenController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.token');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants', [MeetingParticipantController::class, 'index'])->name('meetings.participants.index');
+        Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}', [MeetingParticipantController::class, 'destroy'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.destroy');
     });
     Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}', [ChannelController::class, 'update'])->name('collaboration.channels.update');

@@ -8,6 +8,7 @@ use App\Enums\MeetingProviderState;
 use App\Services\LiveKit\SdkLiveKitRoomManager;
 use Livekit\DeleteRoomResponse;
 use Livekit\ListRoomsResponse;
+use Livekit\RemoveParticipantResponse;
 use Livekit\Room;
 use Livekit\TwirpError;
 use Mockery;
@@ -72,6 +73,21 @@ class LiveKitRoomManagerContractTest extends TestCase
         $unknown = Mockery::mock(RoomServiceClient::class);
         $unknown->shouldReceive('listRooms')->andThrow(new RuntimeException('transport detail'));
         $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($unknown))->inspect('opaque-room'));
+    }
+
+    public function test_participant_removal_maps_success_absence_and_unknown_safely(): void
+    {
+        $success = Mockery::mock(RoomServiceClient::class);
+        $success->shouldReceive('removeParticipant')->once()->with('opaque-room', 'opaque-identity')->andReturn(new RemoveParticipantResponse);
+        $this->assertSame(MeetingProviderState::Ended, (new SdkLiveKitRoomManager($success))->removeParticipant('opaque-room', 'opaque-identity'));
+
+        $absent = Mockery::mock(RoomServiceClient::class);
+        $absent->shouldReceive('removeParticipant')->andThrow($this->twirpError(ErrorCode::NotFound));
+        $this->assertSame(MeetingProviderState::Ended, (new SdkLiveKitRoomManager($absent))->removeParticipant('opaque-room', 'opaque-identity'));
+
+        $unknown = Mockery::mock(RoomServiceClient::class);
+        $unknown->shouldReceive('removeParticipant')->andThrow(new RuntimeException('transport detail'));
+        $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($unknown))->removeParticipant('opaque-room', 'opaque-identity'));
     }
 
     private function twirpError(string $code): TwirpError

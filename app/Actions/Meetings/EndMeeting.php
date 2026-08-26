@@ -5,6 +5,8 @@ namespace App\Actions\Meetings;
 use App\Contracts\MeetingLifecycleProvider;
 use App\Enums\MeetingProviderState;
 use App\Enums\MeetingStatus;
+use App\Events\MeetingEnded;
+use App\Events\MeetingEnding;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -38,6 +40,7 @@ class EndMeeting
                 'last_provider_error' => null,
             ]);
             $this->audit->log('meeting.end-requested', $locked, $before, $locked->only('status', 'lifecycle_version'));
+            MeetingEnding::dispatch($locked);
 
             return [$locked, $locked->lifecycle_version, true];
         });
@@ -78,6 +81,7 @@ class EndMeeting
                 'last_provider_error' => null,
             ]);
             $this->audit->log('meeting.end-succeeded', $locked, $before, $locked->only('status', 'lifecycle_version', 'actual_end_at'));
+            MeetingEnded::dispatch($locked);
 
             return $locked;
         });

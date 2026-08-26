@@ -63,5 +63,7 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(12)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))),
             Limit::perMinute(30)->by('ip|'.$request->ip()),
         ]);
+        RateLimiter::for('livekit-webhooks', fn (Request $request) => Limit::perMinute(240)->by($request->ip()));
+        RateLimiter::for('meeting-participant-removals', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
     }
 }

@@ -5,6 +5,9 @@ namespace App\Actions\Meetings;
 use App\Contracts\MeetingLifecycleProvider;
 use App\Enums\MeetingProviderState;
 use App\Enums\MeetingStatus;
+use App\Events\MeetingEnded;
+use App\Events\MeetingStarted;
+use App\Events\MeetingUpdated;
 use App\Models\Meeting;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +54,11 @@ class ReconcileMeetingLifecycle
                 $event = 'meeting.end-recovered';
             }
             $this->audit->log($event, $locked, $before, $locked->only('status', 'lifecycle_version', 'actual_start_at', 'actual_end_at'));
+            match ($locked->status) {
+                MeetingStatus::Active => MeetingStarted::dispatch($locked),
+                MeetingStatus::Ended => MeetingEnded::dispatch($locked),
+                default => MeetingUpdated::dispatch($locked),
+            };
 
             return $locked;
         });

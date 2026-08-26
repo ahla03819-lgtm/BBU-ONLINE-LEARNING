@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['meeting_id', 'user_id', 'livekit_identity', 'display_name_snapshot', 'role', 'join_reserved_until', 'first_joined_at', 'last_left_at', 'removed_at', 'removed_by', 'removal_reason'])]
+#[Fillable(['public_uuid', 'meeting_id', 'user_id', 'livekit_identity', 'display_name_snapshot', 'role', 'join_reserved_until', 'first_joined_at', 'last_left_at', 'removed_at', 'removed_by', 'removal_reason'])]
 class MeetingParticipant extends Model
 {
     /** @use HasFactory<MeetingParticipantFactory> */
@@ -20,6 +20,7 @@ class MeetingParticipant extends Model
     protected static function booted(): void
     {
         static::creating(function (MeetingParticipant $participant): void {
+            $participant->public_uuid ??= (string) Str::uuid();
             $participant->livekit_identity ??= (string) Str::uuid();
         });
     }

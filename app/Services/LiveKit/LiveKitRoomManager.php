@@ -11,4 +11,6 @@ interface LiveKitRoomManager
     public function delete(string $roomName): MeetingProviderState;
 
     public function inspect(string $roomName): MeetingProviderState;
+
+    public function removeParticipant(string $roomName, string $identity): MeetingProviderState;
 }

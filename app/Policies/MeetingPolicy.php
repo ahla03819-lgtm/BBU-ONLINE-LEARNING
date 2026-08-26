@@ -73,7 +73,7 @@ class MeetingPolicy
         if (! $user->can('meetings.participants.remove')
             || $meeting->status !== MeetingStatus::Active
             || ! $this->access->canManageMeeting($user, $meeting)
-            || ! $this->access->isAssignedEligibleHost($user, $meeting)) {
+            || (! $this->access->isAdministrator($user) && ! $this->access->isAssignedEligibleHost($user, $meeting))) {
             return false;
         }
 

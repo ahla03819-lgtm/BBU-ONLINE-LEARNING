@@ -67,6 +67,23 @@ final class SdkLiveKitRoomManager implements LiveKitRoomManager
         }
     }
 
+    public function removeParticipant(string $roomName, string $identity): MeetingProviderState
+    {
+        if (! $this->configured()) {
+            return MeetingProviderState::Unknown;
+        }
+        try {
+            $this->client()->removeParticipant($roomName, $identity);
+
+            return MeetingProviderState::Ended;
+        } catch (Error $error) {
+            return $error->getErrorCode() === ErrorCode::NotFound
+                ? MeetingProviderState::Ended : MeetingProviderState::Unknown;
+        } catch (Throwable) {
+            return MeetingProviderState::Unknown;
+        }
+    }
+
     private function configured(): bool
     {
         return collect(['url', 'api_key', 'api_secret'])->every(fn (string $key) => is_string(config("livekit.$key")) && config("livekit.$key") !== '');

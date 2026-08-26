@@ -3,6 +3,7 @@
 namespace App\Actions\Meetings;
 
 use App\Enums\MeetingStatus;
+use App\Events\MeetingUpdated;
 use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Models\SchoolClass;
@@ -52,6 +53,7 @@ class UpdateMeeting
             if ($this->access->isSuperAdministrator($actor)) {
                 $this->audit->log('meeting.super-admin-override', $locked, [], ['operation' => 'update', 'host_user_id' => $host->id]);
             }
+            MeetingUpdated::dispatch($locked);
 
             return $locked;
         });

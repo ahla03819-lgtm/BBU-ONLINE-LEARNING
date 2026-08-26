@@ -5,6 +5,7 @@ namespace App\Actions\Meetings;
 use App\Contracts\MeetingLifecycleProvider;
 use App\Enums\MeetingProviderState;
 use App\Enums\MeetingStatus;
+use App\Events\MeetingStarted;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -85,6 +86,7 @@ class StartMeeting
                 'last_provider_error' => null,
             ]);
             $this->audit->log('meeting.start-succeeded', $locked, $before, $locked->only('status', 'lifecycle_version', 'actual_start_at'));
+            MeetingStarted::dispatch($locked);
 
             return $locked;
         });
