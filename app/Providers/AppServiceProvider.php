@@ -2,9 +2,19 @@
 
 namespace App\Providers;
 
+use App\Contracts\MeetingLifecycleProvider;
+use App\Models\Meeting;
+use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\LiveKit\LiveKitRoomManager;
+use App\Services\LiveKit\LiveKitTokenIssuer;
+use App\Services\LiveKit\LiveKitWebhookVerifier;
+use App\Services\LiveKit\SdkLiveKitRoomManager;
+use App\Services\LiveKit\SdkLiveKitTokenIssuer;
+use App\Services\LiveKit\SdkLiveKitWebhookVerifier;
+use App\Services\Meetings\LiveKitMeetingLifecycleProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,7 +28,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(LiveKitTokenIssuer::class, SdkLiveKitTokenIssuer::class);
+        $this->app->singleton(LiveKitRoomManager::class, SdkLiveKitRoomManager::class);
+        $this->app->singleton(LiveKitWebhookVerifier::class, SdkLiveKitWebhookVerifier::class);
+        $this->app->singleton(MeetingLifecycleProvider::class, LiveKitMeetingLifecycleProvider::class);
     }
 
     /**
@@ -27,9 +40,15 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::before(function (User $user, string $ability, array $arguments) {
-            $messagePolicy = collect($arguments)->contains(fn ($argument) => $argument === Message::class || $argument instanceof Message || $argument instanceof MessageAttachment);
+            $domainPolicyRequiresExplicitOverride = collect($arguments)->contains(fn ($argument) => $argument === Message::class
+                || $argument instanceof Message
+                || $argument instanceof MessageAttachment
+                || $argument === Meeting::class
+                || $argument instanceof Meeting
+                || $argument === MeetingParticipant::class
+                || $argument instanceof MeetingParticipant);
 
-            return $user->isActive() && $user->hasRole('Super Admin') && ! $messagePolicy ? true : null;
+            return $user->isActive() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
         });
         RateLimiter::for('messages-create', fn (Request $request) => [Limit::perMinute(20)->by($request->user()->id.'|'.$request->route('channel')), Limit::perSecond(5, 10)->by('burst|'.$request->user()->id.'|'.$request->route('channel'))]);
         RateLimiter::for('messages-mutate', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id));
@@ -40,5 +59,11 @@ class AppServiceProvider extends ServiceProvider
             : Limit::none());
         RateLimiter::for('attachments-download', fn (Request $request) => Limit::perMinute(120)->by($request->user()->id));
         RateLimiter::for('reactions', fn (Request $request) => Limit::perMinute(60)->by($request->user()->id.'|'.data_get($request->route('channel'), 'id', $request->route('channel'))));
+        RateLimiter::for('meeting-tokens', fn (Request $request) => [
+            Limit::perMinute(12)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))),
+            Limit::perMinute(30)->by('ip|'.$request->ip()),
+        ]);
+        RateLimiter::for('livekit-webhooks', fn (Request $request) => Limit::perMinute(240)->by($request->ip()));
+        RateLimiter::for('meeting-participant-removals', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
     }
 }

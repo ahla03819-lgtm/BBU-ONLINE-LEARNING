@@ -26,6 +26,22 @@ The initial deployment target is one Reverb node and does not require Redis. Pro
 
 Tests: `php artisan test`. Production frontend: `npm run build`.
 
+## LiveKit meeting runtime
+
+Configure the browser WebSocket endpoint as `LIVEKIT_URL=wss://...`, the backend Room Service endpoint as `LIVEKIT_API_URL=https://...`, and provide `LIVEKIT_API_KEY` plus the backend-only `LIVEKIT_API_SECRET` for LiveKit Cloud or a compatible self-hosted server. Never add the API endpoint, key, or secret to a `VITE_` variable. The participant token remains in browser memory only and expires after five minutes; an established LiveKit connection is not terminated merely because its original join token expires.
+
+For local meeting development, run the HTTP server, queue worker, scheduler, Reverb, and Vite as separate supervised processes:
+
+```shell
+php artisan serve
+php artisan queue:work
+php artisan schedule:work
+php artisan reverb:start
+npm run dev
+```
+
+LiveKit must be reachable from the browser at `LIVEKIT_URL`, while Laravel must reach the HTTPS Room Service API at `LIVEKIT_API_URL`. LiveKit webhooks must target `POST /integrations/livekit/webhook`. Camera and microphone permissions are requested only after an explicit action in the meeting lobby. A real two-user media test requires valid LiveKit credentials, HTTPS or localhost browser media access, and separate Teacher and Student browser sessions.
+
 ## Message attachments and reactions
 
 Messages support up to five private attachments, 10 MB per file and 25 MB combined. Supported formats are JPEG, PNG, WebP, PDF, DOCX, XLSX, PPTX, TXT, and CSV. Files are validated on the server, stored under generated private object keys on `MESSAGE_ATTACHMENT_DISK` (the private `local` disk by default), and delivered only through relationship-scoped authorized routes. They are never exposed through `public/storage` or permanent public URLs. Production may select a private S3-compatible disk after installing and configuring the appropriate Laravel filesystem adapter.

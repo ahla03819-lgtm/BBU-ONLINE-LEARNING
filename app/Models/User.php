@@ -80,4 +80,24 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(MessageReaction::class);
     }
+
+    public function createdMeetings(): HasMany
+    {
+        return $this->hasMany(Meeting::class, 'created_by');
+    }
+
+    public function hostedMeetings(): HasMany
+    {
+        return $this->hasMany(Meeting::class, 'host_user_id');
+    }
+
+    public function meetingParticipations(): HasMany
+    {
+        return $this->hasMany(MeetingParticipant::class);
+    }
+
+    public function removedMeetingParticipants(): HasMany
+    {
+        return $this->hasMany(MeetingParticipant::class, 'removed_by');
+    }
 }

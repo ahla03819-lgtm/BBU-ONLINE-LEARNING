@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('announcements:publish-due')->everyMinute()->withoutOverlapping();
+Schedule::command('meetings:reconcile-webhooks')->everyMinute()->withoutOverlapping();
