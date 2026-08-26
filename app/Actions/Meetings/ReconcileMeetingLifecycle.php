@@ -16,9 +16,12 @@ class ReconcileMeetingLifecycle
 {
     public function __construct(private MeetingLifecycleProvider $provider, private AuditLogger $audit) {}
 
-    public function handle(Meeting $meeting, bool $dryRun = false): Meeting
+    public function handle(Meeting $meeting, bool $dryRun = false, ?int $expectedVersion = null): Meeting
     {
         $authoritative = $meeting->fresh();
+        if ($expectedVersion !== null && $authoritative->lifecycle_version !== $expectedVersion) {
+            return $authoritative;
+        }
         if (! in_array($authoritative->status, [MeetingStatus::Starting, MeetingStatus::Ending], true)) {
             return $authoritative;
         }
@@ -28,8 +31,11 @@ class ReconcileMeetingLifecycle
             return $authoritative;
         }
 
-        return DB::transaction(function () use ($authoritative, $providerState) {
+        return DB::transaction(function () use ($authoritative, $providerState, $expectedVersion) {
             $locked = Meeting::query()->lockForUpdate()->findOrFail($authoritative->id);
+            if ($expectedVersion !== null && $locked->lifecycle_version !== $expectedVersion) {
+                return $locked;
+            }
             if (! $this->canRecover($locked, $providerState)) {
                 return $locked;
             }

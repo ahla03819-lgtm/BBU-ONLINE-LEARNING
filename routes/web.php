@@ -84,6 +84,7 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
         Route::patch('/school-classes/{schoolClass}/meetings/{meeting}/cancel', [MeetingController::class, 'cancel'])->name('meetings.cancel');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/start', [MeetingLifecycleController::class, 'start'])->name('meetings.start');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/end', [MeetingLifecycleController::class, 'end'])->name('meetings.end');
+        Route::post('/school-classes/{schoolClass}/meetings/{meeting}/reconcile', [MeetingLifecycleController::class, 'reconcile'])->middleware('throttle:meeting-lifecycle')->name('meetings.reconcile');
         Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/token', [MeetingTokenController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.token');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/lobby', [MeetingExperienceController::class, 'lobby'])->name('meetings.lobby');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/room', [MeetingExperienceController::class, 'room'])->name('meetings.room');
