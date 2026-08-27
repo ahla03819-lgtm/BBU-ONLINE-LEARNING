@@ -89,6 +89,15 @@ class MeetingPolicy
             && ! $this->isRemoved($user, $meeting);
     }
 
+    public function screenShare(User $user, Meeting $meeting): bool
+    {
+        return $user->can('meetings.screen-share')
+            && $meeting->status === MeetingStatus::Active
+            && $this->access->canParticipateInMeeting($user, $meeting)
+            && ($this->access->isAdministrator($user) || $user->hasRole('Teacher'))
+            && ! $this->isRemoved($user, $meeting);
+    }
+
     public function reconcile(User $user, Meeting $meeting): bool
     {
         if (! in_array($meeting->status, [MeetingStatus::Starting, MeetingStatus::Ending], true)

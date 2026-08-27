@@ -42,6 +42,7 @@ class MeetingAuthorizationTest extends TestCase
         'meetings.participants.view',
         'meetings.participants.remove',
         'meetings.tokens.issue',
+        'meetings.screen-share',
     ];
 
     protected function setUp(): void

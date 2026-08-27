@@ -56,7 +56,11 @@ final class IssueMeetingToken
         });
 
         try {
-            $issued = $this->issuer->issue($meeting->livekit_room_name, $participant->livekit_identity, $participant->display_name_snapshot);
+            $sources = ['camera', 'microphone'];
+            if (Gate::forUser($actor)->allows('screenShare', $meeting)) {
+                $sources = [...$sources, 'screen_share', 'screen_share_audio'];
+            }
+            $issued = $this->issuer->issue($meeting->livekit_room_name, $participant->livekit_identity, $participant->display_name_snapshot, $sources);
         } catch (Throwable $exception) {
             DB::transaction(function () use ($participant) {
                 MeetingParticipant::query()->whereKey($participant->id)->lockForUpdate()->update(['join_reserved_until' => null]);
