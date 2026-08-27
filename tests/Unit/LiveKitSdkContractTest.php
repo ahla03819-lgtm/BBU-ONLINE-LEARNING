@@ -58,6 +58,17 @@ class LiveKitSdkContractTest extends TestCase
         app(SdkLiveKitWebhookVerifier::class)->verify($body.' ', 'Bearer '.$authorization);
     }
 
+    public function test_token_adapter_limits_screen_share_to_explicit_publish_sources(): void
+    {
+        config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);
+
+        $issued = app(SdkLiveKitTokenIssuer::class)->issue('room-safe', 'opaque-id', 'Teacher Name', ['camera', 'microphone', 'screen_share', 'screen_share_audio']);
+        $payload = (array) JWT::decode($issued->token, new Key('test-secret-that-is-at-least-32-bytes', 'HS256'));
+        $video = (array) $payload['video'];
+
+        $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $video['canPublishSources']);
+    }
+
     public function test_webhook_adapter_rejects_malformed_authorization_header(): void
     {
         config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);

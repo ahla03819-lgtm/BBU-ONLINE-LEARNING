@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withBroadcasting(__DIR__.'/../routes/channels.php', ['middleware' => ['web', 'auth', 'account.active', 'verified', 'throttle:broadcast-auth']])
     ->withMiddleware(function (Middleware $middleware): void {
+        $trustedProxies = array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '')))));
+        if (env('APP_ENV') === 'local' && $trustedProxies !== []) {
+            $middleware->trustProxies(at: $trustedProxies);
+        }
+
         $middleware->web(append: [HandleInertiaRequests::class, SecurityHeaders::class]);
         $middleware->validateCsrfTokens(except: ['integrations/livekit/webhook']);
         $middleware->alias(['account.active' => EnsureAccountIsActive::class]);

@@ -47,6 +47,7 @@ class MeetingExperienceController extends Controller
                 'host' => $meeting->host?->only('name'),
                 'participant_reference' => $meeting->participants()->where('user_id', request()->user()->id)->value('public_uuid'),
                 'can_join' => request()->user()->can('join', $meeting),
+                'can_screen_share' => request()->user()->can('screenShare', $meeting),
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
             ],
         ];

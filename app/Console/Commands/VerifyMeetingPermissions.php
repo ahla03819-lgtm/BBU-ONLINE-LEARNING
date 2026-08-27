@@ -47,6 +47,6 @@ class VerifyMeetingPermissions extends Command
 
     private function allPermissions(): array
     {
-        return ['meetings.view', 'meetings.create', 'meetings.update', 'meetings.cancel', 'meetings.start', 'meetings.end', 'meetings.join', 'meetings.participants.view', 'meetings.participants.remove', 'meetings.tokens.issue'];
+        return ['meetings.view', 'meetings.create', 'meetings.update', 'meetings.cancel', 'meetings.start', 'meetings.end', 'meetings.join', 'meetings.participants.view', 'meetings.participants.remove', 'meetings.tokens.issue', 'meetings.screen-share'];
     }
 }
