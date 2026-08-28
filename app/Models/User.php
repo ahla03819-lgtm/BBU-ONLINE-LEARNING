@@ -110,4 +110,9 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(AssignmentGrade::class, 'graded_by');
     }
+
+    public function userNotifications(): HasMany
+    {
+        return $this->hasMany(UserNotification::class);
+    }
 }

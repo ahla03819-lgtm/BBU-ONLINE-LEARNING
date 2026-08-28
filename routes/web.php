@@ -22,6 +22,7 @@ use App\Http\Controllers\MeetingTokenController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageReactionController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +52,9 @@ Route::middleware(['auth', 'account.active'])->group(function () {
 Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::get('/', fn () => redirect()->route('dashboard'));
     Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::patch('/notifications/{notificationPublicId}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::resource('users', UserController::class)->except('show');
     Route::patch('/users/{user}/status', [UserController::class, 'status'])->name('users.status');
     Route::patch('/users/{user}/role', [UserController::class, 'role'])->middleware('password.confirm')->name('users.role');

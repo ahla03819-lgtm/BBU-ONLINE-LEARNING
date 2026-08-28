@@ -12,6 +12,7 @@ use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Services\LiveKit\LiveKitRoomManager;
 use App\Services\LiveKit\LiveKitTokenIssuer;
 use App\Services\LiveKit\LiveKitWebhookVerifier;
@@ -63,7 +64,9 @@ class AppServiceProvider extends ServiceProvider
                 || $argument === AssignmentGrade::class
                 || $argument instanceof AssignmentGrade
                 || $argument === AssignmentSubmissionAttachment::class
-                || $argument instanceof AssignmentSubmissionAttachment);
+                || $argument instanceof AssignmentSubmissionAttachment
+                || $argument === UserNotification::class
+                || $argument instanceof UserNotification);
 
             return $user->isActive() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
         });

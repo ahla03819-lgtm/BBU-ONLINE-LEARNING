@@ -3,6 +3,7 @@
 namespace App\Actions\Collaboration;
 
 use App\Enums\AnnouncementStatus;
+use App\Events\AnnouncementPublished;
 use App\Models\Announcement;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class PublishDueAnnouncements
                     }$before = $locked->only('status', 'publish_at', 'published_at');
                     $locked->update(['status' => AnnouncementStatus::Published, 'published_at' => now()]);
                     $this->audit->log('announcement.published', $locked, $before, $locked->only('status', 'publish_at', 'published_at'));
+                    AnnouncementPublished::dispatch($locked);
                     $published++;
                 });
             }

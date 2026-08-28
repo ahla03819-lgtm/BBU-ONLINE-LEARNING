@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Actions\Notifications\MarkAllUserNotificationsRead;
+use App\Actions\Notifications\MarkUserNotificationRead;
+use App\Models\UserNotification;
+use App\Support\UserNotificationPayload;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class NotificationController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $this->authorize('viewAny', UserNotification::class);
+        $notifications = UserNotification::query()
+            ->where('user_id', $request->user()->id)
+            ->latest('created_at')
+            ->latest('id')
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (UserNotification $notification) => UserNotificationPayload::make($notification, $request->user()));
+
+        return Inertia::render('Notifications/Index', ['notifications' => $notifications]);
+    }
+
+    public function read(Request $request, string $notificationPublicId, MarkUserNotificationRead $action): RedirectResponse
+    {
+        $notification = UserNotification::query()
+            ->where('user_id', $request->user()->id)
+            ->where('public_id', $notificationPublicId)
+            ->firstOrFail();
+        $action->handle($request->user(), $notification);
+
+        return back();
+    }
+
+    public function readAll(Request $request, MarkAllUserNotificationsRead $action): RedirectResponse
+    {
+        $action->handle($request->user());
+
+        return back();
+    }
+}
