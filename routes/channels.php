@@ -24,3 +24,10 @@ Broadcast::channel('meetings.class.{schoolClassId}', function ($user, int $schoo
 
     return $schoolClass && app(MeetingAccess::class)->canAccessClass($user, $schoolClass);
 });
+
+Broadcast::channel('notifications.{userId}', function ($user, int $userId) {
+    return $user->id === $userId
+        && $user->isActive()
+        && $user->hasVerifiedEmail()
+        && $user->can('notifications.view');
+});
