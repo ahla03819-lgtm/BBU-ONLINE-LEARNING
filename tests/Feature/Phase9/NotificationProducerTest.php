@@ -115,7 +115,7 @@ class NotificationProducerTest extends TestCase
         $this->assertSame($student->id, $notification->user_id);
         $this->assertSame('announcement.published', $notification->type);
         $this->assertSame('collaboration.channels.show', $notification->route_name);
-        $this->assertSame(['schoolClass' => $class->id, 'channel' => $channel->id], $notification->route_parameters);
+        $this->assertEquals(['schoolClass' => $class->id, 'channel' => $channel->id], $notification->route_parameters);
     }
 
     public function test_meeting_schedule_start_and_cancel_producers_use_safe_current_scope(): void
@@ -146,7 +146,9 @@ class NotificationProducerTest extends TestCase
         }
         $this->assertFalse(UserNotification::query()->where('user_id', $historicalStudent->id)->exists());
         $this->assertFalse(UserNotification::query()->where('user_id', $admin->id)->exists());
-        $this->assertTrue(UserNotification::query()->where('route_name', 'meetings.show')->get()->every(fn ($notification) => $notification->route_parameters === ['schoolClass' => $class->id, 'meeting' => $meeting->uuid]));
+        UserNotification::query()->where('route_name', 'meetings.show')->get()->each(function (UserNotification $notification) use ($class, $meeting): void {
+            $this->assertEquals(['schoolClass' => $class->id, 'meeting' => $meeting->uuid], $notification->route_parameters);
+        });
     }
 
     public function test_removed_participant_notification_is_sanitized_and_has_no_link(): void
@@ -192,7 +194,7 @@ class NotificationProducerTest extends TestCase
         $this->assertSame('assignment.published', $notification->type);
         $this->assertFalse(UserNotification::query()->where('user_id', $historical->id)->exists());
         $this->assertSame('coursework.assignments.show', $notification->route_name);
-        $this->assertSame(['schoolClass' => $class->id, 'classSubject' => $subject->id, 'assignment' => $assignment->id], $notification->route_parameters);
+        $this->assertEquals(['schoolClass' => $class->id, 'classSubject' => $subject->id, 'assignment' => $assignment->id], $notification->route_parameters);
     }
 
     public function test_submission_notifies_current_subject_teacher_without_private_work(): void
