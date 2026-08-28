@@ -71,6 +71,10 @@ Old orphaned objects can be inspected with `php artisan attachments:reconcile-or
 
 Reactions use the fixed catalog `like`, `love`, `laugh`, `surprised`, `sad`, and `celebrate`. HTTP and the database remain authoritative; Reverb delivers versioned aggregate-count updates without reactor identities. Run Reverb and a queue worker as described above for live synchronization.
 
+## Coursework deployment
+
+Coursework uses private storage for submission attachments and immutable database rows for submitted revisions and grade history. After deployment, run `php artisan db:seed --class=RolePermissionSeeder --force` followed by `php artisan coursework:verify-permissions`. The optional `COURSEWORK_ATTACHMENT_DISK` defaults to the private `local` disk. Inspect stale orphaned objects with `php artisan coursework:reconcile-attachments --dry-run` before running the command without `--dry-run`.
+
 ## Authentication and account policy
 
 The first-party web client uses Laravel sessions. There is no public registration. Administrators create accounts and the application sends Laravel's email-verification notification. Protected application routes require an active and verified account. Configure a real mail service through environment variables outside Git.

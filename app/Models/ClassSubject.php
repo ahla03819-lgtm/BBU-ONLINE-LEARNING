@@ -53,4 +53,9 @@ class ClassSubject extends Model
     {
         return $this->hasMany(Meeting::class);
     }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class);
+    }
 }

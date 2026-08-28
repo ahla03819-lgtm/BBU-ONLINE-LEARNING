@@ -3,6 +3,10 @@
 namespace App\Providers;
 
 use App\Contracts\MeetingLifecycleProvider;
+use App\Models\Assignment;
+use App\Models\AssignmentGrade;
+use App\Models\AssignmentSubmission;
+use App\Models\AssignmentSubmissionAttachment;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\Message;
@@ -51,7 +55,15 @@ class AppServiceProvider extends ServiceProvider
                 || $argument === Meeting::class
                 || $argument instanceof Meeting
                 || $argument === MeetingParticipant::class
-                || $argument instanceof MeetingParticipant);
+                || $argument instanceof MeetingParticipant
+                || $argument === Assignment::class
+                || $argument instanceof Assignment
+                || $argument === AssignmentSubmission::class
+                || $argument instanceof AssignmentSubmission
+                || $argument === AssignmentGrade::class
+                || $argument instanceof AssignmentGrade
+                || $argument === AssignmentSubmissionAttachment::class
+                || $argument instanceof AssignmentSubmissionAttachment);
 
             return $user->isActive() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
         });
