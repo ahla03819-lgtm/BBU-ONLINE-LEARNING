@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\AcademicController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AssignmentGradeController;
+use App\Http\Controllers\AssignmentSubmissionAttachmentController;
+use App\Http\Controllers\AssignmentSubmissionController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
@@ -9,6 +12,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
+use App\Http\Controllers\CourseworkController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingExperienceController;
@@ -75,6 +79,22 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::get('/collaboration/classes/{schoolClass}', [CollaborationController::class, 'workspace'])->name('collaboration.classes.show');
     Route::get('/collaboration/classes/{schoolClass}/channels/{channel}', [CollaborationController::class, 'workspace'])->name('collaboration.channels.show');
     Route::scopeBindings()->group(function () {
+        Route::get('/school-classes/{schoolClass}/coursework', [CourseworkController::class, 'index'])->name('coursework.index');
+        Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/create', [CourseworkController::class, 'create'])->name('coursework.assignments.create');
+        Route::post('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments', [CourseworkController::class, 'store'])->name('coursework.assignments.store');
+        Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}', [CourseworkController::class, 'show'])->name('coursework.assignments.show');
+        Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/edit', [CourseworkController::class, 'edit'])->name('coursework.assignments.edit');
+        Route::patch('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}', [CourseworkController::class, 'update'])->name('coursework.assignments.update');
+        foreach (['publish', 'close', 'archive', 'restore'] as $ability) {
+            Route::post("/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/{$ability}", [CourseworkController::class, 'transition'])->defaults('courseworkAbility', $ability)->name("coursework.assignments.{$ability}");
+        }
+        Route::put('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submission/draft', [AssignmentSubmissionController::class, 'save'])->middleware('throttle:attachments-upload')->name('coursework.submissions.save');
+        Route::post('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/submit', [AssignmentSubmissionController::class, 'submit'])->name('coursework.submissions.submit');
+        Route::post('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/resubmit', [AssignmentSubmissionController::class, 'resubmit'])->name('coursework.submissions.resubmit');
+        Route::post('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/grades', [AssignmentGradeController::class, 'store'])->name('coursework.grades.store');
+        Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/revisions/{revision}/attachments/{attachment}', [AssignmentSubmissionAttachmentController::class, 'download'])->middleware('throttle:attachments-download')->name('coursework.attachments.download');
+        Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/revisions/{revision}/attachments/{attachment}/preview', [AssignmentSubmissionAttachmentController::class, 'preview'])->middleware('throttle:attachments-download')->name('coursework.attachments.preview');
+        Route::delete('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/revisions/{revision}/attachments/{attachment}', [AssignmentSubmissionAttachmentController::class, 'destroy'])->name('coursework.attachments.destroy');
         Route::get('/school-classes/{schoolClass}/meetings', [MeetingController::class, 'index'])->name('meetings.index');
         Route::get('/school-classes/{schoolClass}/meetings/create', [MeetingController::class, 'create'])->name('meetings.create');
         Route::post('/school-classes/{schoolClass}/meetings', [MeetingController::class, 'store'])->name('meetings.store');

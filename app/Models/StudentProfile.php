@@ -29,4 +29,9 @@ class StudentProfile extends Model
     {
         return $this->hasMany(Enrollment::class);
     }
+
+    public function assignmentSubmissions(): HasMany
+    {
+        return $this->hasMany(AssignmentSubmission::class);
+    }
 }
