@@ -5,6 +5,7 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssignmentGradeController;
 use App\Http\Controllers\AssignmentSubmissionAttachmentController;
 use App\Http\Controllers\AssignmentSubmissionController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
@@ -82,7 +83,14 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::get('/collaboration', [CollaborationController::class, 'index'])->name('collaboration.index');
     Route::get('/collaboration/classes/{schoolClass}', [CollaborationController::class, 'workspace'])->name('collaboration.classes.show');
     Route::get('/collaboration/classes/{schoolClass}/channels/{channel}', [CollaborationController::class, 'workspace'])->name('collaboration.channels.show');
+    Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::get('/my-attendance', [AttendanceController::class, 'myAttendance'])->name('attendance.mine');
     Route::scopeBindings()->group(function () {
+        Route::post('/school-classes/{schoolClass}/attendance', [AttendanceController::class, 'store'])->name('attendance.registers.store');
+        Route::get('/school-classes/{schoolClass}/attendance/{attendanceRegister}', [AttendanceController::class, 'show'])->name('attendance.registers.show');
+        Route::patch('/school-classes/{schoolClass}/attendance/{attendanceRegister}/records/{record}', [AttendanceController::class, 'update'])->name('attendance.records.update');
+        Route::post('/school-classes/{schoolClass}/attendance/{attendanceRegister}/finalize', [AttendanceController::class, 'finalize'])->name('attendance.registers.finalize');
+        Route::post('/school-classes/{schoolClass}/attendance/{attendanceRegister}/records/{record}/correct', [AttendanceController::class, 'correct'])->name('attendance.records.correct');
         Route::get('/school-classes/{schoolClass}/coursework', [CourseworkController::class, 'index'])->name('coursework.index');
         Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/create', [CourseworkController::class, 'create'])->name('coursework.assignments.create');
         Route::post('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments', [CourseworkController::class, 'store'])->name('coursework.assignments.store');

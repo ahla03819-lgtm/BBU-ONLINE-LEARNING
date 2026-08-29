@@ -34,4 +34,9 @@ class StudentProfile extends Model
     {
         return $this->hasMany(AssignmentSubmission::class);
     }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
+    }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['student_profile_id', 'academic_year_id', 'school_class_id', 'enrolled_on', 'ended_on', 'end_reason', 'current_slot'])]
 class Enrollment extends Model
@@ -37,5 +38,10 @@ class Enrollment extends Model
     public function isCurrent(): bool
     {
         return $this->current_slot === 1;
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
     }
 }
