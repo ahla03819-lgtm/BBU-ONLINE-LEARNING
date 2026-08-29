@@ -7,6 +7,9 @@ use App\Models\Assignment;
 use App\Models\AssignmentGrade;
 use App\Models\AssignmentSubmission;
 use App\Models\AssignmentSubmissionAttachment;
+use App\Models\AttendanceRecord;
+use App\Models\AttendanceRecordRevision;
+use App\Models\AttendanceRegister;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\Message;
@@ -65,6 +68,12 @@ class AppServiceProvider extends ServiceProvider
                 || $argument instanceof AssignmentGrade
                 || $argument === AssignmentSubmissionAttachment::class
                 || $argument instanceof AssignmentSubmissionAttachment
+                || $argument === AttendanceRegister::class
+                || $argument instanceof AttendanceRegister
+                || $argument === AttendanceRecord::class
+                || $argument instanceof AttendanceRecord
+                || $argument === AttendanceRecordRevision::class
+                || $argument instanceof AttendanceRecordRevision
                 || $argument === UserNotification::class
                 || $argument instanceof UserNotification);
 
