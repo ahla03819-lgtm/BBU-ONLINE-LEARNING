@@ -174,8 +174,10 @@ class NotificationInboxTest extends TestCase
             ->has('notificationInbox.unread_count'));
         $this->assertFileExists(resource_path('js/Pages/Notifications/Index.jsx'));
         $layout = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.jsx'));
-        $this->assertStringContainsString('href="/notifications"', $layout);
         $this->assertStringContainsString("permissions.includes('notifications.view')", $layout);
+        $this->assertStringContainsString("notificationUrl={canViewNotifications ? '/notifications' : null}", $layout);
+        $topbar = file_get_contents(resource_path('js/Components/UI/AppTopbar.jsx'));
+        $this->assertStringContainsString('href={notificationUrl}', $topbar);
     }
 
     private function student(): User

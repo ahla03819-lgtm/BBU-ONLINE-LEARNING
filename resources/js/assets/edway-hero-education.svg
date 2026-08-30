@@ -1,0 +1,24 @@
+<svg width="600" height="390" viewBox="0 0 600 390" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">EDWAY learning desk illustration</title><desc id="desc">An original learning desk scene with stacked books, graduation cap, pencil cup, lamp, plant and academic stars.</desc>
+  <defs>
+    <linearGradient id="bookLavender" x1="205" y1="210" x2="430" y2="307" gradientUnits="userSpaceOnUse"><stop stop-color="#F6F4FF"/><stop offset="1" stop-color="#BEB8FF"/></linearGradient>
+    <linearGradient id="bookIndigo" x1="228" y1="184" x2="452" y2="251" gradientUnits="userSpaceOnUse"><stop stop-color="#9D94FB"/><stop offset="1" stop-color="#655BDE"/></linearGradient>
+    <linearGradient id="lampGlow" x1="457" y1="69" x2="557" y2="150" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF9DC"/><stop offset="1" stop-color="#FFD775"/></linearGradient>
+    <filter id="shadow" x="90" y="52" width="430" height="292" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#29236F" flood-opacity=".28"/></filter>
+  </defs>
+  <circle cx="524" cy="70" r="42" fill="#DAD6FF" fill-opacity=".28"/><circle cx="157" cy="118" r="12" fill="#FFD266"/><circle cx="506" cy="247" r="9" fill="#FF918C"/><circle cx="128" cy="231" r="7" fill="#B6F2D2"/>
+  <path d="M166 88l5 12 12 5-12 5-5 12-5-12-12-5 12-5 5-12z" fill="#FFF9B4"/><path d="M427 55l4 9 9 4-9 4-4 9-4-9-9-4 9-4 4-9z" fill="#E8E4FF"/><path d="M539 186l5 12 12 5-12 5-5 12-5-12-12-5 12-5 5-12z" fill="#FFFDF2"/>
+  <path d="M78 293c57-39 137-41 210-15 61 21 115 15 178-22v53H78v-16z" fill="#A69EFF" fill-opacity=".18"/>
+  <g filter="url(#shadow)">
+    <path d="M194 246c0-12 10-22 22-22h190c12 0 22 10 22 22v31c0 12-10 22-22 22H216c-12 0-22-10-22-22v-31z" fill="url(#bookLavender)"/>
+    <path d="M194 246c0-12 10-22 22-22h18v75h-18c-12 0-22-10-22-22v-31z" fill="#E8E5FF"/><path d="M231 225h16v74h-16z" fill="#8178E9" fill-opacity=".45"/>
+    <path d="M212 198c0-12 10-22 22-22h190c12 0 22 10 22 22v29c0 12-10 22-22 22H234c-12 0-22-10-22-22v-29z" fill="url(#bookIndigo)"/>
+    <path d="M212 198c0-12 10-22 22-22h18v73h-18c-12 0-22-10-22-22v-29z" fill="#7067E1"/><path d="M249 177h15v72h-15z" fill="#CEC9FF" fill-opacity=".6"/>
+    <path d="M236 149c0-12 10-22 22-22h164c12 0 22 10 22 22v28c0 12-10 22-22 22H258c-12 0-22-10-22-22v-28z" fill="#FFF7E4"/>
+    <path d="M236 149c0-12 10-22 22-22h18v72h-18c-12 0-22-10-22-22v-28z" fill="#FFCF79"/><path d="M273 128h15v71h-15z" fill="#EDAD51" fill-opacity=".62"/>
+  </g>
+  <path d="M278 112l76-35 76 35-76 36-76-36z" fill="#28245D"/><path d="M303 124v29c0 13 22 25 51 25s51-12 51-25v-29l-51 24-51-24z" fill="#514AAD"/><path d="M430 112v49" stroke="#28245D" stroke-width="6" stroke-linecap="round"/><circle cx="430" cy="162" r="7" fill="#FFD36D"/>
+  <path d="M144 200l10-39h37l8 39c2 9-5 16-14 16h-27c-9 0-16-7-14-16z" fill="#8A81F1"/><path d="M151 161h43l-5-16h-33l-5 16z" fill="#ECEAFF"/><path d="M158 145l-8-43" stroke="#FF887F" stroke-width="7" stroke-linecap="round"/><path d="M169 145l3-47" stroke="#FFCF71" stroke-width="7" stroke-linecap="round"/><path d="M181 145l12-41" stroke="#6EC7E8" stroke-width="7" stroke-linecap="round"/><path d="M145 100l5-10 5 10-5 5-5-5z" fill="#FF887F"/><path d="M167 97l5-10 5 10-5 5-5-5z" fill="#FFCF71"/><path d="M188 103l5-10 5 10-5 5-5-5z" fill="#6EC7E8"/>
+  <path d="M468 210h82" stroke="#F2EEFF" stroke-width="13" stroke-linecap="round"/><path d="M518 209V109c0-26-21-47-47-47h-16" stroke="#F2EEFF" stroke-width="13" stroke-linecap="round"/><path d="M430 52h62c19 0 31 20 21 36l-18 27c-5 8-14 13-24 13h-52c-16 0-25-18-16-31l18-31c3-8 9-14 17-14z" fill="url(#lampGlow)"/><path d="M443 59h63" stroke="#FFFDF1" stroke-width="6" stroke-linecap="round"/>
+  <path d="M491 273c0-25 17-47 40-52 9 20 3 42-14 54-9 7-17 10-26 10z" fill="#72C99F"/><path d="M490 274c-7-24 4-48 26-59 13 17 12 40-2 54-7 7-15 10-24 10z" fill="#A2E4BC"/><path d="M490 275c6-15 14-28 26-39" stroke="#4EAA77" stroke-width="3" stroke-linecap="round"/><path d="M473 282h49l-6 27h-37l-6-27z" fill="#F7F6FF"/><path d="M471 279h53c4 0 7 4 6 8l-3 8h-53l-3-8c-1-4 2-8 6-8z" fill="#DAD6FF"/>
+</svg>

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['class_subject_id', 'created_by', 'title', 'instructions', 'max_points', 'due_at', 'allow_resubmission', 'status', 'published_at', 'closed_at', 'archived_at', 'archived_by', 'archived_from_status', 'lifecycle_version'])]
+#[Fillable(['class_subject_id', 'reporting_period_id', 'created_by', 'title', 'instructions', 'max_points', 'due_at', 'allow_resubmission', 'status', 'published_at', 'closed_at', 'archived_at', 'archived_by', 'archived_from_status', 'lifecycle_version'])]
 class Assignment extends Model
 {
     /** @use HasFactory<AssignmentFactory> */
@@ -26,6 +26,11 @@ class Assignment extends Model
     public function classSubject(): BelongsTo
     {
         return $this->belongsTo(ClassSubject::class);
+    }
+
+    public function reportingPeriod(): BelongsTo
+    {
+        return $this->belongsTo(ReportingPeriod::class);
     }
 
     public function creator(): BelongsTo

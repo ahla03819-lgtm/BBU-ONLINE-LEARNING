@@ -8,7 +8,58 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
-body { @apply bg-slate-50 text-slate-900 antialiased; }
-.field { @apply w-full rounded-lg border border-slate-300 px-3 py-2; }
-.btn { @apply inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50; }
-.card { @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm; }
+:root { --edway-primary: #6c63e8; --edway-primary-strong: #584fd0; --edway-soft: #eef0ff; --edway-canvas: #f6f6fc; --edway-ink: #20243b; --edway-muted: #69708c; --edway-lavender: #f2f0ff; --edway-blue: #edf5ff; --edway-amber: #fff6dd; --edway-coral: #fff0f0; --edway-mint: #ebfaf2; }
+body { background: var(--edway-canvas); color: var(--edway-ink); @apply antialiased; }
+.field { @apply w-full rounded-xl border border-indigo-100 bg-white px-3 py-2.5 text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100; }
+.btn { @apply inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 font-medium text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; background: var(--edway-primary); }
+.btn:hover { background: var(--edway-primary-strong); }
+.card, .edway-card { @apply rounded-2xl border border-indigo-100/70 bg-white p-6 shadow-sm; box-shadow: 0 10px 26px rgba(78, 72, 142, .06); }
+.edway-tone-lavender { background: var(--edway-lavender); }
+.edway-tone-blue { background: var(--edway-blue); }
+.edway-tone-amber { background: var(--edway-amber); }
+.edway-tone-coral { background: var(--edway-coral); }
+.edway-tone-mint { background: var(--edway-mint); }
+
+.edway-live-room .lk-participant-tile {
+    background: radial-gradient(circle at 50% 35%, rgba(119, 103, 240, .26), rgba(20, 24, 38, .97) 65%);
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 1rem;
+    box-shadow: inset 0 1px rgba(255, 255, 255, .05), 0 18px 42px rgba(0, 0, 0, .18);
+}
+
+.edway-live-room .lk-participant-tile .lk-participant-placeholder {
+    background: radial-gradient(circle, rgba(137, 119, 255, .42) 0 25%, rgba(93, 75, 191, .26) 26% 39%, rgba(20, 24, 38, .04) 40%);
+}
+
+.edway-live-room .lk-participant-tile .lk-participant-placeholder svg {
+    width: min(46%, 17rem);
+    height: min(46%, 17rem);
+    padding: 0;
+    filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .28));
+}
+
+.edway-live-room .lk-participant-tile .lk-participant-metadata {
+    right: auto;
+    bottom: .85rem;
+    left: .85rem;
+    gap: .5rem;
+}
+
+.edway-live-room .lk-participant-tile .lk-participant-metadata-item {
+    padding: .55rem .75rem;
+    color: #fff;
+    background: rgba(5, 8, 16, .82);
+    border: 1px solid rgba(255, 255, 255, .13);
+    border-radius: .7rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .28);
+    font-size: .8125rem;
+    font-weight: 650;
+}
+
+.edway-live-room .lk-participant-tile .lk-participant-metadata-item:last-child {
+    display: none;
+}
+
+.edway-live-room .lk-participant-tile .lk-track-muted-indicator-microphone {
+    margin-right: .35rem;
+}

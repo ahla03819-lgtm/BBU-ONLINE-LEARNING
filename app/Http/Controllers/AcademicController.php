@@ -15,6 +15,7 @@ use App\Http\Requests\Academics\SaveSubjectRequest;
 use App\Http\Requests\Academics\SyncClassSubjectsRequest;
 use App\Models\AcademicYear;
 use App\Models\GradeLevel;
+use App\Models\ReportingPeriod;
 use App\Models\SchoolClass;
 use App\Models\Subject;
 use Illuminate\Http\RedirectResponse;
@@ -36,7 +37,7 @@ class AcademicController extends Controller
                 ->whereHas('studentProfile', fn ($students) => $students->where('user_id', auth()->id())));
         }
 
-        return Inertia::render('Academics/Index', ['academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get(), 'gradeLevels' => GradeLevel::query()->orderBy('sequence')->get(), 'subjects' => Subject::query()->orderBy('name')->get(), 'schoolClasses' => $query->orderBy('name')->get(), 'yearStatuses' => array_column(AcademicYearStatus::cases(), 'value'), 'classStatuses' => array_column(SchoolClassStatus::cases(), 'value')]);
+        return Inertia::render('Academics/Index', ['academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get(), 'gradeLevels' => GradeLevel::query()->orderBy('sequence')->get(), 'subjects' => Subject::query()->orderBy('name')->get(), 'schoolClasses' => $query->orderBy('name')->get(), 'reportingPeriods' => auth()->user()->can('reporting-periods.manage') ? ReportingPeriod::query()->with(['academicYear:id,name', 'parent:id,name'])->orderBy('academic_year_id')->orderBy('sequence')->get() : collect(), 'canManageReportingPeriods' => auth()->user()->can('reporting-periods.manage'), 'yearStatuses' => array_column(AcademicYearStatus::cases(), 'value'), 'classStatuses' => array_column(SchoolClassStatus::cases(), 'value')]);
     }
 
     public function storeYear(SaveAcademicYearRequest $r, SaveAcademicYear $a): RedirectResponse

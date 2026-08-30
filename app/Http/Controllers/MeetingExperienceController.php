@@ -37,6 +37,7 @@ class MeetingExperienceController extends Controller
     private function props(SchoolClass $schoolClass, Meeting $meeting): array
     {
         $meeting->loadMissing(['classSubject.subject:id,code,name', 'host:id,name']);
+        $participant = $meeting->participants()->where('user_id', request()->user()->id)->first();
 
         return [
             'schoolClass' => ['id' => $schoolClass->id, 'name' => $schoolClass->name, 'section' => $schoolClass->section],
@@ -45,10 +46,13 @@ class MeetingExperienceController extends Controller
                 'status' => $meeting->status->value, 'lifecycle_version' => $meeting->lifecycle_version,
                 'subject' => $meeting->classSubject?->subject?->only('code', 'name'),
                 'host' => $meeting->host?->only('name'),
-                'participant_reference' => $meeting->participants()->where('user_id', request()->user()->id)->value('public_uuid'),
+                'participant_reference' => $participant?->public_uuid,
+                'join_request' => MeetingWaitingRoomController::requestPayload($meeting->joinRequests()->where('requester_user_id', request()->user()->id)->first(), $participant),
                 'can_join' => request()->user()->can('join', $meeting),
+                'can_bypass_waiting_room' => app(MeetingAccess::class)->isAssignedEligibleHost(request()->user(), $meeting),
                 'can_screen_share' => request()->user()->can('screenShare', $meeting),
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
+                'can_manage_join_requests' => request()->user()->can('manageJoinRequests', $meeting),
             ],
         ];
     }

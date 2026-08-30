@@ -10,6 +10,7 @@ use App\Models\AcademicYear;
 use App\Models\ClassSubject;
 use App\Models\Enrollment;
 use App\Models\Meeting;
+use App\Models\MeetingJoinRequest;
 use App\Models\MeetingParticipant;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
@@ -167,6 +168,7 @@ class MeetingAuthorizationTest extends TestCase
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);
         $otherMeeting = Meeting::factory()->active()->create(['school_class_id' => $otherClass->id]);
         $participant = MeetingParticipant::factory()->create(['meeting_id' => $meeting->id]);
+        MeetingJoinRequest::factory()->admitted()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
         $policy = $this->policy();
 
         $this->assertTrue($policy->view($student, $meeting));

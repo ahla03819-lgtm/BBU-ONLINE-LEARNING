@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\LiveKitWebhookStatus;
+use App\Enums\MeetingJoinRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Events\MeetingEnded;
 use App\Models\LiveKitWebhookEvent;
@@ -85,6 +86,10 @@ class ProcessLiveKitWebhook implements ShouldQueue
         if (! $session->left_at) {
             $session->update(['left_at' => $event->occurred_at, 'leave_webhook_event_id' => $event->event_id, 'leave_reason' => 'participant_left']);
             $participant->update(['last_left_at' => $event->occurred_at]);
+            $meeting->joinRequests()->where('requester_user_id', $participant->user_id)
+                ->where('status', MeetingJoinRequestStatus::Admitted->value)
+                ->where('decided_at', '<=', $event->occurred_at)
+                ->update(['status' => MeetingJoinRequestStatus::Cancelled->value]);
         }
         $this->processed($event);
     }

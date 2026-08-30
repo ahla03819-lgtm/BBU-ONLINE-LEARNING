@@ -69,4 +69,9 @@ class Meeting extends Model
     {
         return $this->hasMany(MeetingParticipant::class);
     }
+
+    public function joinRequests(): HasMany
+    {
+        return $this->hasMany(MeetingJoinRequest::class);
+    }
 }
