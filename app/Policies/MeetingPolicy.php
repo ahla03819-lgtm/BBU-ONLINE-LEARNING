@@ -83,10 +83,28 @@ class MeetingPolicy
 
     public function issueToken(User $user, Meeting $meeting): bool
     {
-        return $user->can('meetings.tokens.issue')
+        if (! ($user->can('meetings.tokens.issue')
             && $meeting->status === MeetingStatus::Active
             && $this->access->canParticipateInMeeting($user, $meeting)
-            && ! $this->isRemoved($user, $meeting);
+            && ! $this->isRemoved($user, $meeting))) {
+            return false;
+        }
+
+        if ($this->access->isAssignedEligibleHost($user, $meeting)) {
+            return true;
+        }
+
+        $request = $meeting->joinRequests()->where('requester_user_id', $user->id)->first();
+        $participant = $meeting->participants()->where('user_id', $user->id)->first();
+
+        return $request?->admitsCurrentEntry($participant) ?? false;
+    }
+
+    public function manageJoinRequests(User $user, Meeting $meeting): bool
+    {
+        return $user->can('meetings.participants.remove')
+            && $meeting->status === MeetingStatus::Active
+            && $this->access->isAssignedEligibleHost($user, $meeting);
     }
 
     public function screenShare(User $user, Meeting $meeting): bool

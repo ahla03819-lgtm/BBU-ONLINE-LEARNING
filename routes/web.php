@@ -14,20 +14,24 @@ use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\CollaborationController;
 use App\Http\Controllers\CourseworkController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingExperienceController;
+use App\Http\Controllers\MeetingJoinRequestController;
 use App\Http\Controllers\MeetingLifecycleController;
 use App\Http\Controllers\MeetingParticipantController;
 use App\Http\Controllers\MeetingTokenController;
+use App\Http\Controllers\MeetingWaitingRoomController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MessageReactionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PeopleController;
+use App\Http\Controllers\ReportingPeriodController;
+use App\Http\Controllers\ResultsController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::post('/integrations/livekit/webhook', LiveKitWebhookController::class)
     ->middleware('throttle:livekit-webhooks')->name('integrations.livekit.webhook');
@@ -52,7 +56,7 @@ Route::middleware(['auth', 'account.active'])->group(function () {
 
 Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::get('/', fn () => redirect()->route('dashboard'));
-    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::patch('/notifications/{notificationPublicId}/read', [NotificationController::class, 'read'])->name('notifications.read');
@@ -61,6 +65,13 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::patch('/users/{user}/role', [UserController::class, 'role'])->middleware('password.confirm')->name('users.role');
     Route::post('/users/{user}/verification', [UserController::class, 'resendVerification'])->name('users.verification');
     Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
+    Route::post('/reporting-periods', [ReportingPeriodController::class, 'store'])->name('reporting-periods.store');
+    Route::patch('/reporting-periods/{reportingPeriod}', [ReportingPeriodController::class, 'update'])->name('reporting-periods.update');
+    Route::patch('/reporting-periods/{reportingPeriod}/transition', [ReportingPeriodController::class, 'transition'])->name('reporting-periods.transition');
+    Route::get('/results', [ResultsController::class, 'index'])->name('results.index');
+    Route::get('/results/{reportingPeriod}/school-classes/{schoolClass}/class-subjects/{classSubject}', [ResultsController::class, 'show'])->name('results.show');
+    Route::get('/my-results', [ResultsController::class, 'mine'])->name('results.mine');
+    Route::get('/my-results/reporting-periods/{reportingPeriod}/school-classes/{schoolClass}', [ResultsController::class, 'reportCard'])->name('results.report-card');
     Route::post('/academic-years', [AcademicController::class, 'storeYear'])->name('academic-years.store');
     Route::patch('/academic-years/{academicYear}', [AcademicController::class, 'updateYear'])->name('academic-years.update');
     Route::post('/grade-levels', [AcademicController::class, 'storeGrade'])->name('grade-levels.store');
@@ -120,6 +131,11 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
         Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/token', [MeetingTokenController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.token');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/lobby', [MeetingExperienceController::class, 'lobby'])->name('meetings.lobby');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/room', [MeetingExperienceController::class, 'room'])->name('meetings.room');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room', [MeetingWaitingRoomController::class, 'show'])->name('meetings.waiting-room.show');
+        Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room', [MeetingWaitingRoomController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.waiting-room.store');
+        Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room', [MeetingWaitingRoomController::class, 'destroy'])->name('meetings.waiting-room.destroy');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests', [MeetingJoinRequestController::class, 'index'])->name('meetings.join-requests.index');
+        Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests/{joinRequest:public_uuid}', [MeetingJoinRequestController::class, 'update'])->middleware('throttle:meeting-participant-removals')->name('meetings.join-requests.update');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants', [MeetingParticipantController::class, 'index'])->name('meetings.participants.index');
         Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}', [MeetingParticipantController::class, 'destroy'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.destroy');
     });

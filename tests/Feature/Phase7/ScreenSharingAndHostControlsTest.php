@@ -8,6 +8,7 @@ use App\Enums\SchoolClassStatus;
 use App\Models\AcademicYear;
 use App\Models\Enrollment;
 use App\Models\Meeting;
+use App\Models\MeetingJoinRequest;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
 use App\Models\TeacherClassAssignment;
@@ -72,6 +73,7 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $this->issuer->publishSources);
 
         $student = $this->student($class);
+        MeetingJoinRequest::factory()->admitted()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
         $this->assertSame(['camera', 'microphone'], $this->issuer->publishSources);
     }

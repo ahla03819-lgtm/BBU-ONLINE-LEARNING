@@ -7,6 +7,7 @@ use App\Enums\SchoolClassStatus;
 use App\Models\AcademicYear;
 use App\Models\Enrollment;
 use App\Models\Meeting;
+use App\Models\MeetingJoinRequest;
 use App\Models\MeetingParticipant;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
@@ -42,6 +43,7 @@ class MeetingTokenTest extends TestCase
         $class = $this->activeClass();
         $student = $this->student($class);
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'lifecycle_version' => 7]);
+        $this->admit($meeting, $student);
 
         $response = $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]));
 
@@ -65,6 +67,7 @@ class MeetingTokenTest extends TestCase
         $class = $this->activeClass();
         $student = $this->student($class);
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'max_participants' => 2]);
+        $this->admit($meeting, $student);
 
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
@@ -78,6 +81,7 @@ class MeetingTokenTest extends TestCase
         $class = $this->activeClass();
         $student = $this->student($class);
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'max_participants' => 2]);
+        $this->admit($meeting, $student);
         MeetingParticipant::factory()->count(2)->create(['meeting_id' => $meeting->id, 'join_reserved_until' => now()->addMinute()]);
 
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))
@@ -107,6 +111,7 @@ class MeetingTokenTest extends TestCase
         $class = $this->activeClass();
         $student = $this->student($class);
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);
+        $this->admit($meeting, $student);
         for ($attempt = 0; $attempt < 12; $attempt++) {
             $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
         }
@@ -130,5 +135,10 @@ class MeetingTokenTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function admit(Meeting $meeting, User $student): void
+    {
+        MeetingJoinRequest::factory()->admitted()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
     }
 }

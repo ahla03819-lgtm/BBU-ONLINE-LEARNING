@@ -29,4 +29,9 @@ class AcademicYear extends Model
     {
         return $this->hasMany(Enrollment::class);
     }
+
+    public function reportingPeriods(): HasMany
+    {
+        return $this->hasMany(ReportingPeriod::class)->orderBy('sequence');
+    }
 }
