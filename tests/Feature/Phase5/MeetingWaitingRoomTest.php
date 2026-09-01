@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\LiveKit\LiveKitTokenIssuer;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\Fakes\FakeLiveKitTokenIssuer;
 use Tests\TestCase;
 
@@ -128,11 +129,25 @@ class MeetingWaitingRoomTest extends TestCase
             ->assertJsonCount(1, 'requests')->assertJsonPath('requests.0.reference', $second->public_uuid);
     }
 
+    public function test_waiting_room_exposes_only_a_safe_requester_avatar_url_to_the_authorized_host(): void
+    {
+        [$class, $host, $student, $meeting] = $this->meetingContext();
+        $student->update(['avatar_path' => "user-avatars/{$student->id}/profile.png"]);
+        $request = MeetingJoinRequest::factory()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
+
+        $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$class, $meeting]))
+            ->assertOk()
+            ->assertJsonPath('requests.0.reference', $request->public_uuid)
+            ->assertJsonPath('requests.0.avatar_url', Storage::disk('public')->url("user-avatars/{$student->id}/profile.png"))
+            ->assertJsonMissingPath('requests.0.avatar_path')
+            ->assertJsonMissingPath('requests.0.requester_user_id');
+    }
+
     public function test_live_room_contains_the_host_only_waiting_room_polling_panel(): void
     {
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
 
-        foreach (['WaitingRoomRequests', 'waiting-room/requests', 'window.setInterval(refresh, 5000)', 'window.clearInterval(interval)', 'meeting.can_manage_join_requests', 'No participants are waiting for approval.'] as $contract) {
+        foreach (['WaitingRoomRequests', 'MeetingParticipantAvatar', 'UserAvatar', 'waiting-room/requests', 'window.setInterval(refresh, 5000)', 'window.clearInterval(interval)', 'meeting.can_manage_join_requests', 'No participants are waiting for approval.'] as $contract) {
             $this->assertStringContainsString($contract, $component);
         }
     }

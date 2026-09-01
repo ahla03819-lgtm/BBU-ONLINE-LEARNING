@@ -4,9 +4,11 @@ import MessageList from './MessageList';
 import PresenceList from './PresenceList';
 import TypingIndicator from './TypingIndicator';
 import useChannelMessages from '../../../Hooks/useChannelMessages';
+import {useAppSounds} from '../../../Sound/AppSounds';
 
 export default function MessagingPanel({schoolClass, channel, currentUser, canCreate, canModerate, canUpload, canReact}) {
-    const messaging = useChannelMessages({schoolClassId: schoolClass.id, channelId: channel.id, user: currentUser});
+    const sounds = useAppSounds();
+    const messaging = useChannelMessages({schoolClassId: schoolClass.id, channelId: channel.id, user: currentUser, onMessageReceived: (message) => sounds.play('notification', `message:${message.id}`)});
     const [reply, setReply] = useState(null);
     const safely = operation => operation.catch(error => window.alert(error.message));
     const edit = message => { const body = window.prompt('Edit message', message.body); if (body !== null && body.trim()) safely(messaging.update(message, body)); };

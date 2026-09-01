@@ -12,10 +12,22 @@ class FakeLiveKitTokenIssuer implements LiveKitTokenIssuer
 
     public array $publishSources = [];
 
-    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone']): IssuedMeetingToken
+    public ?string $metadata = null;
+
+    public ?string $roomName = null;
+
+    public ?string $identity = null;
+
+    public ?string $displayName = null;
+
+    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone'], ?string $metadata = null): IssuedMeetingToken
     {
         $this->calls++;
+        $this->roomName = $roomName;
+        $this->identity = $identity;
+        $this->displayName = $displayName;
         $this->publishSources = $publishSources;
+        $this->metadata = $metadata;
 
         return new IssuedMeetingToken('safe-test-token', CarbonImmutable::now()->addMinutes(5));
     }

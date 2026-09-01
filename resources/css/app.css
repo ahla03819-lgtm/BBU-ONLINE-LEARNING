@@ -8,17 +8,55 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
-:root { --edway-primary: #6c63e8; --edway-primary-strong: #584fd0; --edway-soft: #eef0ff; --edway-canvas: #f6f6fc; --edway-ink: #20243b; --edway-muted: #69708c; --edway-lavender: #f2f0ff; --edway-blue: #edf5ff; --edway-amber: #fff6dd; --edway-coral: #fff0f0; --edway-mint: #ebfaf2; }
-body { background: var(--edway-canvas); color: var(--edway-ink); @apply antialiased; }
-.field { @apply w-full rounded-xl border border-indigo-100 bg-white px-3 py-2.5 text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100; }
-.btn { @apply inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 font-medium text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; background: var(--edway-primary); }
-.btn:hover { background: var(--edway-primary-strong); }
-.card, .edway-card { @apply rounded-2xl border border-indigo-100/70 bg-white p-6 shadow-sm; box-shadow: 0 10px 26px rgba(78, 72, 142, .06); }
-.edway-tone-lavender { background: var(--edway-lavender); }
-.edway-tone-blue { background: var(--edway-blue); }
-.edway-tone-amber { background: var(--edway-amber); }
-.edway-tone-coral { background: var(--edway-coral); }
-.edway-tone-mint { background: var(--edway-mint); }
+:root {
+    --bbu-navy: #082f63;
+    --bbu-navy-strong: #06254d;
+    --bbu-primary: #075ca8;
+    --bbu-primary-strong: #06487f;
+    --bbu-red: #c81735;
+    --bbu-canvas: #f5f8fc;
+    --bbu-surface: #ffffff;
+    --bbu-ink: #14213d;
+    --bbu-muted: #607089;
+    --bbu-soft-navy: #edf4fb;
+    --bbu-soft-blue: #e9f4ff;
+    --bbu-soft-amber: #fff6df;
+    --bbu-soft-red: #fff0f3;
+    --bbu-soft-mint: #eaf9f1;
+
+    /* Stable aliases retain existing component contracts while using the BBU system. */
+    --edway-primary: var(--bbu-primary);
+    --edway-primary-strong: var(--bbu-primary-strong);
+    --edway-soft: var(--bbu-soft-navy);
+    --edway-canvas: var(--bbu-canvas);
+    --edway-ink: var(--bbu-ink);
+    --edway-muted: var(--bbu-muted);
+    --edway-lavender: var(--bbu-soft-navy);
+    --edway-blue: var(--bbu-soft-blue);
+    --edway-amber: var(--bbu-soft-amber);
+    --edway-coral: var(--bbu-soft-red);
+    --edway-mint: var(--bbu-soft-mint);
+}
+
+body { background: var(--bbu-canvas); color: var(--bbu-ink); @apply antialiased; }
+.field { @apply w-full rounded-xl border bg-white px-3 py-2.5 text-slate-900 shadow-sm outline-none transition focus:ring-2; border-color: #d8e5f2; --tw-ring-color: #cfe7fb; }
+.field:focus { border-color: var(--bbu-primary); }
+.field-with-leading-icon, .login-field-with-leading-icon { padding-left: 3rem; }
+.field-with-trailing-action { padding-right: 5rem; }
+.login-field-with-trailing-action { padding-right: 3rem; }
+.btn { @apply inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 font-medium text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; background: var(--bbu-primary); --tw-ring-color: var(--bbu-primary); }
+.btn:hover { background: var(--bbu-primary-strong); }
+.card, .edway-card { @apply rounded-2xl border bg-white p-6 shadow-sm; border-color: #dce7f1; box-shadow: 0 12px 30px rgba(8, 47, 99, .07); }
+.edway-tone-lavender { background: var(--bbu-soft-navy); }
+.edway-tone-blue { background: var(--bbu-soft-blue); }
+.edway-tone-amber { background: var(--bbu-soft-amber); }
+.edway-tone-coral { background: var(--bbu-soft-red); }
+.edway-tone-mint { background: var(--bbu-soft-mint); }
+
+.bbu-primary-icon { background: linear-gradient(145deg, var(--bbu-navy), var(--bbu-primary)); box-shadow: 0 9px 18px rgba(7, 92, 168, .22); }
+.bbu-page-hero { border: 1px solid #d9e6f2; background: linear-gradient(135deg, #fff 0%, var(--bbu-soft-blue) 100%); box-shadow: 0 14px 32px rgba(8, 47, 99, .07); }
+.bbu-workspace-hero { background: linear-gradient(118deg, var(--bbu-navy), var(--bbu-primary) 58%, #2782c9); box-shadow: 0 20px 42px rgba(8, 47, 99, .2); }
+.bbu-dashboard-hero { background: linear-gradient(112deg, var(--bbu-navy) 0%, var(--bbu-primary) 55%, #3488ce 100%); box-shadow: 0 20px 44px rgba(8, 47, 99, .22); }
 
 .edway-live-room .lk-participant-tile {
     background: radial-gradient(circle at 50% 35%, rgba(119, 103, 240, .26), rgba(20, 24, 38, .97) 65%);

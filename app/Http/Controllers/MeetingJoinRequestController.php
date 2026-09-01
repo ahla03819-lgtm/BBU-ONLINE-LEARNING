@@ -17,7 +17,7 @@ class MeetingJoinRequestController extends Controller
         $this->ensureScope($schoolClass, $meeting);
         $this->authorize('manageJoinRequests', $meeting);
 
-        return response()->json(['requests' => $meeting->joinRequests()->with('requester:id,name')->where('status', MeetingJoinRequestStatus::Pending)->orderBy('requested_at')->get()->map(fn (MeetingJoinRequest $request) => ['reference' => $request->public_uuid, 'display_name' => $request->requester->name, 'requested_at' => $request->requested_at?->toIso8601String()])]);
+        return response()->json(['requests' => $meeting->joinRequests()->with('requester:id,name,avatar_path')->where('status', MeetingJoinRequestStatus::Pending)->orderBy('requested_at')->get()->map(fn (MeetingJoinRequest $request) => ['reference' => $request->public_uuid, 'display_name' => $request->requester->name, 'avatar_url' => $request->requester->avatarUrl(), 'requested_at' => $request->requested_at?->toIso8601String()])]);
     }
 
     public function update(DecideMeetingJoinRequestRequest $request, SchoolClass $schoolClass, Meeting $meeting, MeetingJoinRequest $joinRequest, DecideMeetingJoinRequest $action): JsonResponse

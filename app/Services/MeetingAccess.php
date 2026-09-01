@@ -47,7 +47,6 @@ class MeetingAccess
 
         if ($user->hasRole('Student')) {
             return $query->whereHas('schoolClass.enrollments', fn (Builder $enrollments) => $enrollments
-                ->whereColumn('enrollments.academic_year_id', 'school_classes.academic_year_id')
                 ->where('current_slot', 1)
                 ->whereHas('studentProfile', fn (Builder $students) => $students->where('user_id', $user->id)));
         }
@@ -120,7 +119,6 @@ class MeetingAccess
     {
         return $this->isAcademicallyActive($schoolClass)
             && $schoolClass->enrollments()
-                ->where('academic_year_id', $schoolClass->academic_year_id)
                 ->where('current_slot', 1)
                 ->whereHas('studentProfile', fn (Builder $students) => $students->where('user_id', $user->id))
                 ->exists();

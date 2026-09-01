@@ -44,14 +44,16 @@ class DashboardTest extends TestCase
         $this->actingAs($teacher)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('variant', 'teacher')->has('classes', 1)->where('classes.0.id', $class->id));
     }
 
-    public function test_student_only_receives_their_current_enrolled_class_data(): void
+    public function test_student_receives_all_current_class_memberships(): void
     {
         [$class] = $this->classSubject();
         $student = $this->user('Student');
         $profile = StudentProfile::factory()->create(['user_id' => $student]);
         Enrollment::factory()->create(['student_profile_id' => $profile, 'school_class_id' => $class, 'academic_year_id' => $class->academic_year_id, 'current_slot' => 1]);
+        [$secondClass] = $this->classSubject($class->academicYear);
+        Enrollment::factory()->create(['student_profile_id' => $profile, 'school_class_id' => $secondClass, 'academic_year_id' => $secondClass->academic_year_id, 'current_slot' => 1]);
 
-        $this->actingAs($student)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('variant', 'student')->has('classes', 1)->where('classes.0.id', $class->id)->where('assignments', []));
+        $this->actingAs($student)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('variant', 'student')->has('classes', 2)->where('metrics.0.label', 'My classes')->where('metrics.0.value', 2)->where('assignments', []));
     }
 
     private function user(string $role): User
