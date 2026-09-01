@@ -10,19 +10,26 @@ use App\Models\Enrollment;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Services\LiveKit\LiveKitTokenIssuer;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Tests\Fakes\FakeLiveKitTokenIssuer;
 use Tests\TestCase;
 
 class ConversationCallTest extends TestCase
 {
     use RefreshDatabase;
 
+    private FakeLiveKitTokenIssuer $issuer;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->issuer = new FakeLiveKitTokenIssuer;
+        $this->app->instance(LiveKitTokenIssuer::class, $this->issuer);
+        config(['livekit.url' => 'wss://public.example.test']);
     }
 
     public function test_direct_members_can_start_accept_and_issue_a_server_owned_token(): void
@@ -34,7 +41,14 @@ class ConversationCallTest extends TestCase
         $model = ConversationCall::where('public_uuid', $call['uuid'])->firstOrFail();
         $this->actingAs($b)->postJson(route('conversation-calls.respond', $model), ['decision' => 'accepted'])->assertOk();
         $this->assertDatabaseHas('conversation_calls', ['id' => $model->id, 'status' => 'active']);
-        $this->actingAs($b)->postJson(route('conversation-calls.token', $model))->assertOk()->assertJsonPath('identity', 'conversation-call:'.$model->public_uuid.':'.$b->id);
+        $this->actingAs($b)->postJson(route('conversation-calls.token', $model))
+            ->assertOk()
+            ->assertJsonPath('token', 'safe-test-token')
+            ->assertJsonPath('server_url', 'wss://public.example.test')
+            ->assertJsonPath('identity', 'conversation-call:'.$model->public_uuid.':'.$b->id);
+        $this->assertSame($model->livekit_room_name, $this->issuer->roomName);
+        $this->assertSame('conversation-call:'.$model->public_uuid.':'.$b->id, $this->issuer->identity);
+        $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $this->issuer->publishSources);
         Event::assertDispatched(ConversationCallSignal::class, fn ($event) => $event->broadcastAs() === 'conversation.call.started');
     }
 
@@ -94,7 +108,10 @@ class ConversationCallTest extends TestCase
         $call = $this->actingAs($a)->postJson(route('conversation-calls.store', $conversation), ['type' => 'audio'])->assertCreated()->json('call');
         $model = ConversationCall::where('public_uuid', $call['uuid'])->firstOrFail();
         $this->assertSame('active', $model->status);
-        $this->actingAs($b)->postJson(route('conversation-calls.token', $model))->assertOk();
+        $this->actingAs($b)->postJson(route('conversation-calls.token', $model))
+            ->assertOk()
+            ->assertJsonPath('token', 'safe-test-token');
+        $this->assertSame($model->livekit_room_name, $this->issuer->roomName);
         $this->actingAs($b)->postJson(route('conversation-calls.leave', $model))->assertOk();
         $this->assertSame('active', $model->fresh()->status);
     }
