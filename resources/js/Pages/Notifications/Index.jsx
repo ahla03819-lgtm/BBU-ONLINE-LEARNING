@@ -25,7 +25,7 @@ export default function Index({notifications}) {
             <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Notifications</h1>
-                    <p className="mt-1 text-sm text-slate-500">Important school activity and updates.</p>
+                    <p className="mt-1 text-sm text-slate-500">Important learning activity and updates.</p>
                 </div>
                 {notificationInbox.unread_count > 0 && <button type="button" className="btn" disabled={markingAll} onClick={markAll}>{markingAll ? 'Marking…' : 'Mark all as read'}</button>}
             </div>

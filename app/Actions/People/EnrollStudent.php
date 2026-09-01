@@ -16,9 +16,11 @@ class EnrollStudent
     {
         return DB::transaction(function () use ($student, $class, $date) {
             StudentProfile::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
-            if ($student->enrollments()->where('academic_year_id', $class->academic_year_id)->where('current_slot', 1)->exists()) {
-                throw new \DomainException('Student already has a current enrollment in this academic year.');
-            }$enrollment = $student->enrollments()->create(['academic_year_id' => $class->academic_year_id, 'school_class_id' => $class->id, 'enrolled_on' => $date, 'current_slot' => 1]);
+            if ($student->enrollments()->where('school_class_id', $class->id)->where('current_slot', 1)->exists()) {
+                throw new \DomainException('Student already has a current enrollment in this class.');
+            }
+
+            $enrollment = $student->enrollments()->create(['academic_year_id' => $class->academic_year_id, 'school_class_id' => $class->id, 'enrolled_on' => $date, 'current_slot' => 1]);
             $this->audit->log('enrollment.created', $enrollment, [], $enrollment->toArray());
 
             return $enrollment;

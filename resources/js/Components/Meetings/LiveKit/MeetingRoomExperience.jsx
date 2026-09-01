@@ -1,10 +1,29 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {GridLayout, LiveKitRoom, ParticipantTile, RoomAudioRenderer, StartAudio, TrackToggle, useConnectionState, useLocalParticipant, useParticipants, useTracks, useTrackToggle} from '@livekit/components-react';
+import {ConnectionQualityIndicator, GridLayout, LiveKitRoom, ParticipantName, ParticipantTile, RoomAudioRenderer, StartAudio, TrackMutedIndicator, TrackToggle, useConnectionState, useLocalParticipant, useParticipants, useTrackRefContext, useTracks, useTrackToggle, VideoTrack} from '@livekit/components-react';
 import {Track} from 'livekit-client';
 import Icon from '../../UI/Icon';
+import UserAvatar from '../../UI/UserAvatar';
+import MeetingParticipantAvatar from './MeetingParticipantAvatar';
+import {useAppSounds} from '../../../Sound/AppSounds';
 import '@livekit/components-styles';
 
-const initials = (name = 'Participant') => name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+function CameraParticipantTile() {
+    const trackRef = useTrackRefContext();
+
+    return <ParticipantTile>
+        {trackRef.publication && <VideoTrack trackRef={trackRef}/>}
+        <div className="lk-participant-placeholder bg-[radial-gradient(circle_at_50%_30%,#374151,#171923_65%)]">
+            <MeetingParticipantAvatar participant={trackRef.participant}/>
+        </div>
+        <div className="lk-participant-metadata">
+            <div className="lk-participant-metadata-item">
+                <TrackMutedIndicator trackRef={{participant: trackRef.participant, source: Track.Source.Microphone}} show="muted"/>
+                <ParticipantName/>
+            </div>
+            <ConnectionQualityIndicator className="lk-participant-metadata-item"/>
+        </div>
+    </ParticipantTile>;
+}
 
 function Tiles() {
     const cameras = useTracks([{source: Track.Source.Camera, withPlaceholder: true}]);
@@ -17,7 +36,7 @@ function Tiles() {
             <GridLayout tracks={screens} className={`h-full min-h-72 overflow-hidden rounded-xl ${tileStyle}`}><ParticipantTile/></GridLayout>
         </section>}
         <section className={`min-h-0 ${screens.length > 0 ? 'max-h-64 flex-1' : 'flex-1'}`} aria-label="Participant cameras">
-            <GridLayout tracks={cameras} className={`h-full min-h-[25rem] overflow-hidden rounded-2xl ${tileStyle}`}><ParticipantTile/></GridLayout>
+            <GridLayout tracks={cameras} className={`h-full min-h-[25rem] overflow-hidden rounded-2xl ${tileStyle}`}><CameraParticipantTile/></GridLayout>
         </section>
     </div>;
 }
@@ -37,21 +56,61 @@ function RoomSummary() {
     return <div className="flex items-center gap-2 rounded-xl bg-white/[.1] px-3 py-2 text-sm font-semibold text-white" aria-label={`${participants.length} meeting participants`}><Icon name="users" className="h-4 w-4"/>{participants.length}</div>;
 }
 
+function MeetingRoomSounds({meeting}) {
+    const connection = useConnectionState();
+    const participants = useParticipants();
+    const sounds = useAppSounds();
+    const knownParticipants = useRef(null);
+    const previousConnection = useRef(connection);
+    const previousMeetingStatus = useRef(meeting.status);
+
+    useEffect(() => {
+        if (connection !== 'connected') {
+            if (previousConnection.current === 'connected' && ['reconnecting', 'signalReconnecting', 'disconnected'].includes(connection)) sounds.play('reconnect', meeting.uuid);
+            previousConnection.current = connection;
+            return;
+        }
+
+        const current = new Set(participants.filter((participant) => !participant.isLocal).map((participant) => participant.identity));
+        if (knownParticipants.current) {
+            current.forEach((identity) => { if (!knownParticipants.current.has(identity)) sounds.play('participant-joined', `${meeting.uuid}:${identity}`); });
+            knownParticipants.current.forEach((identity) => { if (!current.has(identity)) sounds.play('participant-left', `${meeting.uuid}:${identity}`); });
+        }
+        knownParticipants.current = current;
+        previousConnection.current = connection;
+    }, [connection, meeting.uuid, participants, sounds]);
+
+    useEffect(() => {
+        if (previousMeetingStatus.current === 'active' && ['ending', 'ended', 'cancelled'].includes(meeting.status)) sounds.play('meeting-ended', meeting.uuid);
+        previousMeetingStatus.current = meeting.status;
+    }, [meeting.status, meeting.uuid, sounds]);
+
+    return null;
+}
+
 function WaitingRoomRequests({meeting, schoolClass}) {
     const [requests, setRequests] = useState([]);
     const [deciding, setDeciding] = useState(null);
     const [message, setMessage] = useState('');
     const url = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room/requests`;
+    const sounds = useAppSounds();
+    const knownRequests = useRef(null);
 
     useEffect(() => {
         const refresh = () => fetch(url, {headers: {Accept: 'application/json'}})
             .then((response) => response.ok ? response.json() : null)
-            .then((data) => data && setRequests(data.requests));
+            .then((data) => {
+                if (!data) return;
+                const references = data.requests.map((request) => request.reference);
+                if (knownRequests.current) references.filter((reference) => !knownRequests.current.has(reference)).forEach((reference) => sounds.play('waiting-room-request', `${meeting.uuid}:${reference}`));
+                knownRequests.current = new Set(references);
+                setRequests(data.requests);
+            });
         refresh();
         const interval = window.setInterval(refresh, 5000);
 
         return () => window.clearInterval(interval);
-    }, [url]);
+    }, [meeting.uuid, sounds, url]);
 
     const decide = async (reference, decision) => {
         if (deciding) return;
@@ -66,7 +125,7 @@ function WaitingRoomRequests({meeting, schoolClass}) {
         finally { setDeciding(null); }
     };
 
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">Waiting room</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? `${requests.length} participant${requests.length === 1 ? '' : 's'} waiting` : 'No requests right now'}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Auto refresh</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">No participants are waiting for approval.</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">{initials(request.display_name)}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">Requested {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>Admit</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>Deny</button></div></div>)}</div></section>;
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">Waiting room</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? `${requests.length} participant${requests.length === 1 ? '' : 's'} waiting` : 'No requests right now'}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Auto refresh</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">No participants are waiting for approval.</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><UserAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">Requested {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>Admit</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>Deny</button></div></div>)}</div></section>;
 }
 
 function ParticipantRail({records, canManage, onRemove, removing}) {
@@ -78,7 +137,7 @@ function ParticipantRail({records, canManage, onRemove, removing}) {
         const participant = liveByName.get(record.display_name);
         const microphoneOn = participant?.isMicrophoneEnabled;
         const label = record.role === 'host' ? 'Host' : record.present ? 'Present' : 'Not present';
-        return <div key={record.reference} className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-50 text-xs font-bold text-violet-700">{initials(record.display_name)}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{record.display_name}</p><p className={`mt-0.5 text-xs font-medium ${record.role === 'host' ? 'text-violet-600' : 'text-slate-500'}`}>{label}</p></div>{participant && <Icon name={microphoneOn ? 'mic' : 'mic-off'} className={`h-4 w-4 ${microphoneOn ? 'text-emerald-600' : 'text-red-500'}`}/>} {canManage && record.role !== 'host' && <button className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50" disabled={removing !== null} onClick={() => onRemove(record.reference)} aria-label={removing === record.reference ? `Removing… ${record.display_name}` : `Remove ${record.display_name}`}>{removing === record.reference ? <Icon name="loader" className="h-4 w-4 animate-spin"/> : <Icon name="x" className="h-4 w-4"/>}</button>}</div>;
+        return <div key={record.reference} className="flex items-center gap-3"><UserAvatar name={record.display_name} avatarUrl={record.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{record.display_name}</p><p className={`mt-0.5 text-xs font-medium ${record.role === 'host' ? 'text-violet-600' : 'text-slate-500'}`}>{label}</p></div>{participant && <Icon name={microphoneOn ? 'mic' : 'mic-off'} className={`h-4 w-4 ${microphoneOn ? 'text-emerald-600' : 'text-red-500'}`}/>} {canManage && record.role !== 'host' && <button className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50" disabled={removing !== null} onClick={() => onRemove(record.reference)} aria-label={removing === record.reference ? `Removing… ${record.display_name}` : `Remove ${record.display_name}`}>{removing === record.reference ? <Icon name="loader" className="h-4 w-4 animate-spin"/> : <Icon name="x" className="h-4 w-4"/>}</button>}</div>;
     })}</div></section>;
 }
 
@@ -144,8 +203,8 @@ export default function MeetingRoomExperience({credentials, meeting, schoolClass
         onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
         onDisconnected={() => { if (connected.current) onLeave(); else setConnectionError('Unable to join the meeting. Please try again.'); }}
         className="edway-live-room grid min-h-[calc(100vh-8rem)] gap-4 bg-transparent text-white xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
-            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>EDWAY LIVE CLASS</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 pl-11"><ConnectionStatus error={connectionError}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label="Enable meeting audio" className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500"/></div></header>
+        <MeetingRoomSounds meeting={meeting}/><section className="relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
+            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>BBU LIVE CLASS</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 pl-11"><ConnectionStatus error={connectionError}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label="Enable meeting audio" className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
             {(mediaMessage || moderationMessage) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderationMessage}</div>}
             <div className="relative z-0 min-h-0 flex-1 py-3"><Tiles/></div>
             <RoomAudioRenderer/><MediaControls meeting={meeting} onLeave={onLeave} onMediaMessage={setMediaMessage}/>

@@ -10,10 +10,16 @@ use App\Models\AssignmentSubmissionAttachment;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceRecordRevision;
 use App\Models\AttendanceRegister;
+use App\Models\Conversation;
+use App\Models\ConversationCall;
+use App\Models\ConversationCallParticipant;
+use App\Models\ConversationMember;
+use App\Models\ConversationMessage;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\SchoolClass;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\LiveKit\LiveKitRoomManager;
@@ -74,10 +80,19 @@ class AppServiceProvider extends ServiceProvider
                 || $argument instanceof AttendanceRecord
                 || $argument === AttendanceRecordRevision::class
                 || $argument instanceof AttendanceRecordRevision
+                || $argument === Conversation::class
+                || $argument instanceof Conversation
+                || $argument === ConversationCall::class
+                || $argument instanceof ConversationCall
+                || $argument instanceof ConversationCallParticipant
+                || $argument instanceof ConversationMember
+                || $argument instanceof ConversationMessage
                 || $argument === UserNotification::class
-                || $argument instanceof UserNotification);
+                || $argument instanceof UserNotification
+                || $argument === SchoolClass::class
+                || $argument instanceof SchoolClass);
 
-            return $user->isActive() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
+            return $user->isActive() && $user->hasVerifiedEmail() && $user->hasRole('Super Admin') && ! $domainPolicyRequiresExplicitOverride ? true : null;
         });
         RateLimiter::for('messages-create', fn (Request $request) => [Limit::perMinute(20)->by($request->user()->id.'|'.$request->route('channel')), Limit::perSecond(5, 10)->by('burst|'.$request->user()->id.'|'.$request->route('channel'))]);
         RateLimiter::for('messages-mutate', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id));
@@ -95,5 +110,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('livekit-webhooks', fn (Request $request) => Limit::perMinute(240)->by($request->ip()));
         RateLimiter::for('meeting-participant-removals', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('meeting-lifecycle', fn (Request $request) => Limit::perMinute(10)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
+        RateLimiter::for('class-join-code', fn (Request $request) => [
+            Limit::perMinute(8)->by('user|'.$request->user()->id),
+            Limit::perMinute(20)->by('ip|'.$request->ip()),
+        ]);
     }
 }

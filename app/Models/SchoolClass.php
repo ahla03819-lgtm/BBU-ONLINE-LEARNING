@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['academic_year_id', 'grade_level_id', 'name', 'section', 'status', 'capacity'])]
+#[Fillable(['academic_year_id', 'grade_level_id', 'name', 'section', 'status', 'capacity', 'join_code', 'join_code_enabled'])]
 class SchoolClass extends Model
 {
     /** @use HasFactory<SchoolClassFactory> */
@@ -18,7 +18,7 @@ class SchoolClass extends Model
 
     protected function casts(): array
     {
-        return ['status' => SchoolClassStatus::class];
+        return ['status' => SchoolClassStatus::class, 'join_code_enabled' => 'boolean'];
     }
 
     public function academicYear(): BelongsTo

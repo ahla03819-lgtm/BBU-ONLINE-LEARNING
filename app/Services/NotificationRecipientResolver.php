@@ -156,7 +156,6 @@ class NotificationRecipientResolver
     private function currentEnrollment(Builder $query, SchoolClass $class): Builder
     {
         return $query->where('school_class_id', $class->id)
-            ->where('academic_year_id', $class->academic_year_id)
             ->where('current_slot', 1);
     }
 

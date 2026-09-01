@@ -2,11 +2,14 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {router} from '@inertiajs/react';
 import {echo} from '../realtime/echo';
 
-export default function useNotificationRealtime({userId, initialUnreadCount, enabled, inboxOpen}) {
+export default function useNotificationRealtime({userId, initialUnreadCount, enabled, inboxOpen, onNewNotification}) {
     const [unreadCount, setUnreadCount] = useState(initialUnreadCount ?? 0);
     const reloading = useRef(false);
     const reloadRequested = useRef(false);
     const seen = useRef(new Set());
+    const onNewNotificationRef = useRef(onNewNotification);
+
+    useEffect(() => { onNewNotificationRef.current = onNewNotification; }, [onNewNotification]);
 
     useEffect(() => setUnreadCount(initialUnreadCount ?? 0), [initialUnreadCount]);
 
@@ -39,6 +42,7 @@ export default function useNotificationRealtime({userId, initialUnreadCount, ena
             if (publicId) {
                 seen.current.add(publicId);
                 if (seen.current.size > 100) seen.current.delete(seen.current.values().next().value);
+                onNewNotificationRef.current?.(event.notification);
             }
             if (Number.isInteger(event?.unread_count)) setUnreadCount(event.unread_count);
             reconcile();

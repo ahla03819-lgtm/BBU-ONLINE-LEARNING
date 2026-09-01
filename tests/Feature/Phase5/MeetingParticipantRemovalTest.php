@@ -16,6 +16,7 @@ use App\Services\LiveKit\LiveKitRoomManager;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Tests\TestCase;
 
@@ -87,9 +88,12 @@ class MeetingParticipantRemovalTest extends TestCase
     public function test_participant_list_exposes_only_safe_public_fields(): void
     {
         [$class, $meeting, $host, $participant] = $this->scenario();
+        $participant->user->update(['avatar_path' => "user-avatars/{$participant->user_id}/profile.jpg"]);
         $response = $this->actingAs($host)->getJson(route('meetings.participants.index', [$class, $meeting]))->assertOk();
         $response->assertJsonPath('participants.0.reference', $participant->public_uuid)
+            ->assertJsonPath('participants.0.avatar_url', Storage::disk('public')->url("user-avatars/{$participant->user_id}/profile.jpg"))
             ->assertJsonMissingPath('participants.0.user_id')
+            ->assertJsonMissingPath('participants.0.avatar_path')
             ->assertJsonMissingPath('participants.0.livekit_identity')
             ->assertJsonMissingPath('participants.0.participant_sid')
             ->assertJsonMissingPath('participants.0.email');

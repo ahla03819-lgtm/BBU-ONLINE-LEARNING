@@ -9,6 +9,7 @@ use App\Models\AcademicYear;
 use App\Models\Enrollment;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,7 +26,7 @@ class EnrollmentHistoryTest extends TestCase
         $this->assertSame($class->academic_year_id, $enrollment->academic_year_id);
     }
 
-    public function test_only_one_current_enrollment_per_student_and_year_is_allowed(): void
+    public function test_student_can_have_current_memberships_in_multiple_classes_in_the_same_year(): void
     {
         $year = AcademicYear::factory()->create();
         $first = SchoolClass::factory()->create(['academic_year_id' => $year]);
@@ -33,8 +34,34 @@ class EnrollmentHistoryTest extends TestCase
         $student = StudentProfile::factory()->create();
         app(EnrollStudent::class)->handle($student, $first, '2026-09-01');
 
+        $secondEnrollment = app(EnrollStudent::class)->handle($student, $second, '2026-09-02');
+
+        $this->assertSame(1, $secondEnrollment->current_slot);
+        $this->assertCount(2, $student->enrollments()->where('current_slot', 1)->get());
+    }
+
+    public function test_only_one_current_enrollment_per_student_and_class_is_allowed(): void
+    {
+        $class = SchoolClass::factory()->create();
+        $student = StudentProfile::factory()->create();
+        app(EnrollStudent::class)->handle($student, $class, '2026-09-01');
+
         $this->expectException(\DomainException::class);
-        app(EnrollStudent::class)->handle($student, $second, '2026-09-02');
+        app(EnrollStudent::class)->handle($student, $class, '2026-09-02');
+    }
+
+    public function test_database_constraint_allows_multiple_classes_but_rejects_duplicate_current_class_membership(): void
+    {
+        $year = AcademicYear::factory()->create();
+        $first = SchoolClass::factory()->create(['academic_year_id' => $year]);
+        $second = SchoolClass::factory()->create(['academic_year_id' => $year]);
+        $student = StudentProfile::factory()->create();
+
+        Enrollment::factory()->create(['student_profile_id' => $student, 'academic_year_id' => $year, 'school_class_id' => $first, 'current_slot' => 1]);
+        Enrollment::factory()->create(['student_profile_id' => $student, 'academic_year_id' => $year, 'school_class_id' => $second, 'current_slot' => 1]);
+
+        $this->expectException(QueryException::class);
+        Enrollment::factory()->create(['student_profile_id' => $student, 'academic_year_id' => $year, 'school_class_id' => $first, 'current_slot' => 1]);
     }
 
     public function test_transfer_preserves_history_and_creates_one_new_current_enrollment(): void

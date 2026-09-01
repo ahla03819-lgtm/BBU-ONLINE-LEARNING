@@ -20,7 +20,7 @@ const mergeMessages = (current, incoming) => {
     return [...map.values()].sort((a, b) => Number(a.id) - Number(b.id));
 };
 
-export default function useChannelMessages({schoolClassId, channelId, user}) {
+export default function useChannelMessages({schoolClassId, channelId, user, onMessageReceived}) {
     const base = `/collaboration/classes/${schoolClassId}/channels/${channelId}`;
     const [messages, setMessages] = useState([]);
     const [hasMore, setHasMore] = useState(false);
@@ -33,6 +33,8 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
     const messagesRef = useRef([]);
     const lastTypingSent = useRef(0);
     const typingTimers = useRef({});
+    const onMessageReceivedRef = useRef(onMessageReceived);
+    const heardMessages = useRef(new Set());
     const reactions = useMessageReactions({base, setMessages});
 
     const load = useCallback(async (query = '') => {
@@ -48,6 +50,7 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
     }, [load]);
 
     useEffect(() => { messagesRef.current = messages; }, [messages]);
+    useEffect(() => { onMessageReceivedRef.current = onMessageReceived; }, [onMessageReceived]);
 
     const recover = useCallback(() => {
         const highest = messagesRef.current.reduce((max, message) => Number.isInteger(Number(message.id)) ? Math.max(max, Number(message.id)) : max, 0);
@@ -61,7 +64,15 @@ export default function useChannelMessages({schoolClassId, channelId, user}) {
             .here(users => setMembers(users))
             .joining(member => setMembers(current => current.some(item => String(item.id) === String(member.id)) ? current : [...current, member]))
             .leaving(member => setMembers(current => current.filter(item => String(item.id) !== String(member.id))))
-            .listen('.message.sent', event => setMessages(current => mergeMessages(current, [event.message])))
+            .listen('.message.sent', event => {
+                const messageId = String(event.message?.id ?? '');
+                if (messageId && String(event.message?.sender?.id) !== String(user.id) && !heardMessages.current.has(messageId)) {
+                    heardMessages.current.add(messageId);
+                    if (heardMessages.current.size > 100) heardMessages.current.delete(heardMessages.current.values().next().value);
+                    onMessageReceivedRef.current?.(event.message);
+                }
+                setMessages(current => mergeMessages(current, [event.message]));
+            })
             .listen('.message.updated', event => setMessages(current => mergeMessages(current, [event.message])))
             .listen('.message.hidden', event => setMessages(current => mergeMessages(current, [event.message])))
             .listen('.message.reactions.changed', event => reactions.applyReactionEvent(event.reactions))

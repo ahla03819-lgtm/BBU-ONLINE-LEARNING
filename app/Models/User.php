@@ -12,9 +12,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'status'])]
+#[Fillable(['name', 'email', 'password', 'status', 'avatar_path'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -41,9 +43,23 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->status === AccountStatus::Active;
     }
 
+    public function avatarUrl(): ?string
+    {
+        if (! is_string($this->avatar_path) || ! Str::startsWith($this->avatar_path, "user-avatars/{$this->id}/")) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->avatar_path);
+    }
+
     public function teacherProfile(): HasOne
     {
         return $this->hasOne(TeacherProfile::class);
+    }
+
+    public function conversationMemberships(): HasMany
+    {
+        return $this->hasMany(ConversationMember::class);
     }
 
     public function studentProfile(): HasOne

@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\LiveKit\LiveKitTokenIssuer;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\Fakes\FakeLiveKitTokenIssuer;
 use Tests\TestCase;
 
@@ -74,6 +75,40 @@ class MeetingTokenTest extends TestCase
 
         $this->assertSame(2, $this->issuer->calls);
         $this->assertSame(1, MeetingParticipant::query()->where('meeting_id', $meeting->id)->count());
+    }
+
+    public function test_token_metadata_contains_only_the_authenticated_users_safe_avatar_url(): void
+    {
+        $class = $this->activeClass();
+        $student = $this->student($class);
+        $student->update(['avatar_path' => "user-avatars/{$student->id}/profile.webp"]);
+        $otherStudent = $this->student($class);
+        $otherStudent->update(['avatar_path' => "user-avatars/{$otherStudent->id}/private-looking.png"]);
+        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);
+        $this->admit($meeting, $student);
+
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]), [
+            'avatar_url' => Storage::disk('public')->url("user-avatars/{$otherStudent->id}/private-looking.png"),
+        ])->assertOk();
+
+        $metadata = json_decode((string) $this->issuer->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(Storage::disk('public')->url("user-avatars/{$student->id}/profile.webp"), $metadata['avatar_url']);
+        $this->assertArrayNotHasKey('avatar_path', $metadata);
+        $this->assertArrayNotHasKey('user_id', $metadata);
+    }
+
+    public function test_token_metadata_keeps_the_avatar_field_null_when_the_authenticated_user_has_no_avatar(): void
+    {
+        $class = $this->activeClass();
+        $student = $this->student($class);
+        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);
+        $this->admit($meeting, $student);
+
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+
+        $metadata = json_decode((string) $this->issuer->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('avatar_url', $metadata);
+        $this->assertNull($metadata['avatar_url']);
     }
 
     public function test_capacity_counts_other_unexpired_reservations_and_denies_without_fake_attendance(): void

@@ -64,7 +64,7 @@ class DashboardData
             ->orderBy('name')->get();
 
         return $this->base('student', $user, $classes, [
-            ['label' => 'My class', 'value' => $classes->first() ? trim($classes->first()->name.' '.$classes->first()->section) : '—', 'hint' => 'Current enrollment'],
+            ['label' => 'My classes', 'value' => $classes->count(), 'hint' => 'Current class memberships'],
             ['label' => 'Attendance records', 'value' => $user->studentProfile?->attendanceRecords()->count() ?? 0, 'hint' => 'Personal history'],
             ['label' => 'Coursework', 'value' => $this->assignmentsForClasses($classes)->where('status', 'published')->count(), 'hint' => 'Available assignments'],
             ['label' => 'Unread activity', 'value' => $user->userNotifications()->whereNull('read_at')->count(), 'hint' => 'Notifications'],
