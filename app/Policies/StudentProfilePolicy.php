@@ -22,7 +22,7 @@ class StudentProfilePolicy
             return true;
         }
 
-return $p->enrollments()->where('current_slot', 1)->whereHas('schoolClass', fn ($q) => $q->whereHas('teacherAssignments', fn ($a) => $a->where('current_slot', 1)->whereHas('teacherProfile', fn ($t) => $t->where('user_id', $u->id)))->orWhereHas('classSubjects.teacherAssignments', fn ($a) => $a->where('current_slot', 1)->whereHas('teacherProfile', fn ($t) => $t->where('user_id', $u->id))))->exists();
+        return $p->enrollments()->where('current_slot', 1)->whereHas('schoolClass', fn ($q) => $q->whereHas('teacherAssignments', fn ($a) => $a->where('current_slot', 1)->whereHas('teacherProfile', fn ($t) => $t->where('user_id', $u->id)))->orWhereHas('classSubjects.teacherAssignments', fn ($a) => $a->where('current_slot', 1)->whereHas('teacherProfile', fn ($t) => $t->where('user_id', $u->id))))->exists();
     }
 
     public function create(User $u): bool
