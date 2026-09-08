@@ -18,6 +18,13 @@ class UserNotificationPayload
         'assignment.published' => 'New assignment',
         'assignment.submitted' => 'Assignment submitted',
         'assignment.graded' => 'Assignment graded',
+        'conversation.direct-message' => 'New direct message',
+        'conversation.group-message' => 'New group message',
+        'conversation.member-added' => 'Added to a group',
+        'conversation.member-removed' => 'Group access changed',
+        'conversation.member-promoted' => 'You are now a group manager',
+        'conversation.call-missed' => 'Missed call',
+        'conversation.call-declined' => 'Call declined',
     ];
 
     private const CONTEXT_KEYS = [
@@ -29,17 +36,47 @@ class UserNotificationPayload
         'assignment.published' => ['title'],
         'assignment.submitted' => ['assignment_title'],
         'assignment.graded' => ['assignment_title'],
+        'conversation.direct-message' => ['actor_name'],
+        'conversation.group-message' => ['conversation_name'],
+        'conversation.member-added' => ['conversation_name'],
+        'conversation.member-removed' => ['message'],
+        'conversation.member-promoted' => ['conversation_name'],
+        'conversation.call-missed' => ['actor_name', 'call_type'],
+        'conversation.call-declined' => ['actor_name', 'call_type'],
+    ];
+
+    private const PRESENTATION = [
+        'announcement.published' => ['icon' => 'messages', 'tone' => 'blue'],
+        'meeting.scheduled' => ['icon' => 'calendar', 'tone' => 'blue'],
+        'meeting.started' => ['icon' => 'video', 'tone' => 'green'],
+        'meeting.cancelled' => ['icon' => 'video', 'tone' => 'red'],
+        'meeting.participant-removed' => ['icon' => 'video', 'tone' => 'amber'],
+        'assignment.published' => ['icon' => 'clipboard', 'tone' => 'indigo'],
+        'assignment.submitted' => ['icon' => 'clipboard', 'tone' => 'blue'],
+        'assignment.graded' => ['icon' => 'chart', 'tone' => 'green'],
+        'conversation.direct-message' => ['icon' => 'messages', 'tone' => 'indigo'],
+        'conversation.group-message' => ['icon' => 'users', 'tone' => 'blue'],
+        'conversation.member-added' => ['icon' => 'users', 'tone' => 'green'],
+        'conversation.member-removed' => ['icon' => 'users', 'tone' => 'amber'],
+        'conversation.member-promoted' => ['icon' => 'users', 'tone' => 'indigo'],
+        'conversation.call-missed' => ['icon' => 'video', 'tone' => 'red'],
+        'conversation.call-declined' => ['icon' => 'video', 'tone' => 'amber'],
     ];
 
     public static function make(UserNotification $notification, User $viewer): array
     {
         $href = app(NotificationDeepLinkResolver::class)->resolve($viewer, $notification);
-        $mayExposeContext = $href !== null || $notification->type === 'meeting.participant-removed';
+        $mayExposeContext = $href !== null || in_array($notification->type, ['meeting.participant-removed', 'conversation.member-removed'], true);
+        $actor = $mayExposeContext ? $notification->actor : null;
+        $presentation = self::PRESENTATION[$notification->type] ?? ['icon' => 'bell', 'tone' => 'indigo'];
 
         return [
             'public_id' => $notification->public_id,
             'type' => $notification->type,
             'label' => self::LABELS[$notification->type] ?? 'Account notification',
+            'icon' => $presentation['icon'],
+            'tone' => $presentation['tone'],
+            'actor' => $actor ? ['name' => $actor->name, 'avatar_url' => $actor->avatarUrl()] : null,
             'context' => $mayExposeContext
                 ? Arr::only($notification->context ?? [], self::CONTEXT_KEYS[$notification->type] ?? [])
                 : [],

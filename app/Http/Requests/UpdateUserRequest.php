@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\InstitutionalEmail;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,6 +20,6 @@ class UpdateUserRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($this->route('user'))]];
+        return ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255', new InstitutionalEmail, Rule::unique('users')->ignore($this->route('user'))]];
     }
 }

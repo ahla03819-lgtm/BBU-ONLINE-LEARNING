@@ -15,7 +15,9 @@ class SaveProfile
         return DB::transaction(function () use ($profile, $data, $type, $role) {
             $before = $profile->exists ? $profile->toArray() : [];
             $profile->fill($data)->save();
-            $profile->user->syncRoles([$role]);
+            // A profile is an academic relationship, not an authority
+            // replacement. Preserve any existing higher-privilege role.
+            $profile->user->assignRole($role);
             $this->audit->log($type.($before ? '.updated' : '.created'), $profile, $before, $profile->fresh()->toArray());
 
             return $profile;

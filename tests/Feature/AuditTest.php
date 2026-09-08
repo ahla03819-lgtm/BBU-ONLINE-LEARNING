@@ -26,7 +26,7 @@ class AuditTest extends TestCase
         $actor = User::factory()->create();
         $actor->assignRole('Super Admin');
         $this->actingAs($actor);
-        app(CreateUser::class)->handle(['name' => 'Audited', 'email' => 'audit@example.test', 'password' => 'Sensitive-Password-99', 'status' => 'active', 'role' => 'Student']);
+        app(CreateUser::class)->handle(['name' => 'Audited', 'email' => 'audit@bbu.edu.kh', 'status' => 'active', 'role' => 'Student']);
         $this->assertDatabaseHas('audit_logs', ['action' => 'user.created', 'actor_id' => $actor->id]);
         $json = AuditLog::query()->get()->toJson();
         $this->assertStringNotContainsString('Sensitive-Password-99', $json);

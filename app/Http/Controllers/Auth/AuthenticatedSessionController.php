@@ -22,11 +22,11 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->ensureIsNotRateLimited();
-        if (! Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
+        if (! str_ends_with(mb_strtolower($request->string('email')->trim()->value()), '@bbu.edu.kh') || ! Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
             RateLimiter::hit($request->throttleKey(), 60);
             throw ValidationException::withMessages(['email' => __('These credentials do not match our records.')]);
         }
-        if (! $request->user()->isActive()) {
+        if (! $request->user()->isActive() || $request->user()->approved_at === null) {
             Auth::logout();
             RateLimiter::hit($request->throttleKey(), 60);
             throw ValidationException::withMessages(['email' => __('These credentials do not match our records.')]);

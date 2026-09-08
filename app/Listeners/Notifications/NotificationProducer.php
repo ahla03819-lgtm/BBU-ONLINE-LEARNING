@@ -6,8 +6,8 @@ use App\Actions\Notifications\StoreUserNotification;
 use App\Events\UserNotificationCreated;
 use App\Models\User;
 use App\Services\NotificationRecipientResolver;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 abstract class NotificationProducer
 {

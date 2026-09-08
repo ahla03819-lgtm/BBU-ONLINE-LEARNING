@@ -20,27 +20,28 @@ class DashboardData
 {
     public function for(User $user): array
     {
-        if ($user->hasAnyRole(['Super Admin', 'Admin'])) {
-            return $this->admin($user);
-        }
-
-        if ($user->hasRole('Teacher')) {
-            return $this->teacher($user);
-        }
-
-        return $this->student($user);
+        return match ($user->effectiveRole()) {
+            'Super Admin' => $this->admin($user, 'super-admin'),
+            'Admin' => $this->admin($user),
+            'Teacher' => $this->teacher($user),
+            default => $this->student($user),
+        };
     }
 
-    private function admin(User $user): array
+    private function admin(User $user, string $variant = 'admin'): array
     {
-        $classes = SchoolClass::query()->with('academicYear:id,name')->orderBy('name')->get();
+        $classes = $user->can('classes.view')
+            ? SchoolClass::query()->with('academicYear:id,name')->orderBy('name')->get()
+            : collect();
 
-        return $this->base('admin', $user, $classes, [
-            ['label' => 'Students', 'value' => StudentProfile::query()->count(), 'hint' => 'Student profiles'],
-            ['label' => 'Teachers', 'value' => TeacherProfile::query()->count(), 'hint' => 'Teacher profiles'],
-            ['label' => 'Classes', 'value' => $classes->count(), 'hint' => 'Configured classes'],
-            ['label' => 'Subjects', 'value' => Subject::query()->where('is_active', true)->count(), 'hint' => 'Active subjects'],
+        $metrics = array_filter([
+            $user->can('students.view') ? ['label' => 'Students', 'value' => StudentProfile::query()->count(), 'hint' => 'Student profiles'] : null,
+            $user->can('teachers.view') ? ['label' => 'Teachers', 'value' => TeacherProfile::query()->count(), 'hint' => 'Teacher profiles'] : null,
+            $user->can('classes.view') ? ['label' => 'Classes', 'value' => $classes->count(), 'hint' => 'Configured classes'] : null,
+            $user->can('subjects.view') ? ['label' => 'Subjects', 'value' => Subject::query()->where('is_active', true)->count(), 'hint' => 'Active subjects'] : null,
         ]);
+
+        return $this->base($variant, $user, $classes, $metrics);
     }
 
     private function teacher(User $user): array
@@ -74,14 +75,14 @@ class DashboardData
     private function base(string $variant, User $user, $classes, array $metrics): array
     {
         $classIds = $classes->pluck('id');
-        $today = AttendanceRegister::query()->whereIn('school_class_id', $classIds)->whereDate('attendance_date', today())->withCount([
+        $today = $user->can('attendance.view') ? AttendanceRegister::query()->whereIn('school_class_id', $classIds)->whereDate('attendance_date', today())->withCount([
             'records as present_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Present->value),
             'records as absent_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Absent->value),
             'records as late_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Late->value),
             'records as excused_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Excused->value),
-        ])->get();
-        $assignments = $this->assignmentsForClasses($classes)->with('classSubject.subject:id,name')->latest()->limit(5)->get();
-        $meetings = $this->meetingsForClasses($user, $classes)->with('schoolClass:id,name,section')->orderBy('scheduled_start_at')->limit(5)->get();
+        ])->get() : collect();
+        $assignments = $user->can('assignments.view') ? $this->assignmentsForClasses($classes)->with('classSubject.subject:id,name')->latest()->limit(5)->get() : collect();
+        $meetings = $user->can('meetings.view') ? $this->meetingsForClasses($user, $classes)->with('schoolClass:id,name,section')->orderBy('scheduled_start_at')->limit(5)->get() : collect();
         $activeYear = AcademicYear::query()->where('status', AcademicYearStatus::Active)->first(['id', 'name']);
 
         return [
@@ -92,7 +93,7 @@ class DashboardData
             'attendanceToday' => ['present' => $today->sum('present_count'), 'absent' => $today->sum('absent_count'), 'late' => $today->sum('late_count'), 'excused' => $today->sum('excused_count'), 'total' => $today->sum(fn ($register) => $register->present_count + $register->absent_count + $register->late_count + $register->excused_count)],
             'assignments' => $assignments->map(fn (Assignment $assignment) => ['title' => $assignment->title, 'subject' => $assignment->classSubject->subject->name, 'status' => $assignment->status->value, 'due_at' => $assignment->due_at?->toIso8601String()])->values(),
             'meetings' => $meetings->map(fn (Meeting $meeting) => ['title' => $meeting->title, 'school_class' => trim($meeting->schoolClass->name.' '.$meeting->schoolClass->section), 'status' => $meeting->status->value, 'scheduled_start_at' => $meeting->scheduled_start_at?->toIso8601String()])->values(),
-            'reportingPeriods' => $activeYear?->reportingPeriods()->orderBy('sequence')->get(['id', 'name', 'status'])->map->only('id', 'name', 'status')->values() ?? [],
+            'reportingPeriods' => $user->can('results.view') ? ($activeYear?->reportingPeriods()->orderBy('sequence')->get(['id', 'name', 'status'])->map->only('id', 'name', 'status')->values() ?? []) : [],
             'quickActions' => $this->actions($user, $variant),
         ];
     }

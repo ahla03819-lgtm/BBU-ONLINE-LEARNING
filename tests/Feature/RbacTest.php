@@ -47,8 +47,8 @@ class RbacTest extends TestCase
     {
         $admin = User::factory()->create();
         $admin->assignRole('Admin');
-        $this->actingAs($admin)->post('/users', ['name' => 'New User', 'email' => 'new@example.test', 'password' => 'Correct-Horse-99', 'password_confirmation' => 'Correct-Horse-99', 'status' => 'active', 'role' => 'Student'])->assertRedirect('/users');
-        $target = User::whereEmail('new@example.test')->firstOrFail();
+        $this->actingAs($admin)->post('/users', ['name' => 'New User', 'email' => 'new@bbu.edu.kh', 'status' => 'active', 'role' => 'Student'])->assertRedirect('/users');
+        $target = User::whereEmail('new@bbu.edu.kh')->firstOrFail();
         $this->actingAs($admin)->withSession(['auth.password_confirmed_at' => time()])->patch("/users/{$target->id}/role", ['role' => 'Super Admin'])->assertForbidden();
     }
 }

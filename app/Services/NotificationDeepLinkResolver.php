@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Assignment;
 use App\Models\Channel;
 use App\Models\ClassSubject;
+use App\Models\Conversation;
 use App\Models\Meeting;
 use App\Models\SchoolClass;
 use App\Models\User;
@@ -19,8 +20,20 @@ class NotificationDeepLinkResolver
             'collaboration.channels.show' => $this->collaboration($user, $notification->route_parameters ?? []),
             'meetings.show' => $this->meeting($user, $notification->route_parameters ?? []),
             'coursework.assignments.show' => $this->assignment($user, $notification->route_parameters ?? []),
+            'conversations.show' => $this->conversation($user, $notification->route_parameters ?? []),
             default => null,
         };
+    }
+
+    private function conversation(User $user, array $parameters): ?string
+    {
+        $conversation = Conversation::query()
+            ->where('public_uuid', $parameters['conversation'] ?? null)
+            ->first();
+
+        return $conversation && Gate::forUser($user)->allows('view', $conversation)
+            ? route('conversations.show', $conversation, false)
+            : null;
     }
 
     private function collaboration(User $user, array $parameters): ?string

@@ -15,10 +15,13 @@ use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\ClassJoinController;
 use App\Http\Controllers\ClassWorkspaceController;
 use App\Http\Controllers\CollaborationController;
+use App\Http\Controllers\ConversationAttachmentController;
 use App\Http\Controllers\ConversationCallController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\ConversationMessageExperienceController;
 use App\Http\Controllers\CourseworkController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingExperienceController;
@@ -35,6 +38,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\ReportingPeriodController;
 use App\Http\Controllers\ResultsController;
+use App\Http\Controllers\RoleManagementController;
 use App\Http\Controllers\SchoolClassJoinCodeController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +57,8 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'account.active'])->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+    Route::get('/set-password', [ForcedPasswordChangeController::class, 'show'])->name('password.initialize.show');
+    Route::put('/set-password', [ForcedPasswordChangeController::class, 'update'])->name('password.initialize.update');
     Route::get('/verify-email', [EmailVerificationController::class, 'notice'])->name('verification.notice');
     Route::get('/verify-email/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware('signed')->name('verification.verify');
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware('throttle:6,1')->name('verification.send');
@@ -60,7 +66,7 @@ Route::middleware(['auth', 'account.active'])->group(function () {
     Route::post('/confirm-password', [ConfirmablePasswordController::class, 'store'])->name('password.confirm.store');
 });
 
-Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
+Route::middleware(['auth', 'account.active', 'verified', 'password.change-required'])->group(function () {
     Route::get('/', fn () => redirect()->route('dashboard'));
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/my-account', [MyAccountController::class, 'show'])->name('my-account.profile');
@@ -77,8 +83,12 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::patch('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::patch('/notifications/{notificationPublicId}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::resource('users', UserController::class)->except('show');
+    Route::get('/administration/roles', [RoleManagementController::class, 'index'])->name('roles.index');
+    Route::put('/administration/roles/{role}/permissions', [RoleManagementController::class, 'update'])->middleware('password.confirm')->name('roles.permissions.update');
     Route::patch('/users/{user}/status', [UserController::class, 'status'])->name('users.status');
     Route::patch('/users/{user}/role', [UserController::class, 'role'])->middleware('password.confirm')->name('users.role');
+    Route::post('/users/{user}/approve', [UserController::class, 'approve'])->middleware('password.confirm')->name('users.approve');
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->middleware('password.confirm')->name('users.reset-password');
     Route::post('/users/{user}/verification', [UserController::class, 'resendVerification'])->name('users.verification');
     Route::get('/academics', [AcademicController::class, 'index'])->name('academics.index');
     Route::post('/reporting-periods', [ReportingPeriodController::class, 'store'])->name('reporting-periods.store');
@@ -113,6 +123,16 @@ Route::middleware(['auth', 'account.active', 'verified'])->group(function () {
     Route::post('/conversations/groups', [ConversationController::class, 'storeGroup'])->middleware('throttle:messages-create')->name('conversations.groups.store');
     Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
     Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'send'])->middleware('throttle:messages-create')->name('conversations.messages.store');
+    Route::patch('/conversations/{conversation}/messages/{message}', [ConversationMessageExperienceController::class, 'update'])->name('conversations.messages.update');
+    Route::delete('/conversations/{conversation}/messages/{message}', [ConversationMessageExperienceController::class, 'destroy'])->name('conversations.messages.destroy');
+    Route::post('/conversations/{conversation}/messages/{message}/reactions', [ConversationMessageExperienceController::class, 'react'])->name('conversations.messages.react');
+    Route::post('/conversations/{conversation}/reads', [ConversationMessageExperienceController::class, 'read'])->name('conversations.messages.read');
+    Route::get('/conversations/{conversation}/search', [ConversationMessageExperienceController::class, 'search'])->name('conversations.messages.search');
+    Route::post('/conversations/{conversation}/typing', [ConversationMessageExperienceController::class, 'typing'])->middleware('throttle:30,1')->name('conversations.typing');
+    Route::post('/conversations/{conversation}/messages/{message}/forward', [ConversationMessageExperienceController::class, 'forward'])->name('conversations.messages.forward');
+    Route::put('/conversations/{conversation}/pin/{message}', [ConversationMessageExperienceController::class, 'pin'])->name('conversations.pin');
+    Route::delete('/conversations/{conversation}/pin', [ConversationMessageExperienceController::class, 'unpin'])->name('conversations.pin.destroy');
+    Route::get('/conversations/{conversation}/attachments/{attachment}', [ConversationAttachmentController::class, 'show'])->name('conversations.attachments.show');
     Route::post('/conversations/{conversation}/calls', [ConversationCallController::class, 'store'])->middleware('throttle:messages-create')->name('conversation-calls.store');
     Route::patch('/conversations/{conversation}', [ConversationController::class, 'rename'])->name('conversations.update');
     Route::post('/conversations/{conversation}/members', [ConversationController::class, 'addMembers'])->name('conversations.members.store');

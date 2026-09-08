@@ -35,4 +35,14 @@ class UserPolicy
     {
         return $actor->can('users.assign-role') && (! $user->hasRole('Super Admin') || $actor->hasRole('Super Admin'));
     }
+
+    public function approve(User $actor, User $user): bool
+    {
+        return $this->assignRole($actor, $user) && ($actor->hasRole('Super Admin') ? ! $user->hasRole('Super Admin') : $user->hasAnyRole(['Teacher', 'Student']));
+    }
+
+    public function resetPassword(User $actor, User $user): bool
+    {
+        return ! $actor->is($user) && $this->approve($actor, $user);
+    }
 }

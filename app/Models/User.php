@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'status', 'avatar_path'])]
+#[Fillable(['name', 'email', 'password', 'status', 'avatar_path', 'approved_at', 'approved_by', 'must_change_password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -35,12 +35,31 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'status' => AccountStatus::class,
             'last_login_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'must_change_password' => 'boolean',
         ];
     }
 
     public function isActive(): bool
     {
         return $this->status === AccountStatus::Active;
+    }
+
+    /**
+     * Return the authoritative account role used for role-aware presentation.
+     *
+     * Profiles describe a person's academic relationship; they must not
+     * override the privileges granted to their account.
+     */
+    public function effectiveRole(): string
+    {
+        foreach (['Super Admin', 'Admin', 'Teacher', 'Student'] as $role) {
+            if ($this->hasRole($role)) {
+                return $role;
+            }
+        }
+
+        return 'Student';
     }
 
     public function avatarUrl(): ?string
