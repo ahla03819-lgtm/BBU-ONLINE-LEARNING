@@ -13,7 +13,7 @@ class AttendanceRecordPolicy
 
     public function view(User $user, AttendanceRecord $record): bool
     {
-        return ($user->can('attendance.view') && $this->access->canViewRegister($user, $record->attendanceRegister->schoolClass))
+        return ($user->can('attendance.view') && $this->access->canViewRegister($user, $record->attendanceRegister->schoolClass, $record->attendanceRegister->attendance_date))
             || ($user->can('attendance.view-own') && $this->access->ownsAttendanceRecord($user, $record));
     }
 

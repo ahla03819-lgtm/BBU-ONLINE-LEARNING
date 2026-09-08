@@ -14,7 +14,7 @@ class AttendanceRegisterPolicy
 
     public function view(User $user, AttendanceRegister $register): bool
     {
-        return $user->can('attendance.view') && $this->access->canViewRegister($user, $register->schoolClass);
+        return $user->can('attendance.view') && $this->access->canViewRegister($user, $register->schoolClass, $register->attendance_date);
     }
 
     public function record(User $user, SchoolClass|AttendanceRegister $subject): bool
