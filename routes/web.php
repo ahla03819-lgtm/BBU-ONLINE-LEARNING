@@ -147,10 +147,13 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     Route::get('/collaboration/classes/{schoolClass}', [CollaborationController::class, 'workspace'])->name('collaboration.classes.show');
     Route::get('/collaboration/classes/{schoolClass}/channels/{channel}', [CollaborationController::class, 'workspace'])->name('collaboration.channels.show');
     Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::get('/attendance/reports', [AttendanceController::class, 'report'])->name('attendance.reports');
+    Route::get('/attendance/reports/export', [AttendanceController::class, 'export'])->name('attendance.reports.export');
     Route::get('/my-attendance', [AttendanceController::class, 'myAttendance'])->name('attendance.mine');
     Route::scopeBindings()->group(function () {
         Route::post('/school-classes/{schoolClass}/attendance', [AttendanceController::class, 'store'])->name('attendance.registers.store');
         Route::get('/school-classes/{schoolClass}/attendance/{attendanceRegister}', [AttendanceController::class, 'show'])->name('attendance.registers.show');
+        Route::patch('/school-classes/{schoolClass}/attendance/{attendanceRegister}/records', [AttendanceController::class, 'bulk'])->name('attendance.records.bulk');
         Route::patch('/school-classes/{schoolClass}/attendance/{attendanceRegister}/records/{record}', [AttendanceController::class, 'update'])->name('attendance.records.update');
         Route::post('/school-classes/{schoolClass}/attendance/{attendanceRegister}/finalize', [AttendanceController::class, 'finalize'])->name('attendance.registers.finalize');
         Route::post('/school-classes/{schoolClass}/attendance/{attendanceRegister}/records/{record}/correct', [AttendanceController::class, 'correct'])->name('attendance.records.correct');

@@ -13,6 +13,6 @@ class AttendanceRecordRevisionPolicy
     public function view(User $user, AttendanceRecordRevision $revision): bool
     {
         return $user->can('attendance.view')
-            && $this->access->canViewRegister($user, $revision->attendanceRecord->attendanceRegister->schoolClass);
+            && $this->access->canViewRegister($user, $revision->attendanceRecord->attendanceRegister->schoolClass, $revision->attendanceRecord->attendanceRegister->attendance_date);
     }
 }

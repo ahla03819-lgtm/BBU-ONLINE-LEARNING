@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attendance\BulkRecordAttendance;
 use App\Actions\Attendance\CorrectAttendanceRecord;
 use App\Actions\Attendance\FinalizeAttendanceRegister;
 use App\Actions\Attendance\OpenAttendanceRegister;
 use App\Actions\Attendance\RecordAttendance;
 use App\Enums\AttendanceStatus;
+use App\Http\Requests\Attendance\AttendanceReportRequest;
+use App\Http\Requests\Attendance\BulkRecordAttendanceRequest;
 use App\Http\Requests\Attendance\CorrectAttendanceRecordRequest;
 use App\Http\Requests\Attendance\OpenAttendanceRegisterRequest;
 use App\Http\Requests\Attendance\RecordAttendanceRequest;
@@ -14,10 +17,14 @@ use App\Models\AttendanceRecord;
 use App\Models\AttendanceRegister;
 use App\Models\SchoolClass;
 use App\Services\AttendanceAccess;
+use App\Services\AttendanceReportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
@@ -27,21 +34,29 @@ class AttendanceController extends Controller
         abort_unless($user->can('attendance.view'), 403);
 
         $classes = SchoolClass::query()
-            ->with(['academicYear:id,name,status', 'gradeLevel:id,name'])
+            ->with(['academicYear:id,name,status,starts_on,ends_on', 'gradeLevel:id,name'])
             ->orderBy('name')
             ->get()
-            ->filter(fn (SchoolClass $schoolClass) => $access->canViewRegister($user, $schoolClass))
+            ->filter(fn (SchoolClass $schoolClass) => $access->canViewClassHistory($user, $schoolClass))
             ->values();
         $classIds = $classes->pluck('id');
         $filters = [
             'school_class_id' => $request->integer('school_class_id') ?: null,
             'attendance_date' => $request->string('attendance_date')->toString() ?: null,
+            'academic_year_id' => $request->integer('academic_year_id') ?: null,
+            'student_profile_id' => $request->integer('student_profile_id') ?: null,
+            'date_from' => $request->string('date_from')->toString() ?: null,
+            'date_to' => $request->string('date_to')->toString() ?: null,
         ];
 
         $registers = AttendanceRegister::query()
             ->whereIn('school_class_id', $classIds)
             ->when($filters['school_class_id'], fn ($query, int $classId) => $query->where('school_class_id', $classId))
             ->when($filters['attendance_date'], fn ($query, string $date) => $query->whereDate('attendance_date', $date))
+            ->when($filters['academic_year_id'], fn ($query, int $yearId) => $query->whereHas('schoolClass', fn ($classes) => $classes->where('academic_year_id', $yearId)))
+            ->when($filters['date_from'], fn ($query, string $date) => $query->whereDate('attendance_date', '>=', $date))
+            ->when($filters['date_to'], fn ($query, string $date) => $query->whereDate('attendance_date', '<=', $date))
+            ->when($filters['student_profile_id'], fn ($query, int $studentId) => $query->whereHas('records', fn ($records) => $records->where('student_profile_id', $studentId)))
             ->with(['schoolClass.academicYear:id,name,status', 'schoolClass.gradeLevel:id,name'])
             ->withCount('records')
             ->withCount([
@@ -57,17 +72,35 @@ class AttendanceController extends Controller
             ->map(fn (AttendanceRegister $register) => $this->registerSummary($register))
             ->values();
 
+        $students = AttendanceRecord::query()
+            ->whereHas('attendanceRegister', fn ($registers) => $registers->whereIn('school_class_id', $classIds))
+            ->with('studentProfile.user:id,name')
+            ->get()
+            ->filter(fn (AttendanceRecord $record) => $user->can('view', $record))
+            ->map(fn (AttendanceRecord $record) => $record->studentProfile)
+            ->filter()
+            ->unique('id')
+            ->sortBy(fn ($student) => $student->user?->name ?? '')
+            ->map(fn ($student) => [
+                'id' => $student->id,
+                'name' => $student->user?->name,
+                'student_number' => $student->student_number,
+            ])->values();
+
         return Inertia::render('Attendance/Index', [
             'classes' => $classes->map(fn (SchoolClass $schoolClass) => [
                 'id' => $schoolClass->id,
                 'name' => $schoolClass->name,
                 'section' => $schoolClass->section,
-                'academic_year' => $schoolClass->academicYear?->only('name'),
+                'academic_year' => $schoolClass->academicYear?->only('id', 'name'),
                 'grade_level' => $schoolClass->gradeLevel?->only('name'),
                 'can_open' => $user->can('record', [AttendanceRegister::class, $schoolClass]),
             ])->values(),
             'registers' => $registers,
+            'students' => $students,
             'filters' => $filters,
+            'report_url' => route('attendance.reports'),
+            'report_export_url' => route('attendance.reports.export'),
         ]);
     }
 
@@ -202,6 +235,55 @@ class AttendanceController extends Controller
         return back()->with('success', 'Attendance recorded.');
     }
 
+    public function bulk(BulkRecordAttendanceRequest $request, SchoolClass $schoolClass, AttendanceRegister $attendanceRegister, BulkRecordAttendance $action): RedirectResponse
+    {
+        $this->assertScope($schoolClass, $attendanceRegister);
+        $data = $request->validated();
+        $action->handle($request->user(), $attendanceRegister, $data['mode'], $data['records'] ?? []);
+
+        return back()->with('success', $data['mode'] === 'mark_all_present' ? 'All roster records marked present.' : 'Attendance records updated.');
+    }
+
+    public function report(AttendanceReportRequest $request, AttendanceReportService $reports): JsonResponse
+    {
+        return response()->json($reports->report($request->user(), $request->validated()));
+    }
+
+    public function export(AttendanceReportRequest $request, AttendanceReportService $reports): StreamedResponse
+    {
+        $report = $reports->report($request->user(), $request->validated());
+
+        return response()->streamDownload(function () use ($report): void {
+            $stream = fopen('php://output', 'w');
+            fputcsv($stream, [
+                'Student identifier', 'Student name', 'Academic year', 'Class', 'Date range',
+                'Total records', 'Present', 'Absent', 'Late', 'Excused', 'Attendance percentage',
+            ]);
+
+            $dateRange = $this->dateRangeLabel($report['filters']['date_from'], $report['filters']['date_to']);
+            $class = trim(implode(' ', array_filter([$report['context']['class_name'], $report['context']['class_section']]))) ?: 'All authorized classes';
+            $academicYear = $report['context']['academic_year_name'] ?: 'All authorized academic years';
+
+            foreach ($report['students'] as $entry) {
+                fputcsv($stream, array_map(static fn ($value) => self::safeCsvValue((string) $value), [
+                    $entry['student']['student_number'] ?: $entry['student']['id'],
+                    $entry['student']['name'],
+                    $academicYear,
+                    $class,
+                    $dateRange,
+                    $entry['total'],
+                    $entry['present'],
+                    $entry['absent'],
+                    $entry['late'],
+                    $entry['excused'],
+                    number_format((float) $entry['attendance_percentage'], 2, '.', '').'%',
+                ]));
+            }
+
+            fclose($stream);
+        }, $this->reportFilename($report), ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function finalize(SchoolClass $schoolClass, AttendanceRegister $attendanceRegister, FinalizeAttendanceRegister $action): RedirectResponse
     {
         $this->assertScope($schoolClass, $attendanceRegister);
@@ -245,5 +327,30 @@ class AttendanceController extends Controller
             'late_count' => $register->late_count ?? $register->records()->where('status', AttendanceStatus::Late->value)->count(),
             'excused_count' => $register->excused_count ?? $register->records()->where('status', AttendanceStatus::Excused->value)->count(),
         ];
+    }
+
+    /** @param array{filters: array, context: array, students: mixed, totals: array} $report */
+    private function reportFilename(array $report): string
+    {
+        $class = Str::slug($report['context']['class_name'] ?: 'authorized-classes') ?: 'authorized-classes';
+        $from = $report['filters']['date_from'] ?: 'all-dates';
+        $to = $report['filters']['date_to'] ?: 'all-dates';
+
+        return "attendance-report-{$class}-{$from}-{$to}.csv";
+    }
+
+    private function dateRangeLabel(?string $from, ?string $to): string
+    {
+        return match (true) {
+            $from && $to => "{$from} to {$to}",
+            $from !== null => "From {$from}",
+            $to !== null => "Until {$to}",
+            default => 'All dates',
+        };
+    }
+
+    private static function safeCsvValue(string $value): string
+    {
+        return preg_match('/^\s*[=+\-@]/', $value) === 1 ? "'{$value}" : $value;
     }
 }
