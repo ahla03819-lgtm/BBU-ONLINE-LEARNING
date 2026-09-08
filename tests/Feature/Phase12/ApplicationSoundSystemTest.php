@@ -54,6 +54,8 @@ class ApplicationSoundSystemTest extends TestCase
         foreach (['onMessageReceived', 'heardMessages', 'String(event.message?.sender?.id) !== String(user.id)'] as $contract) {
             $this->assertStringContainsString($contract, $messagesHook);
         }
+        $conversationHook = file_get_contents(resource_path('js/Hooks/useConversationMessages.js'));
+        $this->assertStringNotContainsString("play('notification'", $conversationHook);
         foreach (["sounds.play('waiting-room-request'", "sounds.play('admitted'", 'knownPendingRequests', 'window.clearInterval(interval)'] as $contract) {
             $this->assertStringContainsString($contract, $lobby);
         }

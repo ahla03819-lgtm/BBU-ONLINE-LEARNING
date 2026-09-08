@@ -92,9 +92,9 @@ class AnnouncementController extends Controller
         abort_unless($channel->school_class_id === $class->id, 404);
     }
 
-    private function ensureAnnouncement(SchoolClass $class,Channel $channel,Announcement $announcement): void
+    private function ensureAnnouncement(SchoolClass $class, Channel $channel, Announcement $announcement): void
     {
-        $this->ensureChannel($class,$channel);
-        abort_unless($announcement->channel_id === $channel->id,404);
+        $this->ensureChannel($class, $channel);
+        abort_unless($announcement->channel_id === $channel->id, 404);
     }
 }

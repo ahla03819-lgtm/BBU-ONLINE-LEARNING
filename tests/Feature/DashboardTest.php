@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\People\SaveProfile;
 use App\Enums\AcademicYearStatus;
 use App\Models\AcademicYear;
 use App\Models\ClassSubject;
@@ -32,6 +33,44 @@ class DashboardTest extends TestCase
         $this->classSubject();
 
         $this->actingAs($admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->component('Dashboard')->where('variant', 'admin')->has('metrics', 4)->has('quickActions'));
+    }
+
+    public function test_super_admin_receives_the_broadest_administrative_dashboard(): void
+    {
+        $superAdmin = $this->user('Super Admin');
+        $this->classSubject();
+
+        $this->actingAs($superAdmin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('variant', 'super-admin')
+            ->has('metrics', 4));
+    }
+
+    public function test_admin_with_a_teacher_profile_keeps_administrative_context_and_effective_role_label(): void
+    {
+        $admin = $this->user('Admin');
+        $admin->assignRole('Teacher');
+        TeacherProfile::factory()->create(['user_id' => $admin->id]);
+        $this->classSubject();
+
+        $this->actingAs($admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('variant', 'admin')
+            ->where('auth.role_label', 'Admin')
+            ->has('metrics', 4));
+    }
+
+    public function test_saving_a_teacher_profile_does_not_replace_an_existing_administrative_role(): void
+    {
+        $admin = $this->user('Admin');
+        $profile = TeacherProfile::factory()->make(['user_id' => $admin->id]);
+        $profile->setRelation('user', $admin);
+
+        app(SaveProfile::class)->handle($profile, $profile->getAttributes(), 'teacher-profile', 'Teacher');
+
+        $this->assertTrue($admin->fresh()->hasRole('Admin'));
+        $this->assertTrue($admin->fresh()->hasRole('Teacher'));
+        $this->assertSame('Admin', $admin->fresh()->effectiveRole());
     }
 
     public function test_teacher_only_receives_current_assigned_class_data(): void

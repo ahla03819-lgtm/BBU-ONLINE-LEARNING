@@ -49,6 +49,6 @@ class ChannelController extends Controller
 
     private function ensureNested(SchoolClass $class, Channel $channel): void
     {
-        abort_unless($channel->school_class_id === $class->id,404);
+        abort_unless($channel->school_class_id === $class->id, 404);
     }
 }

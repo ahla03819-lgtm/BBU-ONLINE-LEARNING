@@ -35,6 +35,6 @@ class ClassSubjectLifecycleTest extends TestCase
         $this->assertSame($classSubject->id, ClassSubject::firstOrFail()->id);
         $this->assertSame(ClassSubjectStatus::Active, $classSubject->fresh()->status);
         $this->assertSame(ChannelStatus::Active, $channel->fresh()->status);
-        $this->assertDatabaseCount('teacher_class_subject_assignments',1);
+        $this->assertDatabaseCount('teacher_class_subject_assignments', 1);
     }
 }

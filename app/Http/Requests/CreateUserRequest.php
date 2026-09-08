@@ -4,9 +4,9 @@ namespace App\Http\Requests;
 
 use App\Enums\AccountStatus;
 use App\Models\User;
+use App\Rules\InstitutionalEmail;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class CreateUserRequest extends FormRequest
 {
@@ -22,7 +22,7 @@ class CreateUserRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255', 'unique:users,email'], 'password' => ['required', 'confirmed', Password::defaults()], 'status' => ['required', Rule::enum(AccountStatus::class)], 'role' => ['required', Rule::in(['Super Admin', 'Admin', 'Teacher', 'Student'])]];
+        return ['name' => ['required', 'string', 'max:255'], 'email' => ['required', 'email', 'max:255', new InstitutionalEmail, 'unique:users,email'], 'status' => ['required', Rule::enum(AccountStatus::class)], 'role' => ['required', Rule::in(['Super Admin', 'Admin', 'Teacher', 'Student'])]];
     }
 
     public function after(): array
