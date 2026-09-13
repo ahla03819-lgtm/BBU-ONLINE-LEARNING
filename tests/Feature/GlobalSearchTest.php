@@ -89,6 +89,11 @@ class GlobalSearchTest extends TestCase
         $people = $this->actingAs($student)->getJson(route('global-search', ['q' => $teacher->name, 'category' => 'people']))->assertOk()->json('results.people');
         $this->assertTrue(collect($people)->pluck('title')->contains($teacher->name));
         $this->assertStringNotContainsString($teacher->email, json_encode($people));
+        $this->assertSame('Teacher', $people[0]['description']);
+        $this->assertSame(route('classes.members', ['schoolClass' => $class, 'search' => $teacher->name]), $people[0]['url']);
+        $studentPeople = $this->actingAs($teacher)->getJson(route('global-search', ['q' => $student->name, 'category' => 'people']))->assertOk()->json('results.people');
+        $this->assertSame('Student', $studentPeople[0]['description']);
+        $this->assertSame(route('classes.members', ['schoolClass' => $class, 'search' => $student->name]), $studentPeople[0]['url']);
         $this->actingAs($student)->getJson(route('global-search', ['q' => 'Hidden', 'category' => 'people']))->assertOk()->assertJsonCount(0, 'results.people');
         $this->actingAs($student)->getJson(route('global-search', ['q' => 'Authorized Class', 'category' => 'classes']))->assertOk()->assertJsonPath('results.classes.0.title', 'Authorized Class A');
         $this->actingAs($student)->getJson(route('global-search', ['q' => 'Hidden Class', 'category' => 'classes']))->assertOk()->assertJsonCount(0, 'results.classes');

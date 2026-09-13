@@ -40,10 +40,21 @@ class GlobalSearchService
         $classIds = $this->collaboration->classesFor($user)->select('school_classes.id');
 
         return User::query()
-            ->where(fn ($query) => $query->whereKey($user)->orWhereHas('teacherProfile.classAssignments', fn ($assignments) => $assignments->whereIn('school_class_id', $classIds))->orWhereHas('studentProfile.enrollments', fn ($enrollments) => $enrollments->whereIn('school_class_id', $classIds)))
+            ->where(fn ($query) => $query->whereHas('teacherProfile.classAssignments', fn ($assignments) => $assignments->where('current_slot', 1)->whereIn('school_class_id', $classIds))->orWhereHas('studentProfile.enrollments', fn ($enrollments) => $enrollments->where('current_slot', 1)->whereIn('school_class_id', $classIds)))
             ->where('name', 'like', "%{$term}%")
+            ->with([
+                'teacherProfile.classAssignments' => fn ($assignments) => $assignments->where('current_slot', 1)->whereIn('school_class_id', $classIds)->with('schoolClass:id,name,section'),
+                'studentProfile.enrollments' => fn ($enrollments) => $enrollments->where('current_slot', 1)->whereIn('school_class_id', $classIds)->with('schoolClass:id,name,section'),
+            ])
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'avatar_path'])
-            ->map(fn (User $person) => $this->item('people', $person->name, null, $person->avatarUrl(), route('people.index', ['search' => $person->name])));
+            ->map(function (User $person) {
+                $teacherClass = $person->teacherProfile?->classAssignments->first()?->schoolClass;
+                $studentClass = $person->studentProfile?->enrollments->first()?->schoolClass;
+                $schoolClass = $studentClass ?? $teacherClass;
+                $role = $studentClass ? 'Student' : 'Teacher';
+
+                return $this->item('people', $person->name, $role, $person->avatarUrl(), route('classes.members', ['schoolClass' => $schoolClass, 'search' => $person->name]));
+            });
     }
 
     private function messages(User $user, string $term, int $limit): Collection
