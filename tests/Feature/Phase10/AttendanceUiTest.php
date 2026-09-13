@@ -149,6 +149,7 @@ class AttendanceUiTest extends TestCase
             TeacherClassAssignment::factory()->create([
                 'teacher_profile_id' => TeacherProfile::factory()->create(['user_id' => $teacher]),
                 'school_class_id' => $class,
+                'starts_on' => '2026-09-01',
                 'current_slot' => 1,
             ]);
         }
