@@ -22,6 +22,7 @@ use App\Http\Controllers\ConversationMessageExperienceController;
 use App\Http\Controllers\CourseworkController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ForcedPasswordChangeController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingExperienceController;
@@ -68,6 +69,7 @@ Route::middleware(['auth', 'account.active'])->group(function () {
 
 Route::middleware(['auth', 'account.active', 'verified', 'password.change-required'])->group(function () {
     Route::get('/', fn () => redirect()->route('dashboard'));
+    Route::get('/global-search', GlobalSearchController::class)->middleware('throttle:60,1')->name('global-search');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/my-account', [MyAccountController::class, 'show'])->name('my-account.profile');
     Route::get('/my-account/{section}', [MyAccountController::class, 'show'])->whereIn('section', ['profile', 'security', 'notifications', 'appearance'])->name('my-account.show');
