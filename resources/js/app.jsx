@@ -5,7 +5,7 @@ import {AppSoundsProvider} from './Sound/AppSounds';
 import './realtime/echo';
 
 createInertiaApp({
-    title: (title) => title ? `${title} · BBU Online Learning` : 'BBU Online Learning',
+    title: (title) => title ? `${title} · BBU ONLINE LEARNING` : 'BBU ONLINE LEARNING',
     resolve: (name) => {
         const pages = import.meta.glob('./Pages/**/*.jsx');
         return pages[`./Pages/${name}.jsx`]();

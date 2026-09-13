@@ -1,4 +1,4 @@
-# EDWAY School
+# BBU ONLINE LEARNING
 
 Laravel 13 modular-monolith foundation using PHP 8.3+, React, Inertia, Tailwind, MySQL, PHPUnit, and Spatie Laravel Permission.
 
