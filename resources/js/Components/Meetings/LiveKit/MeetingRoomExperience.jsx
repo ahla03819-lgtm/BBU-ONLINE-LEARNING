@@ -198,7 +198,10 @@ export default function MeetingRoomExperience({credentials, meeting, schoolClass
         finally { setRemoving(null); }
     };
 
-    return <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio={initialMedia.microphone} video={initialMedia.camera}
+    const audio = initialMedia.microphone ? (initialMedia.microphoneId ? {deviceId: initialMedia.microphoneId} : true) : false;
+    const video = initialMedia.camera ? (initialMedia.cameraId ? {deviceId: initialMedia.cameraId} : true) : false;
+
+    return <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio={audio} video={video}
         onConnected={() => { connected.current = true; setConnectionError(''); }}
         onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
         onDisconnected={() => { if (connected.current) onLeave(); else setConnectionError('Unable to join the meeting. Please try again.'); }}

@@ -46,7 +46,7 @@ class MeetingExperienceTest extends TestCase
         $meeting = Meeting::factory()->create(['school_class_id' => $class->id]);
 
         $this->actingAs($student)->get(route('meetings.lobby', [$class, $meeting]))->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('Meetings/Lobby')->where('meeting.status', 'scheduled')->where('meeting.can_join', false)
+            ->component('Meetings/Lobby')->where('meeting.status', 'scheduled')->where('meeting.title', $meeting->title)->where('meeting.can_join', false)
             ->missing('meeting.livekit_room_name')->missing('meeting.livekit_identity')->missing('meeting.token'));
         $this->assertDatabaseCount('meeting_participants', 0);
     }
