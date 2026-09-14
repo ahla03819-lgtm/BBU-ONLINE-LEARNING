@@ -1,10 +1,13 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {ConnectionQualityIndicator, GridLayout, LiveKitRoom, ParticipantName, ParticipantTile, RoomAudioRenderer, StartAudio, TrackMutedIndicator, TrackToggle, useConnectionState, useLocalParticipant, useParticipants, useTrackRefContext, useTracks, useTrackToggle, VideoTrack} from '@livekit/components-react';
+import {ConnectionQualityIndicator, GridLayout, LiveKitRoom, ParticipantName, ParticipantTile, RoomAudioRenderer, StartAudio, TrackMutedIndicator, useConnectionState, useParticipants, useTrackRefContext, useTracks, VideoTrack} from '@livekit/components-react';
 import {Track} from 'livekit-client';
 import Icon from '../../UI/Icon';
 import UserAvatar from '../../UI/UserAvatar';
 import MeetingParticipantAvatar from './MeetingParticipantAvatar';
 import {useAppSounds} from '../../../Sound/AppSounds';
+import useMeetingEphemeralSignals from '../../../Hooks/Meetings/useMeetingEphemeralSignals';
+import MeetingControlCenter from './MeetingControlCenter';
+import {MeetingChatPanel, ParticipantsPanel} from './MeetingSidePanel';
 import '@livekit/components-styles';
 
 function CameraParticipantTile() {
@@ -128,52 +131,39 @@ function WaitingRoomRequests({meeting, schoolClass}) {
     return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">Waiting room</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? `${requests.length} participant${requests.length === 1 ? '' : 's'} waiting` : 'No requests right now'}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Auto refresh</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">No participants are waiting for approval.</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><UserAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">Requested {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>Admit</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>Deny</button></div></div>)}</div></section>;
 }
 
-function ParticipantRail({records, canManage, onRemove, removing}) {
-    const liveParticipants = useParticipants();
-    const liveByName = new Map(liveParticipants.map((participant) => [participant.name, participant]));
-    const visible = records.filter((record) => !record.removed);
-
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><h2 className="text-sm font-bold text-slate-950">Participants ({liveParticipants.length})</h2><Icon name="users" className="h-4 w-4 text-violet-600"/></div><div className="mt-3 space-y-3">{visible.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600">No participants are connected yet.</p> : visible.map((record) => {
-        const participant = liveByName.get(record.display_name);
-        const microphoneOn = participant?.isMicrophoneEnabled;
-        const label = record.role === 'host' ? 'Host' : record.present ? 'Present' : 'Not present';
-        return <div key={record.reference} className="flex items-center gap-3"><UserAvatar name={record.display_name} avatarUrl={record.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{record.display_name}</p><p className={`mt-0.5 text-xs font-medium ${record.role === 'host' ? 'text-violet-600' : 'text-slate-500'}`}>{label}</p></div>{participant && <Icon name={microphoneOn ? 'mic' : 'mic-off'} className={`h-4 w-4 ${microphoneOn ? 'text-emerald-600' : 'text-red-500'}`}/>} {canManage && record.role !== 'host' && <button className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50" disabled={removing !== null} onClick={() => onRemove(record.reference)} aria-label={removing === record.reference ? `Removing… ${record.display_name}` : `Remove ${record.display_name}`}>{removing === record.reference ? <Icon name="loader" className="h-4 w-4 animate-spin"/> : <Icon name="x" className="h-4 w-4"/>}</button>}</div>;
-    })}</div></section>;
+function ElapsedTime({startedAt}) {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const interval = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(interval);
+    }, []);
+    if (!startedAt) return null;
+    const seconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
+    if (!Number.isFinite(seconds)) return null;
+    const minutes = Math.floor(seconds / 60);
+    return <span className="font-mono text-xs font-bold tabular-nums text-slate-200">{String(Math.floor(minutes / 60)).padStart(2, '0')}:{String(minutes % 60).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span>;
 }
 
-function MediaControls({meeting, onLeave, onMediaMessage}) {
-    const connection = useConnectionState();
-    const {localParticipant, isCameraEnabled, isMicrophoneEnabled, isScreenShareEnabled} = useLocalParticipant();
-    const screen = useTrackToggle({source: Track.Source.ScreenShare, onDeviceError: () => onMediaMessage('Screen sharing was cancelled or is unavailable in this browser.')});
-    const [menuOpen, setMenuOpen] = useState(false);
-    const menuRef = useRef(null);
-    const available = connection === 'connected' && meeting.status === 'active';
-    const stopAll = async () => {
-        await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);
-    };
-    useEffect(() => {
-        if (['ending', 'ended', 'cancelled'].includes(meeting.status)) stopAll().finally(onLeave);
-    }, [meeting.status]);
-    useEffect(() => () => { localParticipant.setScreenShareEnabled(false).catch(() => {}); }, [localParticipant]);
-    useEffect(() => {
-        const close = (event) => { if (!menuRef.current?.contains(event.target)) setMenuOpen(false); };
-        const escape = (event) => { if (event.key === 'Escape') setMenuOpen(false); };
-        document.addEventListener('mousedown', close); document.addEventListener('keydown', escape);
-        return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); };
-    }, []);
-    const leave = async () => { await stopAll(); onLeave(); };
-    const control = 'flex min-h-[4.5rem] min-w-[4.9rem] flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-40';
-    const mediaControl = (enabled) => `${control} ${enabled ? 'border-white/[.12] bg-white/[.1] hover:border-white/20 hover:bg-white/[.18]' : 'border-red-300/25 bg-red-500/[.16] text-red-50 hover:bg-red-500/[.24]'}`;
+function ReactionOverlay({events}) {
+    if (!events.length) return null;
+    return <div className="pointer-events-none absolute inset-x-0 top-24 z-20 flex flex-col items-center gap-2" aria-live="polite">{events.map((event) => <div key={event.id} className="animate-[bounce_1s_ease-in-out] rounded-full border border-white/20 bg-slate-950/70 px-4 py-2 text-lg shadow-xl backdrop-blur"><span>{event.reaction}</span><span className="ml-2 text-xs font-bold text-white">{event.sender.name}</span></div>)}</div>;
+}
 
-    return <div className="relative mx-auto mt-4 flex w-fit max-w-full flex-wrap justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2.5 shadow-2xl shadow-black/40" ref={menuRef}>
-        <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available} className={mediaControl(isMicrophoneEnabled)} aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'} data-media-state={isMicrophoneEnabled ? 'Microphone active' : 'Microphone muted'} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5 w-5"/>{isMicrophoneEnabled ? 'Mic' : 'Muted'}</TrackToggle>
-        <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available} className={mediaControl(isCameraEnabled)} aria-label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5 w-5"/>{isCameraEnabled ? 'Camera' : 'Camera off'}</TrackToggle>
-        <button className={`${control} ${menuOpen ? 'border-violet-300/60 bg-violet-600 shadow-[0_0_0_2px_rgba(139,92,246,.65)]' : 'border-white/[.12] bg-white/[.1] hover:border-white/20 hover:bg-white/[.18]'}`} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="More meeting controls" aria-haspopup="menu" aria-expanded={menuOpen}><Icon name="more" className="h-5 w-5"/>More</button>
-        <button className="ml-1 flex min-h-[4.5rem] min-w-[4.9rem] flex-col items-center justify-center gap-1.5 rounded-xl border border-red-400/30 bg-red-600 px-3 py-2 text-[11px] font-semibold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-not-allowed disabled:opacity-40 sm:ml-2" onClick={leave} disabled={connection === 'disconnected'}><Icon name="logout" className="h-5 w-5"/>Leave</button>
-        {menuOpen && <div className="absolute bottom-[calc(100%+.75rem)] left-1/2 z-20 w-56 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#171a23] p-2 shadow-2xl shadow-black/50" role="menu" aria-label="More meeting controls">
-            {meeting.can_screen_share && <button {...screen.buttonProps} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-50" disabled={!available || screen.pending} onClick={(event) => { screen.buttonProps.onClick?.(event); setMenuOpen(false); }} role="menuitem"><Icon name="screen" className="h-5 w-5 text-violet-300"/>{screen.pending ? 'Updating…' : isScreenShareEnabled ? 'Stop sharing screen' : 'Share screen'}</button>}
-        </div>}
-    </div>;
+function RoomContent({meeting, schoolClass, participantRecords, canRemove, onRemove, removing, onLeave, mediaMessage, onMediaMessage, moderationMessage, connectionError}) {
+    const [panel, setPanel] = useState(null);
+    const signals = useMeetingEphemeralSignals();
+
+    return <><MeetingRoomSounds meeting={meeting}/><div className={`grid min-h-[calc(100vh-8rem)] gap-4 ${panel || meeting.can_manage_join_requests ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
+        <section className="relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
+            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>BBU LIVE CLASS</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus error={connectionError}/><ElapsedTime startedAt={meeting.actual_start_at}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label="Enable meeting audio" className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
+            <ReactionOverlay events={signals.reactionEvents}/>
+            {(mediaMessage || moderationMessage) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderationMessage}</div>}
+            <div className="relative z-0 min-h-0 flex-1 py-3"><Tiles/></div>
+            <RoomAudioRenderer/>
+            <MeetingControlCenter meeting={meeting} schoolClass={schoolClass} activePanel={panel} onPanelChange={setPanel} signals={signals} onLeave={onLeave} onMessage={onMediaMessage}/>
+        </section>
+        {(panel || meeting.can_manage_join_requests) && <aside className="min-h-0 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:pr-1">{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} records={participantRecords} canManage={canRemove} onRemove={onRemove} removing={removing}/> : meeting.can_manage_join_requests ? <WaitingRoomRequests meeting={meeting} schoolClass={schoolClass}/> : null}</aside>}
+    </div></>;
 }
 
 export default function MeetingRoomExperience({credentials, meeting, schoolClass, initialMedia, onLeave}) {
@@ -205,13 +195,7 @@ export default function MeetingRoomExperience({credentials, meeting, schoolClass
         onConnected={() => { connected.current = true; setConnectionError(''); }}
         onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
         onDisconnected={() => { if (connected.current) onLeave(); else setConnectionError('Unable to join the meeting. Please try again.'); }}
-        className="edway-live-room grid min-h-[calc(100vh-8rem)] gap-4 bg-transparent text-white xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <MeetingRoomSounds meeting={meeting}/><section className="relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
-            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>BBU LIVE CLASS</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 pl-11"><ConnectionStatus error={connectionError}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label="Enable meeting audio" className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
-            {(mediaMessage || moderationMessage) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderationMessage}</div>}
-            <div className="relative z-0 min-h-0 flex-1 py-3"><Tiles/></div>
-            <RoomAudioRenderer/><MediaControls meeting={meeting} onLeave={onLeave} onMediaMessage={setMediaMessage}/>
-        </section>
-        <aside className="order-first grid content-start gap-4 xl:order-none xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:pr-1">{meeting.can_manage_join_requests && <WaitingRoomRequests meeting={meeting} schoolClass={schoolClass}/>}<ParticipantRail records={participants} canManage={meeting.can_manage_participants} onRemove={remove} removing={removing}/></aside>
+        className="edway-live-room bg-transparent text-white">
+        <RoomContent meeting={meeting} schoolClass={schoolClass} participantRecords={participants} canRemove={meeting.can_manage_participants} onRemove={remove} removing={removing} onLeave={onLeave} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} moderationMessage={moderationMessage} connectionError={connectionError}/>
     </LiveKitRoom>;
 }

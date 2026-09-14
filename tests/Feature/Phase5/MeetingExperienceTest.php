@@ -33,6 +33,23 @@ class MeetingExperienceTest extends TestCase
         $this->assertStringNotContainsString('problem.message', $component);
     }
 
+    public function test_live_room_control_center_keeps_chat_and_reactions_ephemeral_and_room_scoped(): void
+    {
+        $signals = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingEphemeralSignals.js'));
+        $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+
+        foreach (['meeting-chat', 'meeting-hand', 'meeting-reaction', 'RoomEvent.DataReceived', 'localParticipant.publishData', 'MAX_MESSAGE_LENGTH = 2000'] as $contract) {
+            $this->assertStringContainsString($contract, $signals);
+        }
+        foreach (['MeetingChatPanel', 'ParticipantsPanel', 'MeetingControlCenter', 'actual_start_at'] as $contract) {
+            $this->assertStringContainsString($contract, $room);
+        }
+        $this->assertStringContainsString('meeting.can_end', $controls);
+        $this->assertStringNotContainsString('channels/', $signals);
+        $this->assertStringNotContainsString('fetch(', $signals);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
