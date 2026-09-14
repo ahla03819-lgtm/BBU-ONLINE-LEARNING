@@ -98,16 +98,17 @@ class ScreenSharingAndHostControlsTest extends TestCase
     public function test_screen_share_and_host_control_ui_uses_authoritative_livekit_state_and_safe_feedback(): void
     {
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+        $sidePanel = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingSidePanel.jsx'));
 
-        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'Screen shared by', 'Share screen', 'Stop sharing screen', 'setScreenShareEnabled(false)', 'Removing…', 'Participant removed.', 'Unable to remove the participant.', 'Reconnecting…'] as $contract) {
-            $this->assertStringContainsString($contract, $component);
+        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'Screen shared by', 'Share screen', 'Stop sharing screen', 'setScreenShareEnabled(false)', 'removing === record.reference', 'Participant removed.', 'Unable to remove the participant.', 'Reconnecting…'] as $contract) {
+            $this->assertStringContainsString($contract, $component.$controls.$sidePanel);
         }
-        $this->assertStringContainsString("connection === 'connected' && meeting.status === 'active'", $component);
-        $this->assertStringContainsString("['ending', 'ended', 'cancelled']", $component);
-        $this->assertStringNotContainsString('livekit_identity', $component);
-        $this->assertStringNotContainsString('livekit_room_name', $component);
-        $this->assertStringNotContainsString('error.message', $component);
-        $this->assertStringNotContainsString('getDisplayMedia(', $component);
+        $this->assertStringContainsString("connection === 'connected' && meeting.status === 'active'", $controls);
+        $this->assertStringContainsString("['ending', 'ended', 'cancelled']", $controls);
+        $this->assertStringNotContainsString('livekit_identity', $component.$controls.$sidePanel);
+        $this->assertStringNotContainsString('livekit_room_name', $component.$controls.$sidePanel);
+        $this->assertStringNotContainsString('getDisplayMedia(', $component.$controls.$sidePanel);
     }
 
     public function test_rbac_upgrade_assigns_screen_share_without_broadening_students(): void

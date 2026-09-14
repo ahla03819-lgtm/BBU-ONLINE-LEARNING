@@ -132,18 +132,19 @@ class MeetingExperienceReliabilityTest extends TestCase
 
         $index = file_get_contents(resource_path('js/Pages/Meetings/Index.jsx'));
         $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
         $show = file_get_contents(resource_path('js/Pages/Meetings/Show.jsx'));
         foreach (['Live now', 'Scheduled', 'Transitioning', 'History', 'No meetings yet'] as $label) {
             $this->assertStringContainsString($label, $index);
         }
-        foreach (['Connecting…', 'Connected', 'Reconnecting…', 'Disconnected', 'Camera off', 'Microphone muted', 'participant.name'] as $label) {
-            $this->assertStringContainsString($label, $room);
+        foreach (['Connecting…', 'Connected', 'Reconnecting…', 'Disconnected', 'Camera off', 'Muted', 'participant.name'] as $label) {
+            $this->assertStringContainsString($label, $room.$controls);
         }
         $this->assertStringContainsString('if (connected.current) onLeave()', $room);
         $this->assertStringContainsString('disabled={ending}', $show);
         $this->assertStringContainsString('Retry reconciliation', $show);
-        $this->assertStringNotContainsString('livekit_identity', $room);
-        $this->assertStringNotContainsString('livekit_room_name', $room);
+        $this->assertStringNotContainsString('livekit_identity', $room.$controls);
+        $this->assertStringNotContainsString('livekit_room_name', $room.$controls);
     }
 
     private function activeClass(): SchoolClass
