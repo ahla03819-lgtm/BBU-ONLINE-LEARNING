@@ -46,6 +46,8 @@ class MeetingExperienceTest extends TestCase
             $this->assertStringContainsString($contract, $room);
         }
         $this->assertStringNotContainsString('actual_start_at', $room);
+        $this->assertStringContainsString('sharedMeetingElapsedSeconds(meeting, clock, now)', $room);
+        $this->assertStringContainsString('if (sharedSeconds === null && sessionStartedAt === null) return null', $room);
         $this->assertStringContainsString('meeting.can_end', $controls);
         $this->assertStringNotContainsString('channels/', $signals);
         $this->assertStringNotContainsString('fetch(', $signals);
@@ -85,7 +87,7 @@ class MeetingExperienceTest extends TestCase
         $meeting = Meeting::factory()->create(['school_class_id' => $class->id]);
 
         $this->actingAs($student)->get(route('meetings.lobby', [$class, $meeting]))->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('Meetings/Lobby')->where('meeting.status', 'scheduled')->where('meeting.title', $meeting->title)->where('meeting.can_join', false)
+            ->component('Meetings/Lobby')->where('meeting.status', 'scheduled')->where('meeting.title', $meeting->title)->where('meeting.can_join', false)->where('meeting.session_started_at', null)
             ->missing('meeting.livekit_room_name')->missing('meeting.livekit_identity')->missing('meeting.token'));
         $this->assertDatabaseCount('meeting_participants', 0);
     }
@@ -93,9 +95,10 @@ class MeetingExperienceTest extends TestCase
     public function test_active_current_student_and_teacher_can_open_room_but_historical_and_unrelated_users_are_denied(): void
     {
         $class = $this->activeClass();
-        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);
+        $startedAt = now()->subMinutes(4)->startOfSecond();
+        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'session_started_at' => $startedAt]);
         foreach ([$this->student($class), $this->teacher($class)] as $current) {
-            $this->actingAs($current)->get(route('meetings.room', [$class, $meeting]))->assertOk()->assertInertia(fn (Assert $page) => $page->component('Meetings/Room')->where('meeting.can_join', true));
+            $this->actingAs($current)->get(route('meetings.room', [$class, $meeting]))->assertOk()->assertInertia(fn (Assert $page) => $page->component('Meetings/Room')->where('meeting.can_join', true)->where('meeting.session_started_at', $startedAt->toIso8601String()));
         }
         foreach ([$this->student($class, false), $this->teacher($class, false), $this->roleUser('Student')] as $denied) {
             $this->actingAs($denied)->get(route('meetings.lobby', [$class, $meeting]))->assertForbidden();

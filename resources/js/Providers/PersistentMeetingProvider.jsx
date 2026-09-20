@@ -93,7 +93,7 @@ export function PersistentMeetingProvider({children}) {
 
     return <PersistentMeetingContext.Provider value={value}>
         {children}
-        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting}/>}
+        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting}/>}
     </PersistentMeetingContext.Provider>;
 }
 

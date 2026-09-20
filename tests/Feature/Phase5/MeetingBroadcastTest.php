@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Phase5;
 
+use App\Enums\MeetingStatus;
 use App\Enums\SchoolClassStatus;
 use App\Events\MeetingLifecycleChanged;
 use App\Events\MeetingParticipantRemoved;
@@ -57,6 +58,11 @@ class MeetingBroadcastTest extends TestCase
         $this->assertSame('private-meetings.class.'.$meeting->school_class_id, $lifecycle->broadcastOn()[0]->name);
         $payload = $lifecycle->broadcastWith();
         $this->assertSame(9, $payload['meeting']['lifecycle_version']);
+        $this->assertNull($payload['meeting']['session_started_at']);
+        $meeting->update(['session_started_at' => now()->subMinute()->startOfSecond()]);
+        $this->assertSame($meeting->session_started_at->toIso8601String(), (new MeetingLifecycleChanged($meeting, 'started'))->broadcastWith()['meeting']['session_started_at']);
+        $meeting->update(['status' => MeetingStatus::Ended]);
+        $this->assertNull((new MeetingLifecycleChanged($meeting, 'ended'))->broadcastWith()['meeting']['session_started_at']);
         foreach (['token', 'livekit_room_name', 'livekit_identity', 'participant_sid', 'api_secret'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, json_encode($payload, JSON_THROW_ON_ERROR));
         }

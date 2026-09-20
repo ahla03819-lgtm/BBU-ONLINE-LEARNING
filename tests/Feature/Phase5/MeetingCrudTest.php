@@ -123,6 +123,7 @@ class MeetingCrudTest extends TestCase
         $this->actingAs($teacher)->post(route('meetings.store', $class), $this->payload(['max_participants' => 1]))->assertSessionHasErrors('max_participants');
         $this->actingAs($teacher)->post(route('meetings.store', $class), $this->payload(['max_participants' => 501]))->assertSessionHasErrors('max_participants');
         $this->actingAs($teacher)->post(route('meetings.store', $class), $this->payload(['uuid' => 'client-value', 'livekit_room_name' => 'client-room']))->assertSessionHasErrors(['uuid', 'livekit_room_name']);
+        $this->actingAs($teacher)->post(route('meetings.store', $class), $this->payload(['session_started_at' => now()->toIso8601String()]))->assertSessionHasErrors('session_started_at');
         $this->assertDatabaseCount('meetings', 0);
     }
 
@@ -152,7 +153,8 @@ class MeetingCrudTest extends TestCase
             'livekit_room_name' => 'client-room',
             'status' => MeetingStatus::Cancelled->value,
             'lifecycle_version' => 999,
-        ]))->assertSessionHasErrors(['uuid', 'livekit_room_name', 'status', 'lifecycle_version']);
+            'session_started_at' => now()->toIso8601String(),
+        ]))->assertSessionHasErrors(['uuid', 'livekit_room_name', 'status', 'lifecycle_version', 'session_started_at']);
         $this->assertSame($technical, $meeting->fresh()->only('uuid', 'livekit_room_name', 'lifecycle_version', 'status'));
     }
 

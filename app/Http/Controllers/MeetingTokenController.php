@@ -20,6 +20,8 @@ class MeetingTokenController extends Controller
             'server_url' => config('livekit.url'),
             'expires_at' => $result['token']->expiresAt->toIso8601String(),
             'lifecycle_version' => $result['lifecycle_version'],
+            'session_started_at' => $meeting->fresh()->session_started_at?->toIso8601String(),
+            'server_now_at' => now()->toIso8601String(),
             'participant' => [
                 'id' => $result['participant']->id,
                 'display_name' => $result['participant']->display_name_snapshot,

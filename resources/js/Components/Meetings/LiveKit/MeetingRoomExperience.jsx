@@ -10,6 +10,7 @@ import MeetingControlCenter, {MeetingDeviceSettings} from './MeetingControlCente
 import MeetingStage from './MeetingStage';
 import {HostControlsPanel, MeetingChatPanel, MeetingInfoPanel, ParticipantsPanel} from './MeetingSidePanel';
 import {authorizedMeetingLink, localCameraTrackClass} from './meetingView';
+import {sharedMeetingElapsedSeconds} from './meetingElapsedTime';
 import '@livekit/components-styles';
 
 const MEETING_HISTORY_GUARD = '__edwayMeetingHistoryGuard';
@@ -132,28 +133,30 @@ function WaitingRoomRequests({meeting, schoolClass}) {
     return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">Waiting room</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? `${requests.length} participant${requests.length === 1 ? '' : 's'} waiting` : 'No requests right now'}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Auto refresh</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">No participants are waiting for approval.</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">Requested {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>Admit</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>Deny</button></div></div>)}</div></section>;
 }
 
-function useMeetingElapsedTime() {
+function useMeetingElapsedTime(meeting, clock) {
     const connection = useConnectionState();
     const [sessionStartedAt, setSessionStartedAt] = useState(null);
-    const [now, setNow] = useState(() => Date.now());
+    const [now, setNow] = useState(() => performance.now());
+    const sharedSeconds = sharedMeetingElapsedSeconds(meeting, clock, now);
+    const hasSharedClock = sharedSeconds !== null;
 
     useEffect(() => {
         if (connection !== 'connected') return;
 
-        setSessionStartedAt((startedAt) => startedAt ?? Date.now());
+        setSessionStartedAt((startedAt) => startedAt ?? performance.now());
     }, [connection]);
 
     useEffect(() => {
-        if (sessionStartedAt === null) return;
+        if (!hasSharedClock && sessionStartedAt === null) return;
 
-        const interval = window.setInterval(() => setNow(Date.now()), 1000);
+        const interval = window.setInterval(() => setNow(performance.now()), 1000);
 
         return () => window.clearInterval(interval);
-    }, [sessionStartedAt]);
+    }, [sessionStartedAt, hasSharedClock]);
 
-    if (sessionStartedAt === null) return null;
+    if (sharedSeconds === null && sessionStartedAt === null) return null;
 
-    const seconds = Math.max(0, Math.floor((now - sessionStartedAt) / 1000));
+    const seconds = sharedSeconds ?? Math.max(0, Math.floor((now - sessionStartedAt) / 1000));
     if (!Number.isFinite(seconds)) return null;
     const minutes = Math.floor(seconds / 60);
     return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -204,14 +207,14 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     </aside>;
 }
 
-function RoomContent({meeting, schoolClass, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
+function RoomContent({meeting, clock, schoolClass, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
     const [copied, setCopied] = useState('');
     const connection = useConnectionState();
     const participants = useParticipants();
     const signals = useMeetingEphemeralSignals();
-    const elapsedTime = useMeetingElapsedTime();
+    const elapsedTime = useMeetingElapsedTime(meeting, clock);
     const participantIdentities = useMemo(() => participants.map((participant) => participant.identity).sort().join(','), [participants]);
     const moderation = useMeetingModeration({meeting, schoolClass, connected: connection === 'connected', participantIdentities});
     const meetingLink = useMemo(() => authorizedMeetingLink(meeting, schoolClass, window.location.origin), [meeting, schoolClass]);
@@ -244,7 +247,7 @@ function RoomContent({meeting, schoolClass, onLeave, onReturn, mode, mediaMessag
     </div></>;
 }
 
-export default function MeetingRoomExperience({credentials, meeting, schoolClass, initialMedia, mode = 'full', onReturn, onLeave}) {
+export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mode = 'full', onReturn, onLeave}) {
     const connected = useRef(false);
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
     const [connectionError, setConnectionError] = useState('');
@@ -258,6 +261,6 @@ export default function MeetingRoomExperience({credentials, meeting, schoolClass
         onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
         onDisconnected={() => { if (connected.current) onLeave(); else setConnectionError('Unable to join the meeting. Please try again.'); }}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
-        <RoomContent meeting={meeting} schoolClass={schoolClass} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
+        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
     </LiveKitRoom>;
 }

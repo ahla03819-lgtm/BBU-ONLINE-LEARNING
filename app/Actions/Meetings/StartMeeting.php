@@ -39,6 +39,7 @@ class StartMeeting
                 'status' => MeetingStatus::Starting,
                 'lifecycle_version' => $locked->lifecycle_version + 1,
                 'start_attempt_uuid' => $attemptUuid,
+                'session_started_at' => null,
                 'last_provider_error' => null,
             ]);
             $this->audit->log('meeting.start-requested', $locked, $before, $locked->only('status', 'lifecycle_version'));
@@ -82,6 +83,7 @@ class StartMeeting
             $locked->update([
                 'status' => MeetingStatus::Active,
                 'actual_start_at' => $locked->actual_start_at ?? now(),
+                'session_started_at' => now(),
                 'lifecycle_version' => $locked->lifecycle_version + 1,
                 'last_provider_error' => null,
             ]);
@@ -117,6 +119,7 @@ class StartMeeting
             $before = $locked->only('status', 'lifecycle_version');
             $locked->update([
                 'status' => MeetingStatus::Scheduled,
+                'session_started_at' => null,
                 'lifecycle_version' => $locked->lifecycle_version + 1,
                 'last_provider_error' => 'Meeting provider definitively rejected room creation.',
             ]);

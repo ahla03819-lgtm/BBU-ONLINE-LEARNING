@@ -47,13 +47,21 @@ class MeetingLifecycleTest extends TestCase
     {
         $class = $this->activeClass();
         $host = $this->classTeacher($class);
-        $meeting = Meeting::factory()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id, 'lifecycle_version' => 3]);
+        $historicalStart = now()->subDays(20)->startOfSecond();
+        $meeting = Meeting::factory()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id, 'lifecycle_version' => 3, 'actual_start_at' => $historicalStart, 'session_started_at' => $historicalStart]);
+        $this->provider->onStart = function () use ($meeting) {
+            $this->assertNull($meeting->fresh()->session_started_at);
+        };
 
         $result = $this->actingAs($host)->app->make(StartMeeting::class)->handle($host, $meeting);
 
         $this->assertSame(MeetingStatus::Active, $result->status);
         $this->assertSame(5, $result->lifecycle_version);
         $this->assertNotNull($result->actual_start_at);
+        $this->assertTrue($result->actual_start_at->equalTo($historicalStart));
+        $this->assertNotNull($result->session_started_at);
+        $this->assertTrue($result->session_started_at->greaterThan($historicalStart));
+        $sessionStart = $result->session_started_at;
         $this->assertTrue(Str::isUuid($result->start_attempt_uuid));
         $this->assertSame(1, $this->provider->startCalls);
         $this->assertDatabaseHas('audit_logs', ['action' => 'meeting.start-requested', 'target_id' => $meeting->id]);
@@ -61,6 +69,7 @@ class MeetingLifecycleTest extends TestCase
 
         $again = app(StartMeeting::class)->handle($host, $result);
         $this->assertSame(5, $again->lifecycle_version);
+        $this->assertTrue($again->session_started_at->equalTo($sessionStart));
         $this->assertSame(1, $this->provider->startCalls);
     }
 
@@ -161,6 +170,7 @@ class MeetingLifecycleTest extends TestCase
         $this->assertSame(MeetingStatus::Starting, $result->status);
         $this->assertSame(4, $result->lifecycle_version);
         $this->assertNull($result->actual_start_at);
+        $this->assertNull($result->session_started_at);
     }
 
     public function test_cancelled_and_ended_meetings_cannot_start_and_cancelled_cannot_end(): void
@@ -285,8 +295,11 @@ class MeetingLifecycleTest extends TestCase
         $this->assertSame(MeetingStatus::Active, $recovered->status);
         $this->assertSame(3, $recovered->lifecycle_version);
         $this->assertNotNull($recovered->actual_start_at);
+        $this->assertNotNull($recovered->session_started_at);
+        $sessionStart = $recovered->session_started_at;
         $rerun = app(ReconcileMeetingLifecycle::class)->handle($recovered);
         $this->assertSame(3, $rerun->lifecycle_version);
+        $this->assertTrue($rerun->session_started_at->equalTo($sessionStart));
         $this->assertSame(1, AuditLog::query()->where('action', 'meeting.start-recovered')->count());
 
         $ending = Meeting::factory()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id, 'status' => MeetingStatus::Ending, 'lifecycle_version' => 8]);
