@@ -36,6 +36,21 @@ class LiveKitSdkContractTest extends TestCase
         CarbonImmutable::setTestNow();
     }
 
+    public function test_token_adapter_allows_data_publishing_only_when_explicitly_requested(): void
+    {
+        config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);
+
+        $issued = app(SdkLiveKitTokenIssuer::class)->issue('meeting-safe', 'opaque-meeting-id', 'Student Name', ['camera', 'microphone'], null, true);
+        $payload = (array) JWT::decode($issued->token, new Key('test-secret-that-is-at-least-32-bytes', 'HS256'));
+        $video = (array) $payload['video'];
+
+        $this->assertTrue($video['canPublishData']);
+        $this->assertSame('meeting-safe', $video['room']);
+        $this->assertSame('opaque-meeting-id', $payload['sub']);
+        $this->assertSame(['camera', 'microphone'], $video['canPublishSources']);
+        $this->assertArrayNotHasKey('roomAdmin', $video);
+    }
+
     public function test_webhook_adapter_accepts_valid_signature_and_rejects_tampering(): void
     {
         config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);

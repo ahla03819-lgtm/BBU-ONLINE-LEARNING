@@ -144,6 +144,17 @@ class NotificationRealtimeTest extends TestCase
         $this->assertStringContainsString('useNotificationRealtime', $layout);
     }
 
+    public function test_live_notification_keeps_unread_count_current_while_full_meeting_defers_inertia_reconciliation(): void
+    {
+        $hook = file_get_contents(resource_path('js/Hooks/useNotificationRealtime.js'));
+
+        $this->assertStringContainsString('if (Number.isInteger(event?.unread_count)) setUnreadCount(event.unread_count);', $hook);
+        $this->assertStringContainsString('if (pauseBackgroundRefreshRef.current) {', $hook);
+        $this->assertStringContainsString('refreshDeferred.current = true;', $hook);
+        $this->assertStringContainsString('if (!pauseBackgroundRefresh && refreshDeferred.current) {', $hook);
+        $this->assertStringContainsString('refreshDeferred.current = false;', $hook);
+    }
+
     private function student(): User
     {
         $user = User::factory()->create();

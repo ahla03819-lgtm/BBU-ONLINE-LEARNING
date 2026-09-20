@@ -146,10 +146,14 @@ class MeetingWaitingRoomTest extends TestCase
     public function test_live_room_contains_the_host_only_waiting_room_polling_panel(): void
     {
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $moderation = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingModeration.js'));
+        $sidePanel = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingSidePanel.jsx'));
 
-        foreach (['WaitingRoomRequests', 'MeetingParticipantAvatar', 'UserAvatar', 'waiting-room/requests', 'window.setInterval(refresh, 5000)', 'window.clearInterval(interval)', 'meeting.can_manage_join_requests', 'No participants are waiting for approval.'] as $contract) {
-            $this->assertStringContainsString($contract, $component);
+        foreach (['useMeetingModeration', 'WaitingSection', 'MeetingParticipantAvatar', 'waiting-room/requests', 'window.setTimeout(refresh, 5000)', 'window.clearTimeout(timer)', 'meeting.can_manage_join_requests', 'No participants are waiting for approval.'] as $contract) {
+            $this->assertStringContainsString($contract, $component.$moderation.$sidePanel);
         }
+
+        $this->assertStringNotContainsString('usePage(', $component.$moderation.$sidePanel);
     }
 
     private function meetingContext(): array

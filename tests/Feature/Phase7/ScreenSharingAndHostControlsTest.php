@@ -71,11 +71,13 @@ class ScreenSharingAndHostControlsTest extends TestCase
 
         $this->actingAs($teacher)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
         $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $this->issuer->publishSources);
+        $this->assertTrue($this->issuer->canPublishData);
 
         $student = $this->student($class);
         MeetingJoinRequest::factory()->admitted()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
         $this->assertSame(['camera', 'microphone'], $this->issuer->publishSources);
+        $this->assertTrue($this->issuer->canPublishData);
     }
 
     public function test_lobby_serialization_exposes_only_safe_screen_share_capability(): void
@@ -100,15 +102,23 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
         $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
         $sidePanel = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingSidePanel.jsx'));
+        $stage = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingStage.jsx'));
+        $moderation = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingModeration.js'));
+        $view = file_get_contents(resource_path('js/Components/Meetings/LiveKit/meetingView.js'));
+        $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
 
         foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'Screen shared by', 'Share screen', 'Stop sharing screen', 'setScreenShareEnabled(false)', 'removing === record.reference', 'Participant removed.', 'Unable to remove the participant.', 'Reconnecting…'] as $contract) {
-            $this->assertStringContainsString($contract, $component.$controls.$sidePanel);
+            $this->assertStringContainsString($contract, $component.$controls.$sidePanel.$stage.$moderation);
         }
         $this->assertStringContainsString("connection === 'connected' && meeting.status === 'active'", $controls);
         $this->assertStringContainsString("['ending', 'ended', 'cancelled']", $controls);
-        $this->assertStringNotContainsString('livekit_identity', $component.$controls.$sidePanel);
-        $this->assertStringNotContainsString('livekit_room_name', $component.$controls.$sidePanel);
-        $this->assertStringNotContainsString('getDisplayMedia(', $component.$controls.$sidePanel);
+        $this->assertStringNotContainsString('livekit_identity', $component.$controls.$sidePanel.$stage.$moderation);
+        $this->assertStringNotContainsString('livekit_room_name', $component.$controls.$sidePanel.$stage.$moderation);
+        $this->assertStringNotContainsString('getDisplayMedia(', $component.$controls.$sidePanel.$stage.$moderation);
+        $this->assertStringContainsString('trackRef?.participant?.isLocal && trackRef.source === Track.Source.Camera', $view);
+        $this->assertStringContainsString('localCameraTrackClass(trackRef)', $stage);
+        $this->assertStringContainsString('localCameraTrackClass(preview)', $component);
+        $this->assertStringContainsString('localCameraMirrorClass', $lobby);
     }
 
     public function test_rbac_upgrade_assigns_screen_share_without_broadening_students(): void

@@ -195,6 +195,22 @@ class MeetingLifecycleTest extends TestCase
         $this->assertSame(1, $this->provider->endCalls);
     }
 
+    public function test_authorized_json_end_returns_lifecycle_state_without_a_room_redirect(): void
+    {
+        $class = $this->activeClass();
+        $host = $this->classTeacher($class);
+        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id]);
+
+        $this->actingAs($host)->postJson(route('meetings.end', [$class, $meeting]))
+            ->assertOk()
+            ->assertHeaderMissing('Location')
+            ->assertJsonPath('meeting.uuid', $meeting->uuid)
+            ->assertJsonPath('meeting.status', MeetingStatus::Ended->value)
+            ->assertJsonPath('meeting.lifecycle_version', 3);
+
+        $this->assertSame(MeetingStatus::Ended, $meeting->fresh()->status);
+    }
+
     public function test_stale_end_completion_cannot_overwrite_newer_version(): void
     {
         $class = $this->activeClass();

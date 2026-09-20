@@ -133,12 +133,13 @@ class MeetingExperienceReliabilityTest extends TestCase
         $index = file_get_contents(resource_path('js/Pages/Meetings/Index.jsx'));
         $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
         $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+        $stage = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingStage.jsx'));
         $show = file_get_contents(resource_path('js/Pages/Meetings/Show.jsx'));
         foreach (['Live now', 'Scheduled', 'Transitioning', 'History', 'No meetings yet'] as $label) {
             $this->assertStringContainsString($label, $index);
         }
         foreach (['Connecting…', 'Connected', 'Reconnecting…', 'Disconnected', 'Camera off', 'Muted', 'participant.name'] as $label) {
-            $this->assertStringContainsString($label, $room.$controls);
+            $this->assertStringContainsString($label, $room.$controls.$stage);
         }
         $this->assertStringContainsString('if (connected.current) onLeave()', $room);
         $this->assertStringContainsString('disabled={ending}', $show);

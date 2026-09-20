@@ -7,6 +7,7 @@ import {useAppSounds} from '../Sound/AppSounds';
 import useIncomingCalls from '../Hooks/useIncomingCalls';
 import UserAvatar from '../Components/UI/UserAvatar';
 import AnnouncementPopup, {clearAnnouncementSession} from '../Components/Announcements/AnnouncementPopup';
+import {usePersistentMeeting} from '../Providers/PersistentMeetingProvider';
 
 export default function AuthenticatedLayout({ children }) {
     const page = usePage();
@@ -23,7 +24,9 @@ export default function AuthenticatedLayout({ children }) {
     const canManagePeople = auth.permissions.includes('students.manage') || auth.permissions.includes('teachers.manage');
     const sounds = useAppSounds();
     const incomingCall = useIncomingCalls(auth.user);
-    const unreadCount = useNotificationRealtime({userId: auth.user.id, initialUnreadCount: notificationInbox?.unread_count, enabled: canViewNotifications, inboxOpen: page.component === 'Notifications/Index', onNewNotification: (notification) => sounds.play('notification', notification.public_id)});
+    const {activeMeeting} = usePersistentMeeting();
+    const roomPath = activeMeeting && new URL(activeMeeting.roomUrl, window.location.origin).pathname;
+    const unreadCount = useNotificationRealtime({userId: auth.user.id, initialUnreadCount: notificationInbox?.unread_count, enabled: canViewNotifications, inboxOpen: page.component === 'Notifications/Index', onNewNotification: (notification) => sounds.play('notification', notification.public_id), pauseBackgroundRefresh: Boolean(roomPath && window.location.pathname === roomPath)});
     const navigation = useMemo(() => [
         {label: 'Workspace', items: [{label: 'Dashboard', href: '/dashboard', component: 'Dashboard', icon: 'home'}, {label: 'Classes', href: auth.permissions.includes('classes.view') ? '/classes' : null, component: 'Classes/Index', icon: 'school'}]},
         {label: 'Learning', items: [{label: 'Attendance', href: canManageAttendance ? '/attendance' : canViewOwnAttendance ? '/my-attendance' : null, component: canManageAttendance ? 'Attendance/Index' : 'Attendance/MyAttendance', icon: 'calendar'}, {label: canViewOwnResults ? 'My Results' : 'Results', href: canViewOwnResults ? '/my-results' : canViewResults ? '/results' : null, component: canViewOwnResults ? 'Results/MyResults' : 'Results/Index', icon: 'chart'}, {label: 'Coursework', href: null, icon: 'clipboard', visible: auth.permissions.includes('assignments.view')}, {label: 'Meetings', href: null, icon: 'video', visible: auth.permissions.includes('meetings.view')}]},

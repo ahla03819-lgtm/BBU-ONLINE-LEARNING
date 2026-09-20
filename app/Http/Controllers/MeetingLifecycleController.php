@@ -10,6 +10,7 @@ use App\Http\Requests\Meetings\ReconcileMeetingRequest;
 use App\Http\Requests\Meetings\StartMeetingRequest;
 use App\Models\Meeting;
 use App\Models\SchoolClass;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 
 class MeetingLifecycleController extends Controller
@@ -21,9 +22,19 @@ class MeetingLifecycleController extends Controller
         return back()->with('success', 'Meeting start request processed.');
     }
 
-    public function end(EndMeetingRequest $request, SchoolClass $schoolClass, Meeting $meeting, EndMeeting $action): RedirectResponse
+    public function end(EndMeetingRequest $request, SchoolClass $schoolClass, Meeting $meeting, EndMeeting $action): RedirectResponse|JsonResponse
     {
-        $action->handle($request->user(), $meeting);
+        $ended = $action->handle($request->user(), $meeting);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'meeting' => [
+                    'uuid' => $ended->uuid,
+                    'status' => $ended->status->value,
+                    'lifecycle_version' => $ended->lifecycle_version,
+                ],
+            ]);
+        }
 
         return back()->with('success', 'Meeting end request processed.');
     }

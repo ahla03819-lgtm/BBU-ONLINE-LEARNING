@@ -55,6 +55,9 @@ class MeetingExperienceController extends Controller
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
                 'can_manage_join_requests' => request()->user()->can('manageJoinRequests', $meeting),
                 'actual_start_at' => $meeting->actual_start_at?->toIso8601String(),
+                'scheduled_start_at' => $meeting->scheduled_start_at?->toIso8601String(),
+                'scheduled_end_at' => $meeting->scheduled_end_at?->toIso8601String(),
+                'invite_url' => route('meetings.lobby', [$schoolClass, $meeting], absolute: false),
             ],
         ];
     }

@@ -63,7 +63,7 @@ final class IssueMeetingToken
             $metadata = json_encode([
                 'avatar_url' => $actor->avatarUrl(),
             ], JSON_THROW_ON_ERROR);
-            $issued = $this->issuer->issue($meeting->livekit_room_name, $participant->livekit_identity, $participant->display_name_snapshot, $sources, $metadata);
+            $issued = $this->issuer->issue($meeting->livekit_room_name, $participant->livekit_identity, $participant->display_name_snapshot, $sources, $metadata, canPublishData: true);
         } catch (Throwable $exception) {
             DB::transaction(function () use ($participant) {
                 MeetingParticipant::query()->whereKey($participant->id)->lockForUpdate()->update(['join_reserved_until' => null]);

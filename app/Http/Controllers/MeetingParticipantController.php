@@ -19,8 +19,12 @@ class MeetingParticipantController extends Controller
 
         return response()->json(['participants' => $meeting->participants()->with('user:id,avatar_path')->orderBy('id')->get()->map(fn ($participant) => [
             'reference' => $participant->public_uuid,
+            // Match connected participants without publishing provider identities or relying on names.
+            'connection_key' => hash('sha256', $meeting->uuid.':'.$participant->livekit_identity),
             'display_name' => $participant->display_name_snapshot,
             'role' => $participant->role->value,
+            'is_host' => $participant->user_id === $meeting->host_user_id,
+            'can_remove' => $participant->user_id !== $meeting->host_user_id && request()->user()->can('remove', $participant),
             'present' => $participant->attendanceSessions()->whereNull('left_at')->exists(),
             'avatar_url' => $participant->user?->avatarUrl(),
             ...($canSeeRemoved ? ['removed' => (bool) $participant->removed_at] : []),
