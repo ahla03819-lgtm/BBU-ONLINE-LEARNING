@@ -10,7 +10,7 @@ use RuntimeException;
 
 final class SdkLiveKitTokenIssuer implements LiveKitTokenIssuer
 {
-    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone'], ?string $metadata = null): IssuedMeetingToken
+    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone'], ?string $metadata = null, bool $canPublishData = false): IssuedMeetingToken
     {
         $key = config('livekit.api_key');
         $secret = config('livekit.api_secret');
@@ -22,7 +22,7 @@ final class SdkLiveKitTokenIssuer implements LiveKitTokenIssuer
         $options = (new AccessTokenOptions)->setIdentity($identity)->setName($displayName)->setMetadata($metadata)->setTtl($ttl);
         $grant = (new VideoGrant)
             ->setRoomJoin(true)->setRoomName($roomName)
-            ->setCanPublish(true)->setCanSubscribe(true)->setCanPublishData(false)
+            ->setCanPublish(true)->setCanSubscribe(true)->setCanPublishData($canPublishData)
             ->setCanPublishSources($publishSources);
         $token = (new AccessToken($key, $secret))->init($options)->setGrant($grant)->toJwt();
 

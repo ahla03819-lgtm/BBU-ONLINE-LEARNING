@@ -49,6 +49,7 @@ class ConversationCallTest extends TestCase
         $this->assertSame($model->livekit_room_name, $this->issuer->roomName);
         $this->assertSame('conversation-call:'.$model->public_uuid.':'.$b->id, $this->issuer->identity);
         $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $this->issuer->publishSources);
+        $this->assertFalse($this->issuer->canPublishData);
         Event::assertDispatched(ConversationCallSignal::class, fn ($event) => $event->broadcastAs() === 'conversation.call.started');
     }
 

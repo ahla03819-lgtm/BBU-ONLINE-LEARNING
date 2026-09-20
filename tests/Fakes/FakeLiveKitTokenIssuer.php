@@ -20,7 +20,9 @@ class FakeLiveKitTokenIssuer implements LiveKitTokenIssuer
 
     public ?string $displayName = null;
 
-    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone'], ?string $metadata = null): IssuedMeetingToken
+    public bool $canPublishData = false;
+
+    public function issue(string $roomName, string $identity, string $displayName, array $publishSources = ['camera', 'microphone'], ?string $metadata = null, bool $canPublishData = false): IssuedMeetingToken
     {
         $this->calls++;
         $this->roomName = $roomName;
@@ -28,6 +30,7 @@ class FakeLiveKitTokenIssuer implements LiveKitTokenIssuer
         $this->displayName = $displayName;
         $this->publishSources = $publishSources;
         $this->metadata = $metadata;
+        $this->canPublishData = $canPublishData;
 
         return new IssuedMeetingToken('safe-test-token', CarbonImmutable::now()->addMinutes(5));
     }

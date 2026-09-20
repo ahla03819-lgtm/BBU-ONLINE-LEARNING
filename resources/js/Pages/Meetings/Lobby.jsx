@@ -1,4 +1,4 @@
-import React, {lazy, Suspense, useEffect, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Head, Link} from '@inertiajs/react';
 import Layout from '../../Layouts/AuthenticatedLayout';
 import Icon from '../../Components/UI/Icon';
@@ -8,12 +8,11 @@ import MeetingStatusBadge from '../../Components/Meetings/MeetingStatusBadge';
 import useMediaPreview from '../../Hooks/Meetings/useMediaPreview';
 import {echo} from '../../realtime/echo';
 import {useAppSounds} from '../../Sound/AppSounds';
-
-const MeetingRoomExperience = lazy(() => import('../../Components/Meetings/LiveKit/MeetingRoomExperience'));
+import {usePersistentMeeting} from '../../Providers/PersistentMeetingProvider';
+import {localCameraMirrorClass} from '../../Components/Meetings/LiveKit/meetingView';
 
 export default function Lobby({schoolClass, meeting: initialMeeting}) {
     const [meeting, setMeeting] = useState(initialMeeting);
-    const [credentials, setCredentials] = useState(null);
     const [joining, setJoining] = useState(false);
     const [error, setError] = useState('');
     const [joinRequest, setJoinRequest] = useState(initialMeeting.join_request);
@@ -21,6 +20,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
     const [deciding, setDeciding] = useState(null);
     const media = useMediaPreview();
     const sounds = useAppSounds();
+    const {activeMeeting, startMeeting, leaveMeeting, returnToMeeting} = usePersistentMeeting();
     const previousJoinRequestStatus = useRef(initialMeeting.join_request?.status ?? null);
     const knownPendingRequests = useRef(null);
     const previousMeetingStatus = useRef(meeting.status);
@@ -29,17 +29,31 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
         if (!echo) return;
         const name = `meetings.class.${schoolClass.id}`;
         const channel = echo.private(name);
-        ['scheduled', 'updated', 'started', 'ending', 'ended', 'cancelled'].forEach((event) => channel.listen(`.meeting.${event}`, ({meeting: update}) => setMeeting((current) => update.lifecycle_version > current.lifecycle_version ? {...current, ...update, can_join: update.status === 'active'} : current)));
-        channel.listen('.meeting.participant-removed', ({participant}) => { if (participant.reference === meeting.participant_reference) { setError('You were removed from this meeting.'); setCredentials(null); media.stop(); } });
-        return () => echo.leave(name);
-    }, [schoolClass.id, meeting.participant_reference]);
+        const events = ['scheduled', 'updated', 'started', 'ending', 'ended', 'cancelled'];
+        const updateMeeting = ({meeting: update}) => setMeeting((current) => update.lifecycle_version > current.lifecycle_version ? {...current, ...update, can_join: update.status === 'active'} : current);
+        events.forEach((event) => channel.listen(`.meeting.${event}`, updateMeeting));
+        const removed = ({participant}) => {
+            if (participant.reference !== meeting.participant_reference) return;
+            setError('You were removed from this meeting.');
+            if (activeMeeting?.meeting.uuid === meeting.uuid) leaveMeeting();
+            media.stop();
+        };
+        channel.listen('.meeting.participant-removed', removed);
+        return () => {
+            events.forEach((event) => channel.stopListening(`.meeting.${event}`, updateMeeting));
+            channel.stopListening('.meeting.participant-removed', removed);
+        };
+    }, [activeMeeting?.meeting.uuid, leaveMeeting, schoolClass.id, meeting.participant_reference, meeting.uuid, media.stop]);
 
     useEffect(() => {
         const wasActive = previousMeetingStatus.current === 'active';
         if (wasActive && ['ending', 'ended', 'cancelled'].includes(meeting.status)) sounds.play('meeting-ended', meeting.uuid);
         previousMeetingStatus.current = meeting.status;
-        if (['ending', 'ended', 'cancelled'].includes(meeting.status)) { setCredentials(null); media.stop(); }
-    }, [meeting.status, meeting.uuid, sounds]);
+        if (['ending', 'ended', 'cancelled'].includes(meeting.status)) {
+            if (activeMeeting?.meeting.uuid === meeting.uuid) leaveMeeting();
+            media.stop();
+        }
+    }, [activeMeeting?.meeting.uuid, leaveMeeting, meeting.status, meeting.uuid, media.stop, sounds]);
 
     useEffect(() => {
         if (meeting.status !== 'active' || meeting.can_bypass_waiting_room) return;
@@ -71,13 +85,34 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
 
     const issueToken = async () => {
         if (!meeting.can_join || meeting.status !== 'active' || joining) return;
+        if (activeMeeting) {
+            if (activeMeeting.meeting.uuid === meeting.uuid) return returnToMeeting();
+            setError('Leave the current meeting before joining another meeting.');
+            return;
+        }
         setJoining(true); setError(''); media.stop();
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || data.errors?.meeting?.[0] || 'Unable to join this meeting.');
-            setCredentials(data); window.history.replaceState({}, '', `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`);
+            const roomUrl = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`;
+            const started = startMeeting({
+                credentials: data,
+                meeting,
+                schoolClass,
+                participantReference: meeting.participant_reference,
+                initialMedia: {camera: media.cameraEnabled, microphone: media.microphoneEnabled, cameraId: media.cameraId, microphoneId: media.microphoneId},
+                roomUrl,
+                lobbyUrl: `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/lobby`,
+                onLeave: () => {
+                    if (!meeting.can_bypass_waiting_room && joinRequest?.status === 'admitted') {
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                        fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrfToken, Accept: 'application/json'}}).catch(() => {});
+                    }
+                },
+            });
+            if (!started.ok) throw new Error(started.message);
         } catch (problem) { setError(problem.message === 'Failed to fetch' ? 'The meeting provider is unavailable.' : problem.message); }
         finally { setJoining(false); }
     };
@@ -111,18 +146,6 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
         } catch { setError('Unable to update this join request. Please try again.'); }
         finally { setDeciding(null); }
     };
-    const leave = () => {
-        if (!meeting.can_bypass_waiting_room && joinRequest?.status === 'admitted') {
-            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
-            fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}})
-                .then((response) => response.ok ? response.json() : null)
-                .then((data) => data?.request && setJoinRequest(data.request));
-        }
-        setCredentials(null); media.stop(); window.history.replaceState({}, '', `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/lobby`);
-    };
-
-    if (credentials) return <Layout><Head title={meeting.title}/><Suspense fallback={<div className="edway-card flex min-h-64 items-center justify-center text-slate-600"><Icon name="loader" className="mr-3 h-5 w-5 animate-spin text-indigo-600"/>Loading meeting…</div>}><MeetingRoomExperience credentials={credentials} meeting={meeting} schoolClass={schoolClass} initialMedia={{camera: media.cameraEnabled, microphone: media.microphoneEnabled, cameraId: media.cameraId, microphoneId: media.microphoneId}} onLeave={leave}/></Suspense></Layout>;
-
     const classContext = `${schoolClass.name}${schoolClass.section ? ` · ${schoolClass.section}` : ''}${meeting.subject ? ` · ${meeting.subject.code} ${meeting.subject.name}` : ''}`;
     return <Layout>
         <Head title={`${meeting.title} lobby`}/>
@@ -130,7 +153,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
             <Link href={`/school-classes/${schoolClass.id}/meetings/${meeting.uuid}`} className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 transition hover:text-indigo-900"><Icon name="arrow-left" className="h-4 w-4"/>Meeting details</Link>
             <header className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-[linear-gradient(120deg,#f4f2ff,#fff_58%,#eef3ff)] px-6 py-7 shadow-[0_12px_28px_rgba(74,67,160,.08)] sm:px-8"><div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-violet-200/35 blur-3xl"/><div className="relative flex flex-wrap items-start justify-between gap-4"><div><div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-indigo-600"><Icon name="video" className="h-4 w-4"/>Live class lobby</div><h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{meeting.title}</h1><p className="mt-2 text-sm text-slate-600">{classContext}</p></div><MeetingStatusBadge status={meeting.status}/></div></header>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,.75fr)]">
-                <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-[#151729] p-3 shadow-[0_20px_40px_rgba(24,24,52,.2)]"><div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_72%_0%,rgba(129,111,255,.4),transparent_55%)]"/><div className="relative flex items-center justify-between px-2 pb-3 text-xs font-semibold text-slate-300"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400"/>Device check</span><span>Preview only</span></div><div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-[#292c54] to-[#0b0c19]"><video ref={media.videoRef} autoPlay muted playsInline className="h-full w-full object-cover" aria-label="Local camera preview"/>{!media.cameraEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-300"><span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-violet-200"><Icon name="video-off" className="h-7 w-7"/></span><p className="text-sm font-medium">Camera is off</p><button className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20" onClick={media.toggleCamera}>Turn on camera</button></div>}</div><p className="relative px-2 pt-3 text-xs leading-5 text-slate-400">Your preview is visible only to you until you join.</p></section>
+                <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-[#151729] p-3 shadow-[0_20px_40px_rgba(24,24,52,.2)]"><div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_72%_0%,rgba(129,111,255,.4),transparent_55%)]"/><div className="relative flex items-center justify-between px-2 pb-3 text-xs font-semibold text-slate-300"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400"/>Device check</span><span>Preview only</span></div><div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-[#292c54] to-[#0b0c19]"><video ref={media.videoRef} autoPlay muted playsInline className={`h-full w-full object-cover ${localCameraMirrorClass}`} aria-label="Local camera preview"/>{!media.cameraEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-300"><span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-violet-200"><Icon name="video-off" className="h-7 w-7"/></span><p className="text-sm font-medium">Camera is off</p><button className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20" onClick={media.toggleCamera}>Turn on camera</button></div>}</div><p className="relative px-2 pt-3 text-xs leading-5 text-slate-400">Your preview is visible only to you until you join.</p></section>
                 <SectionCard className="p-6" title={joinRequest?.status === 'pending' ? 'Waiting room' : 'Ready to join?'} description={joinRequest?.status === 'pending' ? 'Your host will review your request before entry is allowed.' : 'Choose your devices before entering the live class.'}>{media.error && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">{media.error}</p>}{error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}{joinRequest?.status === 'pending' ? <WaitingRoom request={joinRequest} onCancel={cancelRequest}/> : <><div className="mt-5 grid grid-cols-2 gap-3"><DeviceToggle enabled={media.cameraEnabled} icon={media.cameraEnabled ? 'video' : 'video-off'} label={media.cameraEnabled ? 'Camera on' : 'Camera off'} onClick={media.toggleCamera}/><DeviceToggle enabled={media.microphoneEnabled} icon={media.microphoneEnabled ? 'mic' : 'mic-off'} label={media.microphoneEnabled ? 'Mic on' : 'Mic off'} onClick={media.toggleMicrophone}/></div><DeviceSelect label="Camera" icon="video" value={media.cameraId} onChange={(event) => media.chooseCamera(event.target.value)} options={media.devices.cameras} optionLabel={media.labels.camera} defaultLabel="Default camera"/><DeviceSelect label="Microphone" icon="mic" value={media.microphoneId} onChange={(event) => media.chooseMicrophone(event.target.value)} options={media.devices.microphones} optionLabel={media.labels.microphone} defaultLabel="Default microphone"/><div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">Microphone test</p><p className="mt-0.5 text-xs text-slate-500">Check that BBU can hear you.</p></div><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testMicrophone}>{media.testingMicrophone ? 'Stop test' : 'Test mic'}</button></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-100" style={{width: `${media.microphoneLevel}%`}}/></div></div><DeviceSelect label="Speaker" icon="volume" value={media.speakerId} onChange={(event) => media.setSpeakerId(event.target.value)} options={media.devices.speakers} optionLabel={media.labels.speaker} defaultLabel="Default speaker" disabled={!media.speakerSelectionSupported}/><div className="mt-2 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">{media.speakerSelectionSupported ? 'Choose an output, then play a short test tone.' : 'Your browser will use its default speaker.'}</p><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testSpeaker}>{media.testingSpeaker ? 'Playing…' : 'Test speaker'}</button><audio ref={media.speakerRef} preload="none" className="hidden"/></div><button className="btn mt-6 w-full justify-center py-3" disabled={!meeting.can_join || meeting.status !== 'active' || joining} onClick={join}><Icon name="video" className="h-4 w-4"/>{joining ? 'Joining…' : joinRequest?.status === 'admitted' && joinRequest?.can_enter ? 'Enter live class' : joinRequest?.status === 'denied' ? 'Request to join again' : meeting.status === 'active' ? (meeting.can_bypass_waiting_room ? 'Join meeting' : 'Request to join') : 'Waiting for meeting to become active'}</button></>}</SectionCard>
             </div>
             {meeting.can_manage_join_requests && <HostRequests requests={pendingRequests} deciding={deciding} onDecide={decide}/>}

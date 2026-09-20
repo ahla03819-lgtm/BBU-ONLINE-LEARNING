@@ -42,12 +42,34 @@ class MeetingExperienceTest extends TestCase
         foreach (['meeting-chat', 'meeting-hand', 'meeting-reaction', 'RoomEvent.DataReceived', 'localParticipant.publishData', 'MAX_MESSAGE_LENGTH = 2000'] as $contract) {
             $this->assertStringContainsString($contract, $signals);
         }
-        foreach (['MeetingChatPanel', 'ParticipantsPanel', 'MeetingControlCenter', 'actual_start_at'] as $contract) {
+        foreach (['MeetingChatPanel', 'ParticipantsPanel', 'MeetingControlCenter', 'sessionStartedAt'] as $contract) {
             $this->assertStringContainsString($contract, $room);
         }
+        $this->assertStringNotContainsString('actual_start_at', $room);
         $this->assertStringContainsString('meeting.can_end', $controls);
         $this->assertStringNotContainsString('channels/', $signals);
         $this->assertStringNotContainsString('fetch(', $signals);
+    }
+
+    public function test_live_room_keeps_browser_history_navigation_meeting_scoped(): void
+    {
+        $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+
+        foreach (['useMeetingNavigationGuard', 'MEETING_HISTORY_GUARD', "window.addEventListener('popstate', restoreMeeting, {capture: true})", 'event.stopImmediatePropagation()', 'window.history.forward()', "window.removeEventListener('popstate', restoreMeeting, {capture: true})", 'overscroll-x-none'] as $contract) {
+            $this->assertStringContainsString($contract, $component);
+        }
+    }
+
+    public function test_persistent_session_enters_the_room_through_inertia_without_replacing_the_lobby_history_entry(): void
+    {
+        $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
+        $layout = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.jsx'));
+        $notifications = file_get_contents(resource_path('js/Hooks/useNotificationRealtime.js'));
+
+        $this->assertStringContainsString('router.visit(nextSession.roomUrl)', $provider);
+        $this->assertStringNotContainsString("window.history.replaceState(window.history.state, '', nextSession.roomUrl)", $provider);
+        $this->assertStringContainsString('pauseBackgroundRefresh', $layout);
+        $this->assertStringContainsString('pauseBackgroundRefreshRef.current', $notifications);
     }
 
     protected function setUp(): void

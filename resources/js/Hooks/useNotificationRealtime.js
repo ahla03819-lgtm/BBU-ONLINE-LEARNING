@@ -2,18 +2,23 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {router} from '@inertiajs/react';
 import {echo} from '../realtime/echo';
 
-export default function useNotificationRealtime({userId, initialUnreadCount, enabled, inboxOpen, onNewNotification}) {
+export default function useNotificationRealtime({userId, initialUnreadCount, enabled, inboxOpen, onNewNotification, pauseBackgroundRefresh = false}) {
     const [unreadCount, setUnreadCount] = useState(initialUnreadCount ?? 0);
     const reloading = useRef(false);
     const reloadRequested = useRef(false);
+    const refreshDeferred = useRef(false);
     const seen = useRef(new Set());
     const onNewNotificationRef = useRef(onNewNotification);
+    const pauseBackgroundRefreshRef = useRef(pauseBackgroundRefresh);
 
     useEffect(() => { onNewNotificationRef.current = onNewNotification; }, [onNewNotification]);
-
     useEffect(() => setUnreadCount(initialUnreadCount ?? 0), [initialUnreadCount]);
 
     const reconcile = useCallback(() => {
+        if (pauseBackgroundRefreshRef.current) {
+            refreshDeferred.current = true;
+            return;
+        }
         if (reloading.current) {
             reloadRequested.current = true;
             return;
@@ -34,6 +39,14 @@ export default function useNotificationRealtime({userId, initialUnreadCount, ena
     }, [inboxOpen]);
 
     useEffect(() => {
+        pauseBackgroundRefreshRef.current = pauseBackgroundRefresh;
+        if (!pauseBackgroundRefresh && refreshDeferred.current) {
+            refreshDeferred.current = false;
+            reconcile();
+        }
+    }, [pauseBackgroundRefresh, reconcile]);
+
+    useEffect(() => {
         if (!enabled || !userId || !echo) return undefined;
         const name = `notifications.${userId}`;
         const handleCreated = event => {
@@ -49,9 +62,9 @@ export default function useNotificationRealtime({userId, initialUnreadCount, ena
         };
         const channel = echo.private(name).listen('.notification.created', handleCreated);
         const socket = echo.connector.pusher.connection;
-        const connected = () => reconcile();
-        const focused = () => reconcile();
-        const visible = () => { if (document.visibilityState === 'visible') reconcile(); };
+        const connected = () => { if (!pauseBackgroundRefreshRef.current) reconcile(); };
+        const focused = () => { if (!pauseBackgroundRefreshRef.current) reconcile(); };
+        const visible = () => { if (document.visibilityState === 'visible' && !pauseBackgroundRefreshRef.current) reconcile(); };
         socket.bind('connected', connected);
         window.addEventListener('focus', focused);
         document.addEventListener('visibilitychange', visible);
