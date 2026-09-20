@@ -46,6 +46,7 @@ class ReconcileMeetingLifecycle
                 $locked->update([
                     'status' => $active ? MeetingStatus::Active : MeetingStatus::Scheduled,
                     'actual_start_at' => $active ? ($locked->actual_start_at ?? now()) : null,
+                    'session_started_at' => $active ? now() : null,
                     'lifecycle_version' => $locked->lifecycle_version + 1,
                     'last_provider_error' => $active ? null : 'Meeting room does not exist at the provider.',
                 ]);

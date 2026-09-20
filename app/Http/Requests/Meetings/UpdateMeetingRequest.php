@@ -26,7 +26,7 @@ class UpdateMeetingRequest extends FormRequest
             'scheduled_start_at' => ['required', 'date'],
             'scheduled_end_at' => ['nullable', 'date', 'after:scheduled_start_at'],
             'max_participants' => ['required', 'integer', 'min:'.config('meetings.min_participants'), 'max:'.config('meetings.max_participants')],
-            ...collect(['uuid', 'livekit_room_name', 'actual_start_at', 'actual_end_at', 'lifecycle_version', 'status', 'join_policy', 'start_attempt_uuid', 'last_provider_error'])
+            ...collect(['uuid', 'livekit_room_name', 'actual_start_at', 'session_started_at', 'actual_end_at', 'lifecycle_version', 'status', 'join_policy', 'start_attempt_uuid', 'last_provider_error'])
                 ->mapWithKeys(fn (string $field) => [$field => ['prohibited']])->all(),
         ];
     }

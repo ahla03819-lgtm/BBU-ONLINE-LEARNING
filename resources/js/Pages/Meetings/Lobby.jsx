@@ -96,10 +96,12 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || data.errors?.meeting?.[0] || 'Unable to join this meeting.');
+            const clock = {serverNowAt: data.server_now_at, receivedAt: performance.now()};
             const roomUrl = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`;
             const started = startMeeting({
                 credentials: data,
-                meeting,
+                meeting: {...meeting, lifecycle_version: data.lifecycle_version, session_started_at: data.session_started_at},
+                clock,
                 schoolClass,
                 participantReference: meeting.participant_reference,
                 initialMedia: {camera: media.cameraEnabled, microphone: media.microphoneEnabled, cameraId: media.cameraId, microphoneId: media.microphoneId},

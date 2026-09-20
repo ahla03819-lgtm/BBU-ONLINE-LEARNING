@@ -49,11 +49,12 @@ class MeetingTokenTest extends TestCase
         $response = $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]));
 
         $response->assertOk()->assertExactJsonStructure([
-            'token', 'server_url', 'expires_at', 'lifecycle_version',
+            'token', 'server_url', 'expires_at', 'lifecycle_version', 'session_started_at', 'server_now_at',
             'participant' => ['id', 'display_name', 'role'],
         ])->assertJsonPath('token', 'safe-test-token')
             ->assertJsonPath('server_url', 'wss://public.example.test')
             ->assertJsonPath('lifecycle_version', 7)
+            ->assertJsonPath('session_started_at', null)
             ->assertJsonMissingPath('api_url')
             ->assertJsonMissingPath('api_key')
             ->assertJsonMissingPath('api_secret')
@@ -61,6 +62,29 @@ class MeetingTokenTest extends TestCase
         $this->assertDatabaseHas('meeting_participants', ['meeting_id' => $meeting->id, 'user_id' => $student->id]);
         $this->assertDatabaseCount('meeting_attendance_sessions', 0);
         $this->assertDatabaseHas('audit_logs', ['action' => 'meeting.token-issued']);
+    }
+
+    public function test_joined_participants_receive_the_same_authoritative_session_start_despite_stale_historical_start(): void
+    {
+        $class = $this->activeClass();
+        $first = $this->student($class);
+        $second = $this->student($class);
+        $sessionStart = now()->subMinutes(3)->startOfSecond();
+        $meeting = Meeting::factory()->active()->create([
+            'school_class_id' => $class->id,
+            'actual_start_at' => now()->subDays(20),
+            'session_started_at' => $sessionStart,
+        ]);
+        $this->admit($meeting, $first);
+        $this->admit($meeting, $second);
+
+        $firstToken = $this->actingAs($first)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+        $secondToken = $this->actingAs($second)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+
+        $this->assertSame($sessionStart->toIso8601String(), $firstToken->json('session_started_at'));
+        $this->assertSame($firstToken->json('session_started_at'), $secondToken->json('session_started_at'));
+        $this->assertNotNull($firstToken->json('server_now_at'));
+        $this->assertGreaterThanOrEqual($sessionStart->timestamp, strtotime($secondToken->json('server_now_at')));
     }
 
     public function test_repeated_issuance_reuses_one_participant_and_one_capacity_slot(): void

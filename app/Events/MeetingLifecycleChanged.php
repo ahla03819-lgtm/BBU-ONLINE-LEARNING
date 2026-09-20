@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Enums\MeetingStatus;
 use App\Models\Meeting;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -35,6 +36,7 @@ class MeetingLifecycleChanged implements ShouldBroadcast, ShouldDispatchAfterCom
             'status' => $this->meeting->status->value,
             'scheduled_start_at' => $this->meeting->scheduled_start_at?->toIso8601String(),
             'scheduled_end_at' => $this->meeting->scheduled_end_at?->toIso8601String(),
+            'session_started_at' => $this->meeting->status === MeetingStatus::Active ? $this->meeting->session_started_at?->toIso8601String() : null,
             'lifecycle_version' => $this->meeting->lifecycle_version,
             'host' => $this->meeting->host?->only('name'),
             'subject' => $this->meeting->classSubject?->subject?->only('code', 'name'),

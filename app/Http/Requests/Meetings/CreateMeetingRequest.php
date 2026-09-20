@@ -39,7 +39,7 @@ class CreateMeetingRequest extends FormRequest
 
     private function technicalFields(): array
     {
-        return collect(['uuid', 'livekit_room_name', 'actual_start_at', 'actual_end_at', 'lifecycle_version', 'status', 'join_policy', 'start_attempt_uuid', 'last_provider_error'])
+        return collect(['uuid', 'livekit_room_name', 'actual_start_at', 'session_started_at', 'actual_end_at', 'lifecycle_version', 'status', 'join_policy', 'start_attempt_uuid', 'last_provider_error'])
             ->mapWithKeys(fn (string $field) => [$field => ['prohibited']])
             ->all();
     }
