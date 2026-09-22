@@ -19,6 +19,8 @@ use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -111,11 +113,16 @@ class UserController extends Controller
     public function destroy(User $user, EnsureSuperAdminContinuity $guard, AuditLogger $audit): RedirectResponse
     {
         $this->authorize('delete', $user);
+        $avatarDirectory = $user->managedAvatarDirectory();
         DB::transaction(function () use ($user, $guard, $audit) {
             $guard->deleting($user);
             $audit->log('user.deleted', $user, $user->only('name', 'email', 'status'), []);
             $user->delete();
         });
+
+        if (! Storage::disk('public')->deleteDirectory($avatarDirectory)) {
+            Log::warning('Deleted user avatar directory could not be cleaned up.', ['user_id' => $user->id]);
+        }
 
         return redirect()->route('users.index')->with('success', 'User deleted.');
     }

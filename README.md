@@ -26,6 +26,24 @@ The initial deployment target is one Reverb node and does not require Redis. Pro
 
 Tests: `php artisan test`. Production frontend: `npm run build`.
 
+## Avatar storage
+
+Profile photos use Laravel's public storage disk. Run the following after cloning, moving, or deploying the project, and verify that `public/storage` points to `storage/app/public`:
+
+```shell
+php artisan storage:link
+```
+
+If `public/storage` is stale or broken, recreate it with Laravel:
+
+```shell
+php artisan storage:unlink
+php artisan storage:link
+ls -ld public/storage
+```
+
+Full avatar recovery requires restoring both the database and `storage/app/public/user-avatars`. Restoring only one leaves user records and their profile photos out of sync.
+
 ## LiveKit meeting runtime
 
 Configure the browser WebSocket endpoint as `LIVEKIT_URL=wss://...`, the backend Room Service endpoint as `LIVEKIT_API_URL=https://...`, and provide `LIVEKIT_API_KEY` plus the backend-only `LIVEKIT_API_SECRET` for LiveKit Cloud or a compatible self-hosted server. Never add the API endpoint, key, or secret to a `VITE_` variable. The participant token remains in browser memory only and expires after five minutes; an established LiveKit connection is not terminated merely because its original join token expires.
