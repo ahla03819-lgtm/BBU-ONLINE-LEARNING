@@ -151,6 +151,96 @@ class MyAccountTest extends TestCase
         Storage::disk('public')->assertExists($otherPath);
     }
 
+    public function test_avatar_write_failure_preserves_the_existing_path_without_storing_an_invalid_value(): void
+    {
+        $user = User::factory()->create();
+        $previousPath = $user->managedAvatarDirectory().'/original.png';
+        $user->update(['avatar_path' => $previousPath]);
+        $disk = \Mockery::mock(\Illuminate\Contracts\Filesystem\Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturnFalse();
+        $factory = \Mockery::mock(\Illuminate\Contracts\Filesystem\Factory::class);
+        $factory->shouldReceive('disk')->with('public')->once()->andReturn($disk);
+        $this->app->instance(\Illuminate\Contracts\Filesystem\Factory::class, $factory);
+
+        $this->actingAs($user)->post('/my-account/avatar', ['avatar' => UploadedFile::fake()->image('portrait.png')])
+            ->assertSessionHasErrors('avatar');
+
+        $this->assertSame($previousPath, $user->fresh()->avatar_path);
+    }
+
+    public function test_avatar_database_failure_cleans_the_new_file_and_keeps_the_existing_avatar(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $previousPath = $user->managedAvatarDirectory().'/original.png';
+        $user->update(['avatar_path' => $previousPath]);
+        Storage::disk('public')->put($previousPath, 'original');
+        User::updating(fn () => throw new \RuntimeException('Simulated database failure'));
+
+        $this->actingAs($user)->post('/my-account/avatar', ['avatar' => UploadedFile::fake()->image('portrait.png')])
+            ->assertSessionHasErrors('avatar');
+
+        $this->assertSame($previousPath, $user->fresh()->avatar_path);
+        Storage::disk('public')->assertExists($previousPath);
+        $this->assertSame([$previousPath], Storage::disk('public')->allFiles($user->managedAvatarDirectory()));
+    }
+
+    public function test_avatar_delete_failure_restores_the_existing_path(): void
+    {
+        $user = User::factory()->create();
+        $path = $user->managedAvatarDirectory().'/original.png';
+        $user->update(['avatar_path' => $path]);
+        $disk = \Mockery::mock(\Illuminate\Contracts\Filesystem\Filesystem::class);
+        $disk->shouldReceive('delete')->once()->with($path)->andReturnFalse();
+        $disk->shouldReceive('url')->zeroOrMoreTimes()->with($path)->andReturn('/storage/'.$path);
+        Storage::shouldReceive('disk')->with('public')->zeroOrMoreTimes()->andReturn($disk);
+
+        $this->actingAs($user)->delete('/my-account/avatar')->assertSessionHasErrors('avatar');
+
+        $this->assertSame($path, $user->fresh()->avatar_path);
+    }
+
+    public function test_managed_avatar_path_validation_rejects_traversal_ambiguous_and_other_user_paths(): void
+    {
+        $user = User::factory()->create();
+        $validPath = $user->managedAvatarDirectory().'/4e4f7339-a9e6-4592-bcc1-3767b3da8ec8.png';
+        $otherPath = 'user-avatars/'.($user->id + 1).'/avatar.png';
+
+        $this->assertTrue($user->ownsManagedAvatarPath($validPath));
+
+        foreach ([
+            $user->managedAvatarDirectory().'/../avatar.png',
+            $user->managedAvatarDirectory().'\\avatar.png',
+            $user->managedAvatarDirectory().'//avatar.png',
+            $user->managedAvatarDirectory().'/',
+            $user->managedAvatarDirectory().'/avatar/extra.png',
+            $otherPath,
+        ] as $invalidPath) {
+            $this->assertFalse($user->ownsManagedAvatarPath($invalidPath));
+        }
+    }
+
+    public function test_traversal_like_avatar_paths_are_not_deleted_during_removal(): void
+    {
+        $user = User::factory()->create();
+        $user->update(['avatar_path' => $user->managedAvatarDirectory().'/../avatar.png']);
+        Storage::shouldReceive('disk')->never();
+
+        $this->actingAs($user)->delete('/my-account/avatar')->assertRedirect('/my-account');
+
+        $this->assertNull($user->fresh()->avatar_path);
+    }
+
+    public function test_unmanaged_avatar_paths_are_not_deleted_during_removal(): void
+    {
+        $user = User::factory()->create(['avatar_path' => 'other-user/avatar.png']);
+        Storage::shouldReceive('disk')->never();
+
+        $this->actingAs($user)->delete('/my-account/avatar')->assertRedirect('/my-account');
+
+        $this->assertNull($user->fresh()->avatar_path);
+    }
+
     public function test_account_ui_exposes_real_sections_and_moves_sound_setting_out_of_the_topbar(): void
     {
         $page = file_get_contents(resource_path('js/Pages/MyAccount/Show.jsx'));
