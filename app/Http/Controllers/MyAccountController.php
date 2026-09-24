@@ -8,6 +8,7 @@ use App\Http\Requests\MyAccount\UpdateProfileRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -61,17 +62,26 @@ class MyAccountController extends Controller
         $user = $request->user();
         $previousPath = $user->avatar_path;
         $file = $request->file('avatar');
-        $path = $file->storeAs("user-avatars/{$user->id}", Str::uuid().'.'.$file->extension(), 'public');
+        $path = $file->storeAs($user->managedAvatarDirectory(), Str::uuid().'.'.$file->extension(), 'public');
 
-        try {
-            $user->update(['avatar_path' => $path]);
-        } catch (\Throwable $exception) {
-            Storage::disk('public')->delete($path);
+        if (! $user->ownsManagedAvatarPath($path)) {
+            Log::warning('Avatar storage write failed.', ['user_id' => $user->id]);
 
-            throw $exception;
+            throw ValidationException::withMessages(['avatar' => 'We could not save your profile photo. Please try again.']);
         }
 
-        $this->deleteManagedAvatar($user->id, $previousPath);
+        try {
+            if (! $user->update(['avatar_path' => $path])) {
+                throw new \RuntimeException('Avatar database update failed.');
+            }
+        } catch (\Throwable $exception) {
+            $this->deleteStoredAvatar($user, $path, 'new avatar after database failure');
+            Log::error('Avatar database update failed after storage write.', ['user_id' => $user->id, 'exception' => $exception]);
+
+            throw ValidationException::withMessages(['avatar' => 'We could not save your profile photo. Please try again.']);
+        }
+
+        $this->deleteStoredAvatar($user, $previousPath, 'previous avatar after replacement');
 
         return to_route('my-account.profile')->with('success', 'Your profile photo has been updated.');
     }
@@ -81,16 +91,43 @@ class MyAccountController extends Controller
         $user = $request->user();
         $previousPath = $user->avatar_path;
 
-        $user->update(['avatar_path' => null]);
-        $this->deleteManagedAvatar($user->id, $previousPath);
+        if (! $user->ownsManagedAvatarPath($previousPath)) {
+            $user->update(['avatar_path' => null]);
+
+            return to_route('my-account.profile')->with('success', 'Your profile photo has been removed.');
+        }
+
+        try {
+            if (! $user->update(['avatar_path' => null])) {
+                throw new \RuntimeException('Avatar database update failed.');
+            }
+
+            if (! Storage::disk('public')->delete($previousPath)) {
+                throw new \RuntimeException('Avatar storage deletion failed.');
+            }
+        } catch (\Throwable $exception) {
+            if ($user->fresh()?->avatar_path !== $previousPath) {
+                try {
+                    if (! $user->update(['avatar_path' => $previousPath])) {
+                        throw new \RuntimeException('Avatar path restore failed.');
+                    }
+                } catch (\Throwable $restoreException) {
+                    Log::critical('Avatar path could not be restored after deletion failure.', ['user_id' => $user->id, 'exception' => $restoreException]);
+                }
+            }
+
+            Log::error('Avatar removal failed.', ['user_id' => $user->id, 'exception' => $exception]);
+
+            throw ValidationException::withMessages(['avatar' => 'We could not remove your profile photo. Please try again.']);
+        }
 
         return to_route('my-account.profile')->with('success', 'Your profile photo has been removed.');
     }
 
-    private function deleteManagedAvatar(int $userId, ?string $path): void
+    private function deleteStoredAvatar($user, mixed $path, string $context): void
     {
-        if ($path && Str::startsWith($path, "user-avatars/{$userId}/")) {
-            Storage::disk('public')->delete($path);
+        if ($user->ownsManagedAvatarPath($path) && ! Storage::disk('public')->delete($path)) {
+            Log::warning('Avatar storage cleanup failed.', ['user_id' => $user->id, 'context' => $context]);
         }
     }
 }

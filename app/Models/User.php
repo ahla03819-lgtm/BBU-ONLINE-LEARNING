@@ -64,11 +64,33 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function avatarUrl(): ?string
     {
-        if (! is_string($this->avatar_path) || ! Str::startsWith($this->avatar_path, "user-avatars/{$this->id}/")) {
+        if (! $this->ownsManagedAvatarPath($this->avatar_path)) {
             return null;
         }
 
         return Storage::disk('public')->url($this->avatar_path);
+    }
+
+    public function managedAvatarDirectory(): string
+    {
+        return "user-avatars/{$this->id}";
+    }
+
+    public function ownsManagedAvatarPath(mixed $path): bool
+    {
+        if (! is_string($path) || $path === '' || str_contains($path, '..') || str_contains($path, chr(92))) {
+            return false;
+        }
+
+        $directory = $this->managedAvatarDirectory().'/';
+
+        if (! Str::startsWith($path, $directory)) {
+            return false;
+        }
+
+        $filename = Str::after($path, $directory);
+
+        return $filename !== '' && ! str_contains($filename, '/');
     }
 
     public function teacherProfile(): HasOne
