@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('announcements:publish-due')->everyMinute()->withoutOverlapping();
 Schedule::command('meetings:reconcile-webhooks')->everyMinute()->withoutOverlapping();
+Schedule::command('meetings:replenish-series')->daily()->withoutOverlapping();

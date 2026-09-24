@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['uuid', 'school_class_id', 'class_subject_id', 'created_by', 'host_user_id', 'title', 'description', 'scheduled_start_at', 'scheduled_end_at', 'actual_start_at', 'session_started_at', 'actual_end_at', 'status', 'join_policy', 'livekit_room_name', 'max_participants', 'lifecycle_version', 'start_attempt_uuid', 'last_provider_error'])]
+#[Fillable(['meeting_series_id', 'series_occurrence_on', 'series_sync_version', 'series_override_at', 'uuid', 'school_class_id', 'class_subject_id', 'created_by', 'host_user_id', 'title', 'description', 'scheduled_start_at', 'scheduled_end_at', 'actual_start_at', 'session_started_at', 'actual_end_at', 'status', 'join_policy', 'livekit_room_name', 'max_participants', 'lifecycle_version', 'start_attempt_uuid', 'last_provider_error'])]
 class Meeting extends Model
 {
     /** @use HasFactory<MeetingFactory> */
@@ -43,7 +43,15 @@ class Meeting extends Model
             'actual_end_at' => 'datetime',
             'max_participants' => 'integer',
             'lifecycle_version' => 'integer',
+            'series_occurrence_on' => 'date',
+            'series_sync_version' => 'integer',
+            'series_override_at' => 'datetime',
         ];
+    }
+
+    public function meetingSeries(): BelongsTo
+    {
+        return $this->belongsTo(MeetingSeries::class);
     }
 
     public function schoolClass(): BelongsTo

@@ -17,6 +17,7 @@ use App\Models\ConversationMember;
 use App\Models\ConversationMessage;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
+use App\Models\MeetingSeries;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\SchoolClass;
@@ -64,6 +65,8 @@ class AppServiceProvider extends ServiceProvider
                 || $argument instanceof MessageAttachment
                 || $argument === Meeting::class
                 || $argument instanceof Meeting
+                || $argument === MeetingSeries::class
+                || $argument instanceof MeetingSeries
                 || $argument === MeetingParticipant::class
                 || $argument instanceof MeetingParticipant
                 || $argument === Assignment::class
