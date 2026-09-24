@@ -49,6 +49,11 @@ class ClassSubject extends Model
         return $this->belongsTo(User::class, 'archived_by');
     }
 
+    public function meetingSeries(): HasMany
+    {
+        return $this->hasMany(MeetingSeries::class);
+    }
+
     public function meetings(): HasMany
     {
         return $this->hasMany(Meeting::class);
