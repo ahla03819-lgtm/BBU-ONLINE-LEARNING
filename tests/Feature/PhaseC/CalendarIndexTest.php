@@ -28,4 +28,19 @@ class CalendarIndexTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Calendar/Index'));
     }
+
+    public function test_calendar_index_exposes_the_configured_calendar_timezone(): void
+    {
+        config(['calendar.default_timezone' => 'Asia/Phnom_Penh']);
+
+        $user = User::factory()->create();
+        $user->assignRole('Teacher');
+
+        $this->actingAs($user)
+            ->get(route('calendar.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Calendar/Index')
+                ->where('timezone', 'Asia/Phnom_Penh'));
+    }
 }
