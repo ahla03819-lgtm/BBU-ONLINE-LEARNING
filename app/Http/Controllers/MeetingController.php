@@ -13,6 +13,7 @@ use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Models\SchoolClass;
 use App\Services\MeetingAccess;
+use App\Services\MeetingAttendanceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -44,7 +45,7 @@ class MeetingController extends Controller
         ]);
     }
 
-    public function show(SchoolClass $schoolClass, Meeting $meeting, MeetingAccess $access): Response
+    public function show(SchoolClass $schoolClass, Meeting $meeting, MeetingAccess $access, MeetingAttendanceAccess $attendanceAccess): Response
     {
         $this->ensureVisible($schoolClass, $meeting, $access);
 
@@ -57,6 +58,7 @@ class MeetingController extends Controller
                 'can_end' => auth()->user()->can('end', $meeting),
                 'can_join' => auth()->user()->can('join', $meeting),
                 'can_reconcile' => auth()->user()->can('reconcile', $meeting),
+                'can_view_attendance' => $attendanceAccess->canViewReport(auth()->user(), $meeting),
             ],
         ]);
     }
