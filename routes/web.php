@@ -26,6 +26,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\LiveKitWebhookController;
+use App\Http\Controllers\MeetingAttendanceController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingExperienceController;
 use App\Http\Controllers\MeetingJoinRequestController;
@@ -197,6 +198,8 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/start', [MeetingLifecycleController::class, 'start'])->name('meetings.start');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/end', [MeetingLifecycleController::class, 'end'])->name('meetings.end');
         Route::post('/school-classes/{schoolClass}/meetings/{meeting}/reconcile', [MeetingLifecycleController::class, 'reconcile'])->middleware('throttle:meeting-lifecycle')->name('meetings.reconcile');
+        Route::get('/school-classes/{schoolClass}/meetings/{meeting}/attendance', [MeetingAttendanceController::class, 'show'])->name('meetings.attendance.show');
+        Route::get('/school-classes/{schoolClass}/meetings/{meeting}/attendance/export', [MeetingAttendanceController::class, 'export'])->name('meetings.attendance.export');
         Route::post('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/token', [MeetingTokenController::class, 'store'])->middleware('throttle:meeting-tokens')->name('meetings.token');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/lobby', [MeetingExperienceController::class, 'lobby'])->name('meetings.lobby');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/room', [MeetingExperienceController::class, 'room'])->name('meetings.room');
