@@ -4,33 +4,77 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MAX_VISIBLE_EVENTS = 3;
 
-function firstOfMonth(date) {
-    return new Date(date.getFullYear(), date.getMonth(), 1);
+function pad(value) {
+    return String(value).padStart(2, '0');
 }
 
-function monthRange(date) {
+/**
+ * Calendar date values (year, 1-12 month, day) for "now" in the academic
+ * timezone, never in the browser timezone.
+ */
+function todayIn(timezone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+    return { year: Number(values.year), month: Number(values.month), day: Number(values.day) };
+}
+
+function addMonths(viewedMonth, offset) {
+    const index = viewedMonth.year * 12 + (viewedMonth.month - 1) + offset;
+
     return {
-        start: firstOfMonth(date).toISOString(),
-        end: new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString(),
+        year: Math.floor(index / 12),
+        month: ((index % 12) + 12) % 12 + 1,
     };
 }
 
-function calendarDays(date) {
-    const first = firstOfMonth(date);
-    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const cellCount = Math.ceil((first.getDay() + daysInMonth) / 7) * 7;
-
-    return Array.from({ length: cellCount }, (_, index) => (
-        new Date(date.getFullYear(), date.getMonth(), index - first.getDay() + 1)
-    ));
+/**
+ * UTC Date used purely as neutral calendar arithmetic. Only getUTC* accessors
+ * are ever used on these objects so the browser timezone cannot leak in.
+ */
+function utcDate(year, month, day) {
+    return new Date(Date.UTC(year, month - 1, day));
 }
 
-function localDayKey(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+function utcDateKey(date) {
+    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
 
-    return `${year}-${month}-${day}`;
+/**
+ * Month query boundaries are DATE-ONLY values; the server resolves their
+ * midnight in the academic timezone, so no browser-local instant is sent.
+ */
+function monthRange(viewedMonth) {
+    const start = utcDate(viewedMonth.year, viewedMonth.month, 1);
+    const end = addMonths(viewedMonth, 1);
+
+    return {
+        start: utcDateKey(start),
+        end: utcDateKey(utcDate(end.year, end.month, 1)),
+    };
+}
+
+function calendarDays(viewedMonth) {
+    const firstWeekday = utcDate(viewedMonth.year, viewedMonth.month, 1).getUTCDay();
+    const daysInMonth = utcDate(viewedMonth.year, viewedMonth.month + 1, 0).getUTCDate();
+    const cellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+
+    return Array.from({ length: cellCount }, (_, index) => {
+        const date = utcDate(viewedMonth.year, viewedMonth.month, index - firstWeekday + 1);
+
+        return {
+            key: utcDateKey(date),
+            year: date.getUTCFullYear(),
+            month: date.getUTCMonth() + 1,
+            day: date.getUTCDate(),
+            date,
+        };
+    });
 }
 
 function eventDayKey(value, timezone) {
@@ -53,10 +97,13 @@ function eventTime(value, timezone) {
     }).format(new Date(value));
 }
 
-export default function Calendar() {
-    const [viewedMonth, setViewedMonth] = useState(() => firstOfMonth(new Date()));
+export default function Calendar({ timezone = 'UTC' }) {
+    const [viewedMonth, setViewedMonth] = useState(() => {
+        const today = todayIn(timezone);
+
+        return { year: today.year, month: today.month };
+    });
     const [events, setEvents] = useState([]);
-    const [timezone, setTimezone] = useState('UTC');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -84,11 +131,6 @@ export default function Calendar() {
                 }
 
                 const data = await response.json();
-                const responseTimezone = typeof data.timezone === 'string' && data.timezone
-                    ? data.timezone
-                    : 'UTC';
-
-                setTimezone(responseTimezone);
                 setEvents(Array.isArray(data.events) ? data.events : []);
             } catch (fetchError) {
                 if (fetchError.name !== 'AbortError') {
@@ -102,7 +144,7 @@ export default function Calendar() {
         fetchEvents();
 
         return () => controller.abort();
-    }, [viewedMonth]);
+    }, [viewedMonth, timezone]);
 
     const days = useMemo(() => calendarDays(viewedMonth), [viewedMonth]);
     const eventsByDay = useMemo(() => events.reduce((grouped, event) => {
@@ -114,17 +156,26 @@ export default function Calendar() {
 
         return grouped;
     }, {}), [events, timezone]);
-    const todayKey = localDayKey(new Date());
+    const todayKey = (() => {
+        const today = todayIn(timezone);
+
+        return `${today.year}-${pad(today.month)}-${pad(today.day)}`;
+    })();
     const monthTitle = new Intl.DateTimeFormat(undefined, {
         month: 'long',
         year: 'numeric',
-    }).format(viewedMonth);
+        timeZone: 'UTC',
+    }).format(utcDate(viewedMonth.year, viewedMonth.month, 1));
 
     const moveMonth = (offset) => {
-        setViewedMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+        setViewedMonth((current) => addMonths(current, offset));
     };
 
-    const goToToday = () => setViewedMonth(firstOfMonth(new Date()));
+    const goToToday = () => {
+        const today = todayIn(timezone);
+
+        setViewedMonth({ year: today.year, month: today.month });
+    };
 
     return (
         <AuthenticatedLayout>
@@ -189,25 +240,24 @@ export default function Calendar() {
 
                         <div className="grid grid-cols-7">
                             {days.map((day) => {
-                                const key = localDayKey(day);
-                                const dayEvents = eventsByDay[key] || [];
+                                const dayEvents = eventsByDay[day.key] || [];
                                 const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
                                 const hiddenCount = dayEvents.length - visibleEvents.length;
-                                const outsideMonth = day.getMonth() !== viewedMonth.getMonth();
-                                const isToday = key === todayKey;
+                                const outsideMonth = day.month !== viewedMonth.month;
+                                const isToday = day.key === todayKey;
 
                                 return (
                                     <section
-                                        key={key}
+                                        key={day.key}
                                         className={`min-h-32 border-b border-r border-slate-200 p-2 last:border-r-0 sm:min-h-36 ${outsideMonth ? 'bg-slate-50 text-slate-400' : 'bg-white text-slate-800'}`}
-                                        aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)}
+                                        aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' }).format(day.date)}
                                     >
                                         <time
-                                            dateTime={key}
+                                            dateTime={day.key}
                                             aria-current={isToday ? 'date' : undefined}
                                             className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${isToday ? 'bg-sky-700 text-white ring-2 ring-sky-200' : ''}`}
                                         >
-                                            {day.getDate()}
+                                            {day.day}
                                         </time>
 
                                         <div className="mt-2 space-y-1">

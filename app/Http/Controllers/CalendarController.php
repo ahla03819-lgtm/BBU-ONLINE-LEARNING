@@ -4,15 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CalendarRangeRequest;
 use App\Services\CalendarData;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 
 class CalendarController extends Controller
 {
     public function __invoke(CalendarRangeRequest $request, CalendarData $calendar): JsonResponse
     {
-        $start = CarbonImmutable::parse($request->validated('start'))->utc();
-        $end = CarbonImmutable::parse($request->validated('end'))->utc();
+        $start = $request->startBoundary();
+        $end = $request->endBoundary();
 
         return response()->json([
             'view' => $request->validated('view'),
