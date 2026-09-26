@@ -33,10 +33,10 @@ class UserController extends Controller
         $users = User::query()->with('roles:id,name')
             ->when($request->string('search')->trim()->value(), fn ($query, $search) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")))
             ->when($request->string('role')->value(), fn ($query, $role) => $query->role($role))
-            ->when(in_array($request->string('status')->value(), ['active', 'inactive', 'suspended'], true), fn ($query, $status) => $query->where('status', $status))
-            ->when(in_array($request->string('verified')->value(), ['yes', 'no'], true), fn ($query, $verified) => $verified === 'yes' ? $query->whereNotNull('email_verified_at') : $query->whereNull('email_verified_at'))
-            ->when(in_array($request->string('approval')->value(), ['approved', 'pending'], true), fn ($q, $approval) => $approval === 'approved' ? $q->whereNotNull('approved_at') : $q->whereNull('approved_at'))
-            ->when(in_array($request->string('password_status')->value(), ['normal', 'change-required'], true), fn ($q, $status) => $q->where('must_change_password', $status === 'change-required'))
+            ->when($request->string('status')->value(), fn ($query, $status) => in_array($status, ['active', 'inactive', 'suspended']) ? $query->where('status', $status) : $query)
+            ->when($request->string('verified')->value(), fn ($query, $verified) => in_array($verified, ['yes', 'no']) ? ($verified === 'yes' ? $query->whereNotNull('email_verified_at') : $query->whereNull('email_verified_at')) : $query)
+            ->when($request->string('approval')->value(), fn ($q, $approval) => in_array($approval, ['approved', 'pending']) ? ($approval === 'approved' ? $q->whereNotNull('approved_at') : $q->whereNull('approved_at')) : $q)
+            ->when($request->string('password_status')->value(), fn ($q, $status) => in_array($status, ['normal', 'change-required']) ? $q->where('must_change_password', $status === 'change-required') : $q)
             ->latest()->paginate(15)->withQueryString()->through(fn (User $user) => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'avatar_url' => $user->avatarUrl(), 'roles' => $user->getRoleNames()->values(), 'status' => $user->status->value, 'approval' => $user->approved_at ? 'approved' : 'pending', 'password_status' => $user->must_change_password ? 'change-required' : 'normal', 'can_approve' => $request->user()->can('approve', $user), 'can_reset_password' => $request->user()->can('resetPassword', $user), 'verified_at' => $user->email_verified_at?->toIso8601String(), 'created_at' => $user->created_at?->toIso8601String()]);
 
         return Inertia::render('Users/Index', ['users' => $users, 'filters' => $request->only('search', 'role', 'status', 'verified', 'approval', 'password_status'), 'roles' => ['Super Admin', 'Admin', 'Teacher', 'Student']]);
