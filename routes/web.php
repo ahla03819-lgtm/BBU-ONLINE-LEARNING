@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CalendarPageController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ChannelReadStateController;
 use App\Http\Controllers\ClassJoinController;
@@ -73,6 +74,8 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     Route::get('/', fn () => redirect()->route('dashboard'));
     Route::get('/global-search', GlobalSearchController::class)->middleware('throttle:60,1')->name('global-search');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/calendar', CalendarPageController::class)
+        ->name('calendar.index');
     Route::get('/calendar/events', CalendarController::class)->name('calendar.events');
     Route::get('/my-account', [MyAccountController::class, 'show'])->name('my-account.profile');
     Route::get('/my-account/{section}', [MyAccountController::class, 'show'])->whereIn('section', ['profile', 'security', 'notifications', 'appearance'])->name('my-account.show');
