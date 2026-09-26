@@ -81,7 +81,15 @@ class DashboardData
             'records as late_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Late->value),
             'records as excused_count' => fn (Builder $query) => $query->where('status', AttendanceStatus::Excused->value),
         ])->get() : collect();
-        $assignments = $user->can('assignments.view') ? $this->assignmentsForClasses($classes)->with('classSubject.subject:id,name')->latest()->limit(5)->get() : collect();
+        $assignments = $user->can('assignments.view')
+            ? $this->assignmentsForClasses($classes)
+                ->with('classSubject.subject:id,name')
+                ->latest()
+                ->get()
+                ->filter(fn (Assignment $assignment) => $user->can('view', $assignment))
+                ->take(5)
+                ->values()
+            : collect();
         $meetings = $user->can('meetings.view') ? $this->meetingsForClasses($user, $classes)->with('schoolClass:id,name,section')->orderBy('scheduled_start_at')->limit(5)->get() : collect();
         $activeYear = AcademicYear::query()->where('status', AcademicYearStatus::Active)->first(['id', 'name']);
 
