@@ -1,6 +1,7 @@
 import React, {createContext, useCallback, useContext, useEffect, useRef, useState} from 'react';
 import {router} from '@inertiajs/react';
 import MeetingRoomExperience from '../Components/Meetings/LiveKit/MeetingRoomExperience';
+import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMediaIntent';
 import {echo} from '../realtime/echo';
 
 const PersistentMeetingContext = createContext(null);
@@ -10,19 +11,34 @@ const meetingPath = (url) => new URL(url, window.location.origin).pathname;
 export function PersistentMeetingProvider({children}) {
     const [session, setSession] = useState(null);
     const sessionRef = useRef(null);
+    const clearInProgressRef = useRef(false);
     const [pathname, setPathname] = useState(() => window.location.pathname);
 
-    const clearSession = useCallback(({returnToLobby = false} = {}) => {
+    const clearSession = useCallback(async ({returnToLobby = false, disconnectRoom} = {}) => {
         const current = sessionRef.current;
-        if (!current) return;
+        if (!current || clearInProgressRef.current) return;
 
-        sessionRef.current = null;
-        setSession(null);
-        current.onLeave?.();
+        clearInProgressRef.current = true;
+        try {
+            clearMeetingMediaIntent(current.mediaIntentKey);
+            try {
+                await current.onLeave?.();
+            } catch {
+                // Clear the local session even if the best-effort admission request fails.
+            }
+            try {
+                await disconnectRoom?.();
+            } catch {
+                // Continue clearing the application session if provider disconnect fails.
+            }
 
-        if (returnToLobby && window.location.pathname === meetingPath(current.roomUrl)) {
-            window.history.replaceState(window.history.state, '', current.lobbyUrl);
-            setPathname(meetingPath(current.lobbyUrl));
+            sessionRef.current = null;
+            setSession(null);
+            if (returnToLobby && window.location.pathname === meetingPath(current.roomUrl)) {
+                router.visit(current.lobbyUrl, {replace: true});
+            }
+        } finally {
+            clearInProgressRef.current = false;
         }
     }, []);
 
@@ -35,10 +51,11 @@ export function PersistentMeetingProvider({children}) {
 
         if (current) return {ok: true, existing: true};
 
+        const roomUrlPath = meetingPath(nextSession.roomUrl);
         sessionRef.current = nextSession;
         setSession(nextSession);
-        setPathname(meetingPath(nextSession.roomUrl));
-        router.visit(nextSession.roomUrl);
+        setPathname(roomUrlPath);
+        if (window.location.pathname !== roomUrlPath) router.visit(nextSession.roomUrl);
 
         return {ok: true, existing: false};
     }, []);
@@ -50,7 +67,7 @@ export function PersistentMeetingProvider({children}) {
         router.visit(current.roomUrl);
     }, []);
 
-    const leaveMeeting = useCallback(() => clearSession({returnToLobby: true}), [clearSession]);
+    const leaveMeeting = useCallback((disconnectRoom) => clearSession({returnToLobby: true, disconnectRoom}), [clearSession]);
 
     useEffect(() => router.on('navigate', () => setPathname(window.location.pathname)), []);
 
@@ -93,7 +110,7 @@ export function PersistentMeetingProvider({children}) {
 
     return <PersistentMeetingContext.Provider value={value}>
         {children}
-        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting}/>}
+        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting}/>}
     </PersistentMeetingContext.Provider>;
 }
 

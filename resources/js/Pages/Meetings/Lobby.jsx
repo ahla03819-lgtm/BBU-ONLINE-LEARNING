@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Head, Link} from '@inertiajs/react';
+import {Head, Link, usePage} from '@inertiajs/react';
 import Layout from '../../Layouts/AuthenticatedLayout';
 import Icon from '../../Components/UI/Icon';
 import SectionCard from '../../Components/UI/SectionCard';
@@ -10,8 +10,9 @@ import {echo} from '../../realtime/echo';
 import {useAppSounds} from '../../Sound/AppSounds';
 import {usePersistentMeeting} from '../../Providers/PersistentMeetingProvider';
 import {localCameraMirrorClass} from '../../Components/Meetings/LiveKit/meetingView';
+import {clearMeetingMediaIntent, meetingMediaIntentKey, readMeetingMediaIntent, writeMeetingMediaIntent} from '../../Components/Meetings/LiveKit/meetingMediaIntent';
 
-export default function Lobby({schoolClass, meeting: initialMeeting}) {
+export default function Lobby({schoolClass, meeting: initialMeeting, resumeSession = false}) {
     const [meeting, setMeeting] = useState(initialMeeting);
     const [joining, setJoining] = useState(false);
     const [error, setError] = useState('');
@@ -21,9 +22,12 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
     const media = useMediaPreview();
     const sounds = useAppSounds();
     const {activeMeeting, startMeeting, leaveMeeting, returnToMeeting} = usePersistentMeeting();
+    const {props: pageProps} = usePage();
+    const mediaIntentKey = meetingMediaIntentKey(meeting.uuid, pageProps.auth?.user?.id);
     const previousJoinRequestStatus = useRef(initialMeeting.join_request?.status ?? null);
     const knownPendingRequests = useRef(null);
     const previousMeetingStatus = useRef(meeting.status);
+    const resumeAttempted = useRef(false);
 
     useEffect(() => {
         if (!echo) return;
@@ -95,9 +99,19 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
-            if (!response.ok) throw new Error(data.message || data.errors?.meeting?.[0] || 'Unable to join this meeting.');
+            if (!response.ok) {
+                if ([401, 403, 404].includes(response.status)) clearMeetingMediaIntent(mediaIntentKey);
+                throw new Error(data.message || data.errors?.meeting?.[0] || 'Unable to join this meeting.');
+            }
             const clock = {serverNowAt: data.server_now_at, receivedAt: performance.now()};
             const roomUrl = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`;
+            const savedIntent = resumeSession ? readMeetingMediaIntent(mediaIntentKey) : null;
+            const mediaIntent = savedIntent || {
+                microphoneEnabled: media.microphoneEnabled,
+                cameraEnabled: media.cameraEnabled,
+                wasScreenSharing: false,
+            };
+            writeMeetingMediaIntent(mediaIntentKey, mediaIntent);
             const started = startMeeting({
                 credentials: data,
                 meeting: {...meeting, lifecycle_version: data.lifecycle_version, session_started_at: data.session_started_at},
@@ -105,12 +119,14 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
                 schoolClass,
                 participantReference: meeting.participant_reference,
                 initialMedia: {camera: media.cameraEnabled, microphone: media.microphoneEnabled, cameraId: media.cameraId, microphoneId: media.microphoneId},
+                mediaIntent,
+                mediaIntentKey,
                 roomUrl,
                 lobbyUrl: `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/lobby`,
-                onLeave: () => {
+                onLeave: async () => {
                     if (!meeting.can_bypass_waiting_room && joinRequest?.status === 'admitted') {
                         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-                        fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrfToken, Accept: 'application/json'}}).catch(() => {});
+                        await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrfToken, Accept: 'application/json'}});
                     }
                 },
             });
@@ -118,6 +134,14 @@ export default function Lobby({schoolClass, meeting: initialMeeting}) {
         } catch (problem) { setError(problem.message === 'Failed to fetch' ? 'The meeting provider is unavailable.' : problem.message); }
         finally { setJoining(false); }
     };
+    useEffect(() => {
+        if (!resumeSession || resumeAttempted.current || activeMeeting?.meeting.uuid === meeting.uuid) return;
+        if (meeting.status !== 'active' || !meeting.can_join) return;
+        if (!meeting.can_bypass_waiting_room && !joinRequest?.can_enter) return;
+
+        resumeAttempted.current = true;
+        issueToken();
+    }, [activeMeeting?.meeting.uuid, joinRequest?.can_enter, meeting.can_bypass_waiting_room, meeting.can_join, meeting.status, meeting.uuid, resumeSession]);
     const join = async () => {
         if (meeting.can_bypass_waiting_room || (joinRequest?.status === 'admitted' && joinRequest?.can_enter)) return issueToken();
         if (!meeting.can_join || meeting.status !== 'active' || joining) return;

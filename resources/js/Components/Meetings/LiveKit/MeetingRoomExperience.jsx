@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ConnectionQualityIndicator, GridLayout, LiveKitRoom, ParticipantName, ParticipantTile, RoomAudioRenderer, StartAudio, TrackMutedIndicator, TrackToggle, useConnectionState, useLocalParticipant, useParticipants, useSpeakingParticipants, useTrackRefContext, useTracks, VideoTrack} from '@livekit/components-react';
+import {ConnectionQualityIndicator, GridLayout, LiveKitRoom, ParticipantName, ParticipantTile, RoomAudioRenderer, StartAudio, TrackMutedIndicator, TrackToggle, useConnectionState, useLocalParticipant, useParticipants, useRoomContext, useSpeakingParticipants, useTrackRefContext, useTracks, VideoTrack} from '@livekit/components-react';
 import {Track} from 'livekit-client';
 import Icon from '../../UI/Icon';
 import MeetingParticipantAvatar from './MeetingParticipantAvatar';
@@ -10,6 +10,8 @@ import MeetingControlCenter, {MeetingDeviceSettings} from './MeetingControlCente
 import MeetingStage from './MeetingStage';
 import {HostControlsPanel, MeetingChatPanel, MeetingInfoPanel, ParticipantsPanel} from './MeetingSidePanel';
 import {authorizedMeetingLink, localCameraTrackClass} from './meetingView';
+import {writeMeetingMediaIntent} from './meetingMediaIntent';
+import {clampMiniWindowPosition, dragMiniWindowPosition, shouldStartMiniWindowDrag} from './meetingMiniWindowPosition';
 import {sharedMeetingElapsedSeconds} from './meetingElapsedTime';
 import '@livekit/components-styles';
 
@@ -173,8 +175,14 @@ function ReactionOverlay({events}) {
     return <div className="pointer-events-none absolute inset-x-0 top-24 z-20 flex flex-col items-center gap-2" aria-live="polite">{events.map((event) => <div key={event.id} className="animate-[bounce_1s_ease-in-out] rounded-full border border-white/20 bg-slate-950/70 px-4 py-2 text-lg shadow-xl backdrop-blur"><span>{event.reaction}</span><span className="ml-2 text-xs font-bold text-white">{event.sender.name}</span></div>)}</div>;
 }
 
-function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, onLeave, onReturn}) {
+function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, mediaMessage, mediaIntentKey, mediaReady, onMessage, onLeave, onReturn}) {
+    const panelRef = useRef(null);
+    const dragRef = useRef(null);
+    const [position, setPosition] = useState(null);
+    const [dragging, setDragging] = useState(false);
+    const [leaving, setLeaving] = useState(false);
     const connection = useConnectionState();
+    const room = useRoomContext();
     const {localParticipant, isCameraEnabled, isMicrophoneEnabled} = useLocalParticipant();
     const participants = useParticipants();
     const speakers = useSpeakingParticipants();
@@ -185,33 +193,118 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     const labels = {connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', signalReconnecting: 'Reconnecting…', disconnected: 'Disconnected'};
     const status = connectionError || labels[connection] || 'Connecting…';
     const available = connection === 'connected' && meeting.status === 'active';
-    const leave = async () => {
-        await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);
-        onLeave();
+    const clampToViewport = useCallback(() => {
+        const panel = panelRef.current;
+        if (!panel) return;
+
+        const bounds = panel.getBoundingClientRect();
+        setPosition((current) => current ? clampMiniWindowPosition(current, {width: bounds.width, height: bounds.height}, {width: window.innerWidth, height: window.innerHeight}) : current);
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('resize', clampToViewport);
+        const observer = typeof ResizeObserver === 'undefined' || !panelRef.current ? null : new ResizeObserver(clampToViewport);
+        observer?.observe(panelRef.current);
+
+        return () => {
+            window.removeEventListener('resize', clampToViewport);
+            observer?.disconnect();
+        };
+    }, [clampToViewport]);
+
+    const startDrag = (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const targetIsInteractive = Boolean(target?.closest('button, a, input, select, textarea, [role="button"], [data-no-drag]'));
+        if (!shouldStartMiniWindowDrag({button: event.button, isPrimary: event.isPrimary, targetIsInteractive})) return;
+
+        const panel = panelRef.current;
+        if (!panel) return;
+        const bounds = panel.getBoundingClientRect();
+        const viewport = {width: window.innerWidth, height: window.innerHeight};
+        const origin = clampMiniWindowPosition({left: bounds.left, top: bounds.top}, {width: bounds.width, height: bounds.height}, viewport);
+        dragRef.current = {pointerId: event.pointerId, origin, pointerStart: {x: event.clientX, y: event.clientY}};
+        setPosition(origin);
+        setDragging(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
     };
 
-    return <aside className="fixed inset-x-3 bottom-3 z-[70] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/50 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[22rem]" aria-label="Mini meeting window">
-        <button type="button" onClick={onReturn} className="relative block aspect-video w-full overflow-hidden bg-[radial-gradient(circle_at_50%_25%,#374151,#111827_70%)] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-300" aria-label="Return to meeting">
+    const moveDrag = (event) => {
+        const drag = dragRef.current;
+        const panel = panelRef.current;
+        if (!drag || drag.pointerId !== event.pointerId || !panel) return;
+
+        const bounds = panel.getBoundingClientRect();
+        setPosition(dragMiniWindowPosition({
+            origin: drag.origin,
+            pointerStart: drag.pointerStart,
+            pointer: {x: event.clientX, y: event.clientY},
+            size: {width: bounds.width, height: bounds.height},
+            viewport: {width: window.innerWidth, height: window.innerHeight},
+        }));
+    };
+
+    const stopDrag = (event) => {
+        if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+        dragRef.current = null;
+        setDragging(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    };
+
+    const moveWithKeyboard = (event) => {
+        const moves = {ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16]};
+        const movement = moves[event.key];
+        const panel = panelRef.current;
+        if (!movement || !panel) return;
+
+        const bounds = panel.getBoundingClientRect();
+        setPosition((current) => clampMiniWindowPosition({
+            left: (current?.left ?? bounds.left) + movement[0],
+            top: (current?.top ?? bounds.top) + movement[1],
+        }, {width: bounds.width, height: bounds.height}, {width: window.innerWidth, height: window.innerHeight}));
+        event.preventDefault();
+    };
+
+    const leave = async () => {
+        if (leaving) return;
+        setLeaving(true);
+        try {
+            await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);
+            await onLeave(() => room.disconnect());
+        } finally {
+            setLeaving(false);
+        }
+    };
+
+    return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[70] flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/50 sm:w-[22rem] sm:max-w-[22rem] ${position ? 'left-0 top-0' : 'inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-5 sm:right-5'}`} aria-label="Mini meeting window">
+        <header role="group" aria-label="Move mini meeting window" tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex shrink-0 select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
+            <span className="min-w-0 truncate text-sm font-bold" title={meeting.title}>{meeting.title}</span>
+            <ConnectionStatus error={connectionError}/>
+        </header>
+        <button type="button" onClick={onReturn} className="relative block aspect-video w-full shrink-0 overflow-hidden bg-[radial-gradient(circle_at_50%_25%,#374151,#111827_70%)] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-300" aria-label="Return to meeting">
             {preview?.publication ? <VideoTrack trackRef={preview} className={`h-full w-full object-cover ${localCameraTrackClass(preview)}`}/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-300"><MeetingParticipantAvatar participant={featuredParticipant} size="lg"/><p className="text-sm font-semibold">Meeting is still running</p><p className="text-xs text-slate-400">Video will appear when a participant shares it.</p></div>}
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent p-3"><span className="max-w-[15rem] truncate text-sm font-bold">{meeting.title}</span><ConnectionStatus error={connectionError}/></div>
             <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2 py-1 text-xs font-bold text-white">{status}{elapsedTime && ` · ${elapsedTime}`}</div>
         </button>
-        <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 p-3">
             <div className="flex items-center gap-1.5" aria-label="Device controls">
-                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5 w-5"/></TrackToggle>
-                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5 w-5"/></TrackToggle>
+                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage('Camera could not be enabled. Check browser permissions or device availability.'); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5 w-5"/></TrackToggle>
+                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage('Microphone could not be enabled. Check browser permissions or device availability.'); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5 w-5"/></TrackToggle>
             </div>
-            <div className="flex items-center gap-2"><button type="button" onClick={onReturn} className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300">Return to meeting</button><button type="button" onClick={leave} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300">Leave</button></div>
+            <div className="flex items-center gap-2"><button type="button" onClick={onReturn} className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300">Return to meeting</button><button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-wait disabled:opacity-60">{leaving ? 'Leaving' : 'Leave'}</button></div>
         </div>
+        {mediaMessage && <p className="px-3 pb-3 text-xs text-amber-200" role="status">{mediaMessage}</p>}
         <p className="sr-only">{schoolClass.name} meeting controls</p>
     </aside>;
 }
 
-function RoomContent({meeting, clock, schoolClass, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
+function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
     const [copied, setCopied] = useState('');
     const connection = useConnectionState();
+    const {localParticipant, isCameraEnabled, isMicrophoneEnabled} = useLocalParticipant();
+    const mediaRestoreStarted = useRef(false);
+    const [mediaReady, setMediaReady] = useState(false);
     const participants = useParticipants();
     const signals = useMeetingEphemeralSignals();
     const elapsedTime = useMeetingElapsedTime(meeting, clock);
@@ -219,6 +312,37 @@ function RoomContent({meeting, clock, schoolClass, onLeave, onReturn, mode, medi
     const moderation = useMeetingModeration({meeting, schoolClass, connected: connection === 'connected', participantIdentities});
     const meetingLink = useMemo(() => authorizedMeetingLink(meeting, schoolClass, window.location.origin), [meeting, schoolClass]);
     const raisedCount = participants.filter((participant) => signals.raisedHands[participant.identity]).length;
+
+    useEffect(() => {
+        if (connection !== 'connected' || mediaRestoreStarted.current) return;
+        mediaRestoreStarted.current = true;
+
+        const restoreMedia = async () => {
+            const desiredCamera = mediaIntent?.cameraEnabled ?? initialMedia.camera;
+            const desiredMicrophone = mediaIntent?.microphoneEnabled ?? initialMedia.microphone;
+            const cameraNeedsChange = isCameraEnabled !== desiredCamera;
+            const microphoneNeedsChange = isMicrophoneEnabled !== desiredMicrophone;
+            const [cameraResult, microphoneResult] = await Promise.allSettled([
+                cameraNeedsChange ? localParticipant.setCameraEnabled(desiredCamera) : Promise.resolve(),
+                microphoneNeedsChange ? localParticipant.setMicrophoneEnabled(desiredMicrophone) : Promise.resolve(),
+            ]);
+
+            writeMeetingMediaIntent(mediaIntentKey, {
+                cameraEnabled: desiredCamera && cameraResult.status === 'fulfilled',
+                microphoneEnabled: desiredMicrophone && microphoneResult.status === 'fulfilled',
+            });
+
+            const failedDevices = [];
+            if (cameraNeedsChange && cameraResult.status === 'rejected') failedDevices.push('Camera');
+            if (microphoneNeedsChange && microphoneResult.status === 'rejected') failedDevices.push('microphone');
+            if (failedDevices.length) {
+                onMediaMessage(`${failedDevices.join(' and ')} could not be restored. Check browser permissions or device availability.`);
+            }
+            setMediaReady(true);
+        };
+
+        restoreMedia();
+    }, [connection, initialMedia.camera, initialMedia.microphone, isCameraEnabled, isMicrophoneEnabled, localParticipant, mediaIntent, mediaIntentKey, onMediaMessage]);
     const copyMeetingLink = useCallback(async () => {
         if (!meetingLink || !navigator.clipboard?.writeText) {
             setCopied('Copying the meeting link is unavailable in this browser.');
@@ -232,7 +356,7 @@ function RoomContent({meeting, clock, schoolClass, onLeave, onReturn, mode, medi
         }
     }, [meetingLink]);
 
-    if (mode === 'mini') return <><MeetingRoomSounds meeting={meeting}/><RoomAudioRenderer/><MiniMeetingWindow meeting={meeting} schoolClass={schoolClass} elapsedTime={elapsedTime} connectionError={connectionError} onReturn={onReturn} onLeave={onLeave}/></>;
+    if (mode === 'mini') return <><MeetingRoomSounds meeting={meeting}/><RoomAudioRenderer/><MiniMeetingWindow meeting={meeting} schoolClass={schoolClass} elapsedTime={elapsedTime} connectionError={connectionError} mediaMessage={mediaMessage} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onMessage={onMediaMessage} onReturn={onReturn} onLeave={onLeave}/></>;
 
     return <><MeetingRoomSounds meeting={meeting}/><div className={`fixed inset-x-0 bottom-0 top-14 z-10 grid overflow-y-auto bg-slate-950 p-3 sm:p-4 lg:left-56 lg:p-6 ${panel ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
         <section className="relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
@@ -241,14 +365,13 @@ function RoomContent({meeting, clock, schoolClass, onLeave, onReturn, mode, medi
             {(mediaMessage || moderation.message) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderation.message}</div>}
             <div className="relative z-0 min-h-0 flex-1 py-3"><MeetingStage view={view} onViewChange={setView}/></div>
             <RoomAudioRenderer/>
-            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} onLeave={onLeave} onMessage={onMediaMessage}/>
+            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage}/>
         </section>
         {panel && <aside className="min-h-0 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:pl-4">{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} moderation={moderation}/> : panel === 'host' ? <HostControlsPanel meeting={meeting} moderation={moderation} onClose={() => setPanel(null)} onPeople={() => setPanel('people')} onInfo={() => setPanel('info')}/> : panel === 'info' ? <MeetingInfoPanel meeting={meeting} schoolClass={schoolClass} count={participants.length} meetingLink={meetingLink} onCopy={copyMeetingLink} copied={copied} onClose={() => setPanel(null)}/> : panel === 'devices' ? <MeetingDeviceSettings onClose={() => setPanel(null)} onMessage={onMediaMessage}/> : null}</aside>}
     </div></>;
 }
 
-export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mode = 'full', onReturn, onLeave}) {
-    const connected = useRef(false);
+export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, mode = 'full', onReturn, onLeave}) {
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
     const [connectionError, setConnectionError] = useState('');
     const [mediaMessage, setMediaMessage] = useState('');
@@ -257,10 +380,10 @@ export default function MeetingRoomExperience({credentials, meeting, clock, scho
     const video = initialMedia.camera ? (initialMedia.cameraId ? {deviceId: initialMedia.cameraId} : true) : false;
 
     return <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio={audio} video={video}
-        onConnected={() => { connected.current = true; setConnectionError(''); }}
+        onConnected={() => setConnectionError('')}
         onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
-        onDisconnected={() => { if (connected.current) onLeave(); else setConnectionError('Unable to join the meeting. Please try again.'); }}
+        onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
-        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
+        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
     </LiveKitRoom>;
 }
