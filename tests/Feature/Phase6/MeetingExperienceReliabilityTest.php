@@ -133,6 +133,7 @@ class MeetingExperienceReliabilityTest extends TestCase
         $index = file_get_contents(resource_path('js/Pages/Meetings/Index.jsx'));
         $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
         $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+        $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
         $stage = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingStage.jsx'));
         $show = file_get_contents(resource_path('js/Pages/Meetings/Show.jsx'));
         foreach (['Live now', 'Scheduled', 'Transitioning', 'History', 'No meetings yet'] as $label) {
@@ -141,7 +142,11 @@ class MeetingExperienceReliabilityTest extends TestCase
         foreach (['Connecting…', 'Connected', 'Reconnecting…', 'Disconnected', 'Camera off', 'Muted', 'participant.name'] as $label) {
             $this->assertStringContainsString($label, $room.$controls.$stage);
         }
-        $this->assertStringContainsString('if (connected.current) onLeave()', $room);
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}", $room);
+        $this->assertStringNotContainsString('if (connected.current) onLeave()', $room);
+        $this->assertStringContainsString('await stopAll();', $controls);
+        $this->assertStringContainsString('await onLeave(() => room.disconnect());', $controls);
+        $this->assertStringContainsString('await current.onLeave?.();', $provider);
         $this->assertStringContainsString('disabled={ending}', $show);
         $this->assertStringContainsString('Retry reconciliation', $show);
         $this->assertStringNotContainsString('livekit_identity', $room.$controls);
