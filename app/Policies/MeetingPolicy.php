@@ -95,9 +95,8 @@ class MeetingPolicy
         }
 
         $request = $meeting->joinRequests()->where('requester_user_id', $user->id)->first();
-        $participant = $meeting->participants()->where('user_id', $user->id)->first();
 
-        return $request?->admitsCurrentEntry($participant) ?? false;
+        return $request?->admitsCurrentEntry() ?? false;
     }
 
     public function manageJoinRequests(User $user, Meeting $meeting): bool

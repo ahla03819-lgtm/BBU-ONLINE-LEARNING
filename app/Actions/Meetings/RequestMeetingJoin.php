@@ -5,7 +5,6 @@ namespace App\Actions\Meetings;
 use App\Enums\MeetingJoinRequestStatus;
 use App\Models\Meeting;
 use App\Models\MeetingJoinRequest;
-use App\Models\MeetingParticipant;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
@@ -21,10 +20,9 @@ final class RequestMeetingJoin
             $locked = Meeting::query()->lockForUpdate()->findOrFail($meeting->id);
             Gate::forUser($actor)->authorize('join', $locked);
             $request = MeetingJoinRequest::query()->where('meeting_id', $locked->id)->where('requester_user_id', $actor->id)->lockForUpdate()->first();
-            $participant = MeetingParticipant::query()->where('meeting_id', $locked->id)->where('user_id', $actor->id)->lockForUpdate()->first();
 
             if ($request && (in_array($request->status, [MeetingJoinRequestStatus::Cancelled, MeetingJoinRequestStatus::Denied], true)
-                || ($request->status === MeetingJoinRequestStatus::Admitted && ! $request->admitsCurrentEntry($participant)))) {
+                || ($request->status === MeetingJoinRequestStatus::Admitted && ! $request->admitsCurrentEntry()))) {
                 $request->update(['status' => MeetingJoinRequestStatus::Pending, 'requested_at' => now(), 'decided_at' => null, 'decided_by' => null]);
             } elseif (! $request) {
                 $request = MeetingJoinRequest::query()->create(['meeting_id' => $locked->id, 'requester_user_id' => $actor->id, 'status' => MeetingJoinRequestStatus::Pending, 'requested_at' => now()]);

@@ -2,13 +2,17 @@
 
 namespace Tests\Feature\Phase5;
 
+use Agence104\LiveKit\AccessToken;
+use Agence104\LiveKit\VideoGrant;
 use App\Enums\MeetingJoinRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Enums\SchoolClassStatus;
 use App\Models\AcademicYear;
 use App\Models\Enrollment;
 use App\Models\Meeting;
+use App\Models\MeetingAttendanceSession;
 use App\Models\MeetingJoinRequest;
+use App\Models\MeetingParticipant;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
 use App\Models\TeacherClassAssignment;
@@ -18,6 +22,7 @@ use App\Services\LiveKit\LiveKitTokenIssuer;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Fakes\FakeLiveKitTokenIssuer;
 use Tests\TestCase;
 
@@ -30,6 +35,7 @@ class MeetingWaitingRoomTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->app->instance(LiveKitTokenIssuer::class, new FakeLiveKitTokenIssuer);
+        config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);
     }
 
     public function test_host_bypasses_waiting_room_but_student_requires_admission_before_a_token(): void
@@ -69,7 +75,7 @@ class MeetingWaitingRoomTest extends TestCase
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertForbidden();
     }
 
-    public function test_admission_is_consumed_after_leaving_and_rejoin_requires_a_new_host_approval(): void
+    public function test_transport_disconnect_preserves_admission_but_explicit_leave_cancels_it(): void
     {
         [$class, $host, $student, $meeting] = $this->meetingContext();
         $this->actingAs($student)->postJson(route('meetings.waiting-room.store', [$class, $meeting]))->assertCreated();
@@ -80,6 +86,12 @@ class MeetingWaitingRoomTest extends TestCase
         $request->update(['decided_at' => now()->subMinutes(2)]);
         $meeting->participants()->where('user_id', $student->id)->firstOrFail()->update(['last_left_at' => now()->subMinute()]);
 
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+        $this->actingAs($student)->postJson(route('meetings.waiting-room.store', [$class, $meeting]))->assertOk()
+            ->assertJsonPath('request.status', 'admitted')->assertJsonPath('request.can_enter', true);
+
+        $this->actingAs($student)->deleteJson(route('meetings.waiting-room.destroy', [$class, $meeting]))
+            ->assertOk()->assertJsonPath('request.status', 'cancelled');
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertForbidden();
         $this->actingAs($student)->postJson(route('meetings.waiting-room.store', [$class, $meeting]))->assertOk()
             ->assertJsonPath('request.status', 'pending')->assertJsonPath('request.can_enter', false);
@@ -87,6 +99,52 @@ class MeetingWaitingRoomTest extends TestCase
         $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$class, $meeting]))->assertOk()->assertJsonCount(1, 'requests');
         $this->actingAs($host)->patchJson(route('meetings.join-requests.update', [$class, $meeting, $request]), ['decision' => 'admitted'])->assertOk();
         $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+    }
+
+    public function test_admitted_student_can_resume_after_old_connection_leave_webhook_races_with_refresh(): void
+    {
+        [$class, $host, $student, $meeting] = $this->meetingContext();
+        $meeting->update(['session_started_at' => now()->subMinutes(5)]);
+        $meeting->refresh();
+        $startedAt = $meeting->session_started_at->toIso8601String();
+        $request = MeetingJoinRequest::factory()->create([
+            'meeting_id' => $meeting->id,
+            'requester_user_id' => $student->id,
+            'status' => MeetingJoinRequestStatus::Admitted,
+            'requested_at' => now()->subMinutes(2),
+            'decided_at' => now()->subMinute(),
+            'decided_by' => $host->id,
+        ]);
+
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))
+            ->assertOk()->assertJsonPath('session_started_at', $startedAt);
+        $participant = MeetingParticipant::query()->where('meeting_id', $meeting->id)->where('user_id', $student->id)->firstOrFail();
+        $this->postWebhook($this->participantWebhook('participant_joined', $meeting, $participant, 'PA_initial'))->assertOk();
+
+        $this->travel(1)->minutes();
+        $this->postWebhook($this->participantWebhook('participant_left', $meeting, $participant, 'PA_initial'))->assertOk();
+        $this->assertSame(MeetingJoinRequestStatus::Admitted, $request->fresh()->status);
+        $this->assertTrue($request->fresh()->admitsCurrentEntry());
+        $this->assertNotNull($participant->fresh()->last_left_at);
+        $this->assertNotNull(MeetingAttendanceSession::query()->where('livekit_participant_sid', 'PA_initial')->firstOrFail()->left_at);
+
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))
+            ->assertOk()->assertJsonPath('session_started_at', $startedAt);
+        $this->postWebhook($this->participantWebhook('participant_joined', $meeting, $participant, 'PA_refresh_one'))->assertOk();
+
+        $this->travel(1)->minutes();
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))
+            ->assertOk()->assertJsonPath('session_started_at', $startedAt);
+        $this->postWebhook($this->participantWebhook('participant_left', $meeting, $participant, 'PA_refresh_one'))->assertOk();
+        $this->assertSame(MeetingJoinRequestStatus::Admitted, $request->fresh()->status);
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))
+            ->assertOk()->assertJsonPath('session_started_at', $startedAt);
+        $this->postWebhook($this->participantWebhook('participant_joined', $meeting, $participant, 'PA_refresh_two'))->assertOk();
+
+        $this->assertSame(3, MeetingAttendanceSession::query()->where('meeting_participant_id', $participant->id)->count());
+        $this->assertSame(1, MeetingAttendanceSession::query()->where('meeting_participant_id', $participant->id)->whereNull('left_at')->count());
+        $this->assertSame(MeetingJoinRequestStatus::Admitted, $request->fresh()->status);
+        $this->assertSame($startedAt, $meeting->fresh()->session_started_at->toIso8601String());
     }
 
     public function test_denied_participant_can_retry_as_a_fresh_pending_request_without_token_access(): void
@@ -170,5 +228,30 @@ class MeetingWaitingRoomTest extends TestCase
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'host_user_id' => $host->id]);
 
         return [$class, $host, $student, $meeting];
+    }
+
+    private function participantWebhook(string $event, Meeting $meeting, MeetingParticipant $participant, string $sid): array
+    {
+        return [
+            'event' => $event,
+            'id' => (string) Str::uuid(),
+            'createdAt' => now()->timestamp,
+            'room' => ['name' => $meeting->livekit_room_name],
+            'participant' => ['identity' => $participant->livekit_identity, 'sid' => $sid],
+        ];
+    }
+
+    private function postWebhook(array $payload)
+    {
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $token = (new AccessToken('test-key', 'test-secret-that-is-at-least-32-bytes'))
+            ->setGrant(new VideoGrant)
+            ->setSha256(base64_encode(hash('sha256', $body, true)))
+            ->toJwt();
+
+        return $this->call('POST', route('integrations.livekit.webhook'), [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+        ], $body);
     }
 }

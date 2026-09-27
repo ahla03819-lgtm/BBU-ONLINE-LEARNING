@@ -45,10 +45,9 @@ class MeetingJoinRequest extends Model
         return $this->belongsTo(User::class, 'decided_by');
     }
 
-    public function admitsCurrentEntry(?MeetingParticipant $participant): bool
+    public function admitsCurrentEntry(): bool
     {
         return $this->status === MeetingJoinRequestStatus::Admitted
-            && $this->decided_at instanceof CarbonInterface
-            && (! $participant?->last_left_at || $this->decided_at->greaterThan($participant->last_left_at));
+            && $this->decided_at instanceof CarbonInterface;
     }
 }

@@ -6,7 +6,6 @@ use App\Actions\Meetings\CancelMeetingJoinRequest;
 use App\Actions\Meetings\RequestMeetingJoin;
 use App\Models\Meeting;
 use App\Models\MeetingJoinRequest;
-use App\Models\MeetingParticipant;
 use App\Models\SchoolClass;
 use App\Services\MeetingAccess;
 use Illuminate\Http\JsonResponse;
@@ -19,9 +18,8 @@ class MeetingWaitingRoomController extends Controller
         $this->authorize('join', $meeting);
 
         $joinRequest = $meeting->joinRequests()->where('requester_user_id', request()->user()->id)->first();
-        $participant = $meeting->participants()->where('user_id', request()->user()->id)->first();
 
-        return response()->json(['request' => $this->requestPayload($joinRequest, $participant), 'meeting_status' => $meeting->status->value]);
+        return response()->json(['request' => $this->requestPayload($joinRequest), 'meeting_status' => $meeting->status->value]);
     }
 
     public function store(SchoolClass $schoolClass, Meeting $meeting, RequestMeetingJoin $action, MeetingAccess $access): JsonResponse
@@ -32,9 +30,7 @@ class MeetingWaitingRoomController extends Controller
         }
         $request = $action->handle(request()->user(), $meeting);
 
-        $participant = $meeting->participants()->where('user_id', request()->user()->id)->first();
-
-        return response()->json(['request' => $this->requestPayload($request, $participant)], $request->wasRecentlyCreated ? 201 : 200);
+        return response()->json(['request' => $this->requestPayload($request)], $request->wasRecentlyCreated ? 201 : 200);
     }
 
     public function destroy(SchoolClass $schoolClass, Meeting $meeting, CancelMeetingJoinRequest $action): JsonResponse
@@ -51,8 +47,8 @@ class MeetingWaitingRoomController extends Controller
         abort_unless($meeting->school_class_id === $schoolClass->id, 404);
     }
 
-    public static function requestPayload(?MeetingJoinRequest $request, ?MeetingParticipant $participant = null): ?array
+    public static function requestPayload(?MeetingJoinRequest $request): ?array
     {
-        return $request ? ['reference' => $request->public_uuid, 'status' => $request->status->value, 'requested_at' => $request->requested_at?->toIso8601String(), 'can_enter' => $request->admitsCurrentEntry($participant)] : null;
+        return $request ? ['reference' => $request->public_uuid, 'status' => $request->status->value, 'requested_at' => $request->requested_at?->toIso8601String(), 'can_enter' => $request->admitsCurrentEntry()] : null;
     }
 }

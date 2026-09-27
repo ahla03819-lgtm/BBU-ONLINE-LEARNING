@@ -27,7 +27,8 @@ class MeetingExperienceTest extends TestCase
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
 
         $this->assertStringContainsString("onError={() => setConnectionError('Unable to join the meeting. Please try again.')}", $component);
-        $this->assertStringContainsString('if (connected.current) onLeave()', $component);
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}", $component);
+        $this->assertStringNotContainsString('connected.current) onLeave()', $component);
         $this->assertStringContainsString('useConnectionState', $component);
         $this->assertStringNotContainsString('onReconnecting=', $component);
         $this->assertStringNotContainsString('problem.message', $component);
@@ -62,13 +63,102 @@ class MeetingExperienceTest extends TestCase
         }
     }
 
+    public function test_room_page_resumes_only_when_existing_server_admission_allows_entry(): void
+    {
+        $room = file_get_contents(resource_path('js/Pages/Meetings/Room.jsx'));
+        $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
+
+        $this->assertStringContainsString('resumeSession', $room);
+        $this->assertStringContainsString("if (meeting.status !== 'active' || !meeting.can_join) return;", $lobby);
+        $this->assertStringContainsString('if (!meeting.can_bypass_waiting_room && !joinRequest?.can_enter) return;', $lobby);
+        $this->assertStringContainsString('resumeAttempted.current = true;', $lobby);
+    }
+
+    public function test_media_intent_restores_devices_after_connection_and_never_auto_restarts_screen_capture(): void
+    {
+        $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+        $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
+
+        $this->assertStringContainsString("if (connection !== 'connected' || mediaRestoreStarted.current) return;", $room);
+        $this->assertStringContainsString('localParticipant.setCameraEnabled(desiredCamera)', $room);
+        $this->assertStringContainsString('localParticipant.setMicrophoneEnabled(desiredMicrophone)', $room);
+        $this->assertStringContainsString('Promise.allSettled', $room);
+        $this->assertStringContainsString('Resume screen sharing', $controls);
+        $this->assertStringContainsString('screenShareIntentChange', $controls);
+        $this->assertStringNotContainsString('setScreenShareEnabled(true)', $room.$controls);
+        $this->assertStringContainsString('disabled={!available || share.pending}', $controls);
+        $this->assertStringContainsString('const stopAll = async () => Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)])', $controls);
+        $this->assertStringNotContainsString('localParticipant.setScreenShareEnabled(false).catch(() => {})', $controls);
+        $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
+    }
+
+    public function test_media_restore_is_one_shot_and_permission_failures_do_not_close_the_room(): void
+    {
+        $room = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+
+        $this->assertStringContainsString('if (connection !== \'connected\' || mediaRestoreStarted.current) return;', $room);
+        $this->assertStringContainsString('Promise.allSettled', $room);
+        $this->assertStringContainsString('setMediaReady(true)', $room);
+        $this->assertStringContainsString('could not be restored. Check browser permissions or device availability.', $room);
+    }
+
+    public function test_full_and_mini_modes_share_one_room_without_mode_cleanup_stopping_screen_share(): void
+    {
+        $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
+        $experience = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+
+        $this->assertStringContainsString('{session && <MeetingRoomExperience', $provider);
+        $this->assertStringContainsString("if (mode === 'mini') return", $experience);
+        $this->assertStringContainsString('<LiveKitRoom token={credentials.token}', $experience);
+        $this->assertStringContainsString('useTracks([{source: Track.Source.ScreenShare, withPlaceholder: false}])', $experience);
+        $this->assertStringContainsString('onPointerDown={startDrag}', $experience);
+        $this->assertStringContainsString('onPointerMove={moveDrag}', $experience);
+        $this->assertStringContainsString("target?.closest('button, a, input, select, textarea, [role=\"button\"], [data-no-drag]')", $experience);
+        $this->assertStringContainsString('new ResizeObserver(clampToViewport)', $experience);
+        $this->assertStringContainsString('max-h-[calc(100dvh-2rem)]', $experience);
+        $this->assertStringContainsString('localParticipant.setScreenShareEnabled(false)', $controls);
+        $this->assertStringNotContainsString('localParticipant.setScreenShareEnabled(false).catch(() => {})', $controls);
+    }
+
+    public function test_full_and_mini_leave_explicitly_disconnect_and_drag_header_does_not_cover_leave(): void
+    {
+        $experience = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
+        $controls = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingControlCenter.jsx'));
+
+        $this->assertStringContainsString('await stopAll();', $controls);
+        $this->assertStringContainsString('await onLeave(() => room.disconnect());', $controls);
+        $this->assertStringContainsString('await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);', $experience);
+        $this->assertStringContainsString('await onLeave(() => room.disconnect());', $experience);
+        $headerEnd = strpos($experience, '</header>', strpos($experience, 'aria-label="Move mini meeting window"'));
+        $miniLeave = strpos($experience, 'onClick={leave}', $headerEnd);
+        $this->assertNotFalse($headerEnd);
+        $this->assertNotFalse($miniLeave);
+        $this->assertGreaterThan($headerEnd, $miniLeave);
+    }
+
+    public function test_explicit_leave_awaits_application_cleanup_and_inertia_replaces_the_full_room_page(): void
+    {
+        $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
+        $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
+
+        $this->assertStringContainsString('await current.onLeave?.();', $provider);
+        $this->assertStringContainsString('await disconnectRoom?.();', $provider);
+        $this->assertStringContainsString('router.visit(current.lobbyUrl, {replace: true});', $provider);
+        $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
+        $this->assertStringContainsString('await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`', $lobby);
+        $this->assertStringContainsString('if (!meeting.can_bypass_waiting_room && joinRequest?.status === \'admitted\')', $lobby);
+    }
+
     public function test_persistent_session_enters_the_room_through_inertia_without_replacing_the_lobby_history_entry(): void
     {
         $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
         $layout = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.jsx'));
         $notifications = file_get_contents(resource_path('js/Hooks/useNotificationRealtime.js'));
 
-        $this->assertStringContainsString('router.visit(nextSession.roomUrl)', $provider);
+        $this->assertStringContainsString('const roomUrlPath = meetingPath(nextSession.roomUrl);', $provider);
+        $this->assertStringContainsString('if (window.location.pathname !== roomUrlPath) router.visit(nextSession.roomUrl);', $provider);
         $this->assertStringNotContainsString("window.history.replaceState(window.history.state, '', nextSession.roomUrl)", $provider);
         $this->assertStringContainsString('pauseBackgroundRefresh', $layout);
         $this->assertStringContainsString('pauseBackgroundRefreshRef.current', $notifications);

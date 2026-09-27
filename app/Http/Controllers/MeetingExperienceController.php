@@ -48,7 +48,7 @@ class MeetingExperienceController extends Controller
                 'subject' => $meeting->classSubject?->subject?->only('code', 'name'),
                 'host' => $meeting->host?->only('name'),
                 'participant_reference' => $participant?->public_uuid,
-                'join_request' => MeetingWaitingRoomController::requestPayload($meeting->joinRequests()->where('requester_user_id', request()->user()->id)->first(), $participant),
+                'join_request' => MeetingWaitingRoomController::requestPayload($meeting->joinRequests()->where('requester_user_id', request()->user()->id)->first()),
                 'can_join' => request()->user()->can('join', $meeting),
                 'can_bypass_waiting_room' => app(MeetingAccess::class)->isAssignedEligibleHost(request()->user(), $meeting),
                 'can_screen_share' => request()->user()->can('screenShare', $meeting),
