@@ -35,7 +35,16 @@ export function PersistentMeetingProvider({children}) {
             sessionRef.current = null;
             setSession(null);
             if (returnToLobby && window.location.pathname === meetingPath(current.roomUrl)) {
-                router.visit(current.lobbyUrl, {replace: true});
+                // router.visit() returns void; wrap in a Promise using per-visit callbacks
+                // to await actual navigation completion before releasing clearInProgressRef.
+                await new Promise((resolve, reject) => {
+                    router.visit(current.lobbyUrl, {
+                        replace: true,
+                        onSuccess: resolve,
+                        onError: reject,
+                        onFinish: () => {}, // ensure finish fires even if success/error already handled
+                    });
+                });
             }
         } finally {
             clearInProgressRef.current = false;

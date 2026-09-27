@@ -145,7 +145,16 @@ class MeetingExperienceTest extends TestCase
 
         $this->assertStringContainsString('await current.onLeave?.();', $provider);
         $this->assertStringContainsString('await disconnectRoom?.();', $provider);
-        $this->assertStringContainsString('router.visit(current.lobbyUrl, {replace: true});', $provider);
+        // router.visit() returns void; clearSession wraps it in a Promise using
+        // Inertia per-visit callbacks (onSuccess/onError/onFinish) to await
+        // actual navigation completion before releasing clearInProgressRef.
+        $this->assertStringContainsString('await new Promise((resolve, reject) => {', $provider);
+        $this->assertStringContainsString('router.visit(current.lobbyUrl, {', $provider);
+        $this->assertStringContainsString("replace: true,", $provider);
+        $this->assertStringContainsString('onSuccess: resolve,', $provider);
+        $this->assertStringContainsString('onError: reject,', $provider);
+        $this->assertStringContainsString('onFinish:', $provider);
+        $this->assertStringNotContainsString('router.visit(current.lobbyUrl, {replace: true});', $provider);
         $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
         $this->assertStringContainsString('await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`', $lobby);
         $this->assertStringContainsString('if (!meeting.can_bypass_waiting_room && joinRequest?.status === \'admitted\')', $lobby);
