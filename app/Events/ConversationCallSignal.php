@@ -18,8 +18,10 @@ class ConversationCallSignal implements ShouldBroadcast, ShouldDispatchAfterComm
     public function broadcastOn(): array
     {
         $channels = [new PrivateChannel('conversation-call.'.$this->call->public_uuid)];
-        if ($this->signal === 'started') {
-            foreach ($this->call->participants()->where('user_id', '!=', $this->call->initiated_by_user_id)->whereNull('declined_at')->pluck('user_id') as $userId) {
+        if (in_array($this->signal, ['started', 'accepted', 'declined', 'cancelled', 'ended', 'left'], true)) {
+            $participants = $this->call->participants()->whereNull('declined_at')->pluck('user_id');
+            foreach ($participants as $userId) {
+                if ($this->signal === 'started' && $userId === $this->call->initiated_by_user_id) continue;
                 $channels[] = new PrivateChannel('incoming-call.'.$userId);
             }
         }
@@ -34,6 +36,6 @@ class ConversationCallSignal implements ShouldBroadcast, ShouldDispatchAfterComm
 
     public function broadcastWith(): array
     {
-        return ['call' => ['uuid' => $this->call->public_uuid, 'conversation_uuid' => $this->call->conversation->public_uuid, 'type' => $this->call->type, 'status' => $this->call->status, 'initiator' => ['id' => $this->call->initiator->id, 'name' => $this->call->initiator->name, 'avatar_url' => $this->call->initiator->avatarUrl()]]];
+        return ['signal' => $this->signal, 'call' => ['uuid' => $this->call->public_uuid, 'conversation_uuid' => $this->call->conversation->public_uuid, 'type' => $this->call->type, 'status' => $this->call->status, 'started_at' => $this->call->started_at?->toIso8601String(), 'initiator' => ['id' => $this->call->initiator->id, 'name' => $this->call->initiator->name, 'avatar_url' => $this->call->initiator->avatarUrl()]]];
     }
 }
