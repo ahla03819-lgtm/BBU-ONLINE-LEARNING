@@ -1,10 +1,15 @@
-import React, {useEffect, useState} from 'react';
-import {Head, router} from '@inertiajs/react';
-import {LiveKitRoom, RoomAudioRenderer, StartAudio, TrackToggle, useLocalParticipant, useTracks, VideoTrack} from '@livekit/components-react';
-import {Track} from 'livekit-client';
+import React, {useEffect} from 'react';
+import {Head} from '@inertiajs/react';
 import Layout from '../../Layouts/AuthenticatedLayout';
-import Icon from '../../Components/UI/Icon';
+import {usePersistentConversationCall} from '../../Providers/PersistentConversationCallProvider';
 
-function CallControls({call}) { const {localParticipant, isMicrophoneEnabled, isCameraEnabled} = useLocalParticipant(); const leave = async () => { await Promise.allSettled([localParticipant.setMicrophoneEnabled(false), localParticipant.setCameraEnabled(false), localParticipant.setScreenShareEnabled(false)]); await fetch(`/conversation-calls/${call.uuid}/leave`, {method: 'POST', headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content, Accept: 'application/json'}}); router.visit('/conversations'); }; return <div className="flex flex-wrap justify-center gap-3"><TrackToggle source={Track.Source.Microphone} showIcon={false} className="rounded-xl bg-white/10 px-4 py-3 text-white"><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="mx-auto h-5 w-5"/>Mic</TrackToggle><TrackToggle source={Track.Source.Camera} showIcon={false} className="rounded-xl bg-white/10 px-4 py-3 text-white"><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="mx-auto h-5 w-5"/>Camera</TrackToggle><button onClick={() => localParticipant.setScreenShareEnabled(true)} className="rounded-xl bg-white/10 px-4 py-3 text-white"><Icon name="screen" className="mx-auto h-5 w-5"/>Share</button><button onClick={leave} className="rounded-xl bg-rose-600 px-5 py-3 font-bold text-white">Leave</button></div>; }
-function CallTiles() { const tracks = useTracks([{source: Track.Source.Camera, withPlaceholder: true}]); return <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">{tracks.map(track => <div key={track.participant.identity} className="min-h-64 rounded-2xl bg-slate-800 p-3 text-white"><VideoTrack trackRef={track}/><p className="mt-2 text-sm font-bold">{track.participant.name || 'Participant'}</p></div>)}</div>; }
-export default function CallRoom({call}) { const [credentials, setCredentials] = useState(null); const [error, setError] = useState(''); useEffect(() => { fetch(`/conversation-calls/${call.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content, Accept: 'application/json'}}).then(r => r.ok ? r.json() : Promise.reject()).then(setCredentials).catch(() => setError('You cannot join this call.')); }, [call.uuid]); if (error) return <Layout><p className="rounded-2xl bg-rose-50 p-5 text-rose-800">{error}</p></Layout>; return <Layout><Head title="BBU Live Call"/>{credentials && <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio video={call.type === 'video'} className="min-h-[calc(100vh-10rem)] rounded-3xl bg-slate-950 p-5"><header className="mb-4 flex items-center justify-between text-white"><div><p className="text-xs font-bold uppercase tracking-widest text-sky-300">BBU Live Call</p><h1 className="text-xl font-bold">{call.name}</h1></div><span className="rounded-full bg-emerald-500/20 px-3 py-1 text-sm text-emerald-200">{call.type} call</span></header><CallTiles/><CallControls call={call}/><RoomAudioRenderer/><StartAudio label="Enable call audio"/></LiveKitRoom>}</Layout>; }
+export default function CallRoom({call}) {
+    const {connectCall} = usePersistentConversationCall();
+
+    useEffect(() => {
+        if (!call?.uuid) return;
+        connectCall(call, {mode: 'full'}).catch(() => undefined);
+    }, [call, connectCall]);
+
+    return <Layout><Head title="BBU Live Call"/><div className="flex min-h-[24rem] items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center"><div><p className="text-xs font-bold uppercase tracking-[0.28em] text-sky-700">BBU Live Call</p><h1 className="mt-3 text-2xl font-bold text-slate-900">Joining {call?.name || 'call'}…</h1><p className="mt-2 text-sm text-slate-600">The active call is owned by the persistent provider to keep the LiveKit room alive across navigation.</p></div></div></Layout>;
+}

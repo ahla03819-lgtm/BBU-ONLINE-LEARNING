@@ -148,6 +148,7 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     Route::delete('/conversations/{conversation}/members/{user}', [ConversationController::class, 'removeMember'])->name('conversations.members.destroy');
     Route::post('/conversations/{conversation}/leave', [ConversationController::class, 'leave'])->name('conversations.leave');
     Route::get('/conversation-calls/{call}/room', [ConversationCallController::class, 'room'])->name('conversation-calls.room');
+    Route::get('/conversation-calls/active', [ConversationCallController::class, 'active'])->name('conversation-calls.active');
     Route::post('/conversation-calls/{call}/respond', [ConversationCallController::class, 'respond'])->name('conversation-calls.respond');
     Route::post('/conversation-calls/{call}/cancel', [ConversationCallController::class, 'cancel'])->name('conversation-calls.cancel');
     Route::post('/conversation-calls/{call}/leave', [ConversationCallController::class, 'leave'])->name('conversation-calls.leave');

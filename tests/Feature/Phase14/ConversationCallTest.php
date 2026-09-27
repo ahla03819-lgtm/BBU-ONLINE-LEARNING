@@ -45,6 +45,8 @@ class ConversationCallTest extends TestCase
             ->assertOk()
             ->assertJsonPath('token', 'safe-test-token')
             ->assertJsonPath('server_url', 'wss://public.example.test')
+            ->assertJsonPath('started_at', $model->fresh()->started_at->toIso8601String())
+            ->assertJsonPath('server_now_at', fn ($value) => is_string($value))
             ->assertJsonPath('identity', 'conversation-call:'.$model->public_uuid.':'.$b->id);
         $this->assertSame($model->livekit_room_name, $this->issuer->roomName);
         $this->assertSame('conversation-call:'.$model->public_uuid.':'.$b->id, $this->issuer->identity);
@@ -115,6 +117,50 @@ class ConversationCallTest extends TestCase
         $this->assertSame($model->livekit_room_name, $this->issuer->roomName);
         $this->actingAs($b)->postJson(route('conversation-calls.leave', $model))->assertOk();
         $this->assertSame('active', $model->fresh()->status);
+    }
+
+    public function test_active_call_recovery_returns_only_an_authorized_joined_participant_and_server_start(): void
+    {
+        [$a, $b, $conversation] = $this->conversation();
+        $call = $this->actingAs($a)->postJson(route('conversation-calls.store', $conversation), ['type' => 'video'])->json('call');
+        $model = ConversationCall::where('public_uuid', $call['uuid'])->firstOrFail();
+        $this->actingAs($b)->postJson(route('conversation-calls.respond', $model), ['decision' => 'accepted'])->assertOk();
+        $startedAt = $model->fresh()->started_at->toIso8601String();
+
+        $this->actingAs($b)->getJson(route('conversation-calls.active'))
+            ->assertOk()
+            ->assertJsonPath('call.uuid', $model->public_uuid)
+            ->assertJsonPath('call.started_at', $startedAt)
+            ->assertJsonPath('call.participants.0.id', $a->id);
+        $this->actingAs($this->user('Student'))->getJson(route('conversation-calls.active'))->assertJsonPath('call', null);
+    }
+
+    public function test_leaving_a_direct_call_ends_it_and_revokes_both_participants_tokens(): void
+    {
+        [$a, $b, $conversation] = $this->conversation();
+        $call = $this->actingAs($a)->postJson(route('conversation-calls.store', $conversation), ['type' => 'audio'])->json('call');
+        $model = ConversationCall::where('public_uuid', $call['uuid'])->firstOrFail();
+        $this->actingAs($b)->postJson(route('conversation-calls.respond', $model), ['decision' => 'accepted'])->assertOk();
+
+        $this->actingAs($b)->postJson(route('conversation-calls.leave', $model))->assertOk();
+        $this->assertSame('ended', $model->fresh()->status);
+        $this->actingAs($a)->postJson(route('conversation-calls.token', $model))->assertForbidden();
+        $this->actingAs($b)->postJson(route('conversation-calls.token', $model))->assertForbidden();
+    }
+
+    public function test_call_terminal_signals_reach_each_participants_global_call_channel(): void
+    {
+        [$a, $b, $conversation] = $this->conversation();
+        $call = $this->actingAs($a)->postJson(route('conversation-calls.store', $conversation), ['type' => 'video'])->json('call');
+        $model = ConversationCall::where('public_uuid', $call['uuid'])->with(['conversation', 'initiator'])->firstOrFail();
+
+        foreach (['declined', 'cancelled', 'ended'] as $signal) {
+            $event = new ConversationCallSignal($model, $signal);
+            $channels = collect($event->broadcastOn())->pluck('name');
+            $this->assertContains('private-incoming-call.'.$a->id, $channels);
+            $this->assertContains('private-incoming-call.'.$b->id, $channels);
+            $this->assertSame($signal, $event->broadcastWith()['signal']);
+        }
     }
 
     private function conversation(): array
