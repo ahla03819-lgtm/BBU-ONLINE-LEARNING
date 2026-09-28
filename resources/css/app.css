@@ -101,3 +101,47 @@ body { background: var(--bbu-canvas); color: var(--bbu-ink); @apply antialiased;
 .edway-live-room .lk-participant-tile .lk-track-muted-indicator-microphone {
     margin-right: .35rem;
 }
+
+.meeting-room-content {
+    container-type: inline-size;
+}
+
+.meeting-more-utility,
+.meeting-more-narrow {
+    display: none;
+}
+
+@container (max-width: 1240px) {
+    .meeting-control-bar--panel-open .meeting-control-secondary {
+        display: none;
+    }
+
+    .meeting-control-bar--panel-open .meeting-device-control {
+        min-width: 130px;
+    }
+
+    .meeting-control-bar--panel-open .meeting-device-toggle {
+        min-width: 64px;
+    }
+}
+
+@container (max-width: 1040px) {
+    .meeting-control-bar--panel-open .meeting-control-utility {
+        display: none;
+    }
+
+    .meeting-control-bar--panel-open .meeting-more-utility {
+        display: flex;
+    }
+}
+
+@container (max-width: 860px) {
+    .meeting-control-bar--panel-open .meeting-control-chat,
+    .meeting-control-bar--panel-open .meeting-control-people {
+        display: none;
+    }
+
+    .meeting-control-bar--panel-open .meeting-more-narrow {
+        display: flex;
+    }
+}
