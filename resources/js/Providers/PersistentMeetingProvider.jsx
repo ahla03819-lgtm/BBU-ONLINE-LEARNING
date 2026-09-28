@@ -3,6 +3,7 @@ import {router} from '@inertiajs/react';
 import MeetingRoomExperience from '../Components/Meetings/LiveKit/MeetingRoomExperience';
 import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMediaIntent';
 import {echo} from '../realtime/echo';
+import {createMeetingLeaveTransaction} from './meetingLeaveTransaction';
 
 const PersistentMeetingContext = createContext(null);
 
@@ -11,44 +12,51 @@ const meetingPath = (url) => new URL(url, window.location.origin).pathname;
 export function PersistentMeetingProvider({children}) {
     const [session, setSession] = useState(null);
     const sessionRef = useRef(null);
-    const clearInProgressRef = useRef(false);
+    const leaveTransactionRef = useRef(null);
     const [pathname, setPathname] = useState(() => window.location.pathname);
+
+    if (!leaveTransactionRef.current) leaveTransactionRef.current = createMeetingLeaveTransaction();
 
     const clearSession = useCallback(async ({returnToLobby = false, disconnectRoom} = {}) => {
         const current = sessionRef.current;
-        if (!current || clearInProgressRef.current) return;
+        if (!current) return {status: 'cleared'};
 
-        clearInProgressRef.current = true;
-        try {
-            clearMeetingMediaIntent(current.mediaIntentKey);
+        return leaveTransactionRef.current({
+            returnToLobby,
+            cleanup: async () => {
             try {
                 await current.onLeave?.();
             } catch {
                 // Clear the local session even if the best-effort admission request fails.
             }
+            },
+            disconnect: async () => {
             try {
                 await disconnectRoom?.();
             } catch {
                 // Continue clearing the application session if provider disconnect fails.
             }
+            },
+            navigate: () => {
+                if (!returnToLobby || window.location.pathname !== meetingPath(current.roomUrl)) return Promise.resolve({status: 'success'});
 
-            sessionRef.current = null;
-            setSession(null);
-            if (returnToLobby && window.location.pathname === meetingPath(current.roomUrl)) {
-                // router.visit() returns void; wrap in a Promise using per-visit callbacks
-                // to await actual navigation completion before releasing clearInProgressRef.
-                await new Promise((resolve, reject) => {
+                return new Promise((resolve) => {
+                    let status = 'finished';
                     router.visit(current.lobbyUrl, {
                         replace: true,
-                        onSuccess: resolve,
-                        onError: reject,
-                        onFinish: () => {}, // ensure finish fires even if success/error already handled
+                        onSuccess: () => { status = 'success'; },
+                        onError: () => { status = 'error'; },
+                        onCancel: () => { status = 'cancelled'; },
+                        onFinish: () => resolve({status}),
                     });
                 });
-            }
-        } finally {
-            clearInProgressRef.current = false;
-        }
+            },
+            clearSession: () => {
+                clearMeetingMediaIntent(current.mediaIntentKey);
+                sessionRef.current = null;
+                setSession(null);
+            },
+        });
     }, []);
 
     const startMeeting = useCallback((nextSession) => {
@@ -76,7 +84,14 @@ export function PersistentMeetingProvider({children}) {
         router.visit(current.roomUrl);
     }, []);
 
-    const leaveMeeting = useCallback((disconnectRoom) => clearSession({returnToLobby: true, disconnectRoom}), [clearSession]);
+    const leaveMeeting = useCallback((disconnectRoom) => {
+        const current = sessionRef.current;
+
+        return clearSession({
+            returnToLobby: Boolean(current) && window.location.pathname === meetingPath(current.roomUrl),
+            disconnectRoom,
+        });
+    }, [clearSession]);
 
     useEffect(() => router.on('navigate', () => setPathname(window.location.pathname)), []);
 

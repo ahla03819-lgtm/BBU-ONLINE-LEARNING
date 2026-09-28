@@ -179,6 +179,7 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     const panelRef = useRef(null);
     const dragRef = useRef(null);
     const [position, setPosition] = useState(null);
+    const leavingRef = useRef(false);
     const [dragging, setDragging] = useState(false);
     const [leaving, setLeaving] = useState(false);
     const connection = useConnectionState();
@@ -266,12 +267,14 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     };
 
     const leave = async () => {
-        if (leaving) return;
+        if (leavingRef.current) return;
+        leavingRef.current = true;
         setLeaving(true);
         try {
             await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);
             await onLeave(() => room.disconnect());
         } finally {
+            leavingRef.current = false;
             setLeaving(false);
         }
     };

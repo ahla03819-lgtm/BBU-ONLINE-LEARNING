@@ -54,6 +54,7 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
     const share = useTrackToggle({source: Track.Source.ScreenShare, captureOptions: {contentHint: 'text'}, onChange: screenShareChanged, onDeviceError: () => onMessage('Screen sharing was cancelled or is unavailable in this browser.')});
     const [popover, setPopover] = useState(null);
     const [leaving, setLeaving] = useState(false);
+    const leavingRef = useRef(false);
     const available = connection === 'connected' && meeting.status === 'active';
     const canHost = meeting.can_end || meeting.can_manage_participants || meeting.can_manage_join_requests;
     const ref = useRef(null);
@@ -80,12 +81,14 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
     const closePopover = () => { setPopover(null); trigger.current?.focus(); };
     const togglePopover = (name, event) => { trigger.current = event.currentTarget; setPopover((current) => current === name ? null : name); };
     const leave = async () => {
-        if (leaving) return;
+        if (leavingRef.current) return;
+        leavingRef.current = true;
         setLeaving(true);
         try {
             await stopAll();
             await onLeave(() => room.disconnect());
         } finally {
+            leavingRef.current = false;
             setLeaving(false);
         }
     };
@@ -113,7 +116,7 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
         <div className="meeting-control-secondary hidden lg:block"><Control active={popover === 'view'} onClick={(event) => togglePopover('view', event)} aria-label="Open view options" aria-expanded={popover === 'view'}><Icon name="eye" className="h-5.5 w-5.5"/>View</Control></div>
         {canHost && <div className="meeting-control-secondary hidden lg:block"><Control active={activePanel === 'host'} onClick={() => togglePanel('host')} aria-label="Open host controls" aria-expanded={activePanel === 'host'}><Icon name="settings" className="h-5.5 w-5.5"/>Host</Control></div>}
         <Control className="meeting-control-more shrink-0" active={popover === 'more'} onClick={(event) => togglePopover('more', event)} aria-label="More meeting controls" aria-expanded={popover === 'more'}><Icon name="more" className="h-5.5 w-5.5"/>More</Control>
-        <Control className="meeting-control-leave shrink-0" danger disabled={connection === 'disconnected' || leaving} onClick={leave} aria-label="Leave meeting"><Icon name="logout" className="h-5.5 w-5.5"/>{leaving ? 'Leaving' : 'Leave'}</Control>
+        <Control className="meeting-control-leave shrink-0" danger disabled={leaving} onClick={leave} aria-label="Leave meeting"><Icon name="logout" className="h-5.5 w-5.5"/>{leaving ? 'Leaving' : 'Leave'}</Control>
         {popover && <div ref={menuRef} className="absolute inset-x-0 bottom-[calc(100%+.75rem)] z-30 mx-auto max-h-[60dvh] max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-[#171a23] p-2 shadow-2xl" role="group" aria-label={popover === 'view' ? 'View options' : popover === 'more' ? 'More meeting controls' : 'Meeting reactions'}>
             {popover === 'reactions' && <div className="flex flex-wrap justify-center gap-1">{['👍', '❤️', '👏', '😂', '😮'].map((reaction) => <button key={reaction} type="button" disabled={!available} onClick={() => { signals.sendReaction(reaction).catch((error) => onMessage(error.message)); closePopover(); }} className="rounded-xl p-2 text-xl transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-violet-400" aria-label={`Send ${reaction} reaction`}>{reaction}</button>)}</div>}
             {popover === 'view' && <><p className="px-3 py-2 text-xs text-slate-300">View changes apply only to you.</p>{meetingViews.map((option) => <button key={option.id} type="button" onClick={() => switchView(option.id)} aria-label={`Switch to ${option.id === 'speaker' ? 'speaker' : option.id === 'screen' ? 'screen-share focus' : 'gallery'} view`} aria-pressed={view === option.id} className={`${menuButton} ${view === option.id ? 'bg-violet-600/40' : ''}`}><Icon name={option.icon} className="h-4 w-4"/><span>{option.label}<span className="block text-xs font-normal text-slate-300">{option.description}</span></span></button>)}</>}

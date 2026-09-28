@@ -142,18 +142,19 @@ class MeetingExperienceTest extends TestCase
     {
         $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
         $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
+        $transaction = file_get_contents(resource_path('js/Providers/meetingLeaveTransaction.js'));
 
         $this->assertStringContainsString('await current.onLeave?.();', $provider);
         $this->assertStringContainsString('await disconnectRoom?.();', $provider);
-        // router.visit() returns void; clearSession wraps it in a Promise using
-        // Inertia per-visit callbacks (onSuccess/onError/onFinish) to await
-        // actual navigation completion before releasing clearInProgressRef.
-        $this->assertStringContainsString('await new Promise((resolve, reject) => {', $provider);
+        // The transaction stays locked through every Inertia terminal callback,
+        // and only a completed visit may clear the persistent session.
+        $this->assertStringContainsString('createMeetingLeaveTransaction()', $provider);
+        $this->assertStringContainsString('return new Promise((resolve) => {', $provider);
         $this->assertStringContainsString('router.visit(current.lobbyUrl, {', $provider);
         $this->assertStringContainsString("replace: true,", $provider);
-        $this->assertStringContainsString('onSuccess: resolve,', $provider);
-        $this->assertStringContainsString('onError: reject,', $provider);
-        $this->assertStringContainsString('onFinish:', $provider);
+        $this->assertStringContainsString("onCancel: () => { status = 'cancelled'; },", $provider);
+        $this->assertStringContainsString('onFinish: () => resolve({status}),', $provider);
+        $this->assertStringContainsString("if (navigation.status === 'success') operation.clearSession();", $transaction);
         $this->assertStringNotContainsString('router.visit(current.lobbyUrl, {replace: true});', $provider);
         $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
         $this->assertStringContainsString('await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`', $lobby);
