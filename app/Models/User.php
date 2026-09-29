@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AccountStatus;
+use App\Support\Locale;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'status', 'avatar_path', 'approved_at', 'approved_by', 'must_change_password'])]
+#[Fillable(['name', 'email', 'password', 'status', 'avatar_path', 'locale', 'approved_at', 'approved_by', 'must_change_password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -43,6 +44,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isActive(): bool
     {
         return $this->status === AccountStatus::Active;
+    }
+
+    /**
+     * The interface language this account should be presented in.
+     */
+    public function preferredLocale(): string
+    {
+        return Locale::normalize($this->locale);
     }
 
     /**
