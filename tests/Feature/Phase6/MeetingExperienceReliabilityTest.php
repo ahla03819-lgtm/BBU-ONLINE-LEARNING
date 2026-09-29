@@ -136,19 +136,23 @@ class MeetingExperienceReliabilityTest extends TestCase
         $provider = file_get_contents(resource_path('js/Providers/PersistentMeetingProvider.jsx'));
         $stage = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingStage.jsx'));
         $show = file_get_contents(resource_path('js/Pages/Meetings/Show.jsx'));
-        foreach (['Live now', 'Scheduled', 'Transitioning', 'History', 'No meetings yet'] as $label) {
+        $catalogue = file_get_contents(resource_path('js/i18n/en.js'));
+        foreach (['liveNow', 'scheduled', 'transitioning', 'history', 'meetings.noMeetings'] as $label) {
             $this->assertStringContainsString($label, $index);
         }
-        foreach (['Connecting…', 'Connected', 'Reconnecting…', 'Disconnected', 'Camera off', 'Muted', 'participant.name'] as $label) {
+        foreach (['meetingRoom.controlCenter.cameraOff', 'meetingRoom.controlCenter.muted', 'participant.name'] as $label) {
             $this->assertStringContainsString($label, $room.$controls.$stage);
         }
-        $this->assertStringContainsString("onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}", $room);
+        foreach (['connecting: \'Connecting…\'', 'connected: \'Connected\'', 'reconnecting: \'Reconnecting…\'', 'disconnected: \'Disconnected\''] as $label) {
+            $this->assertStringContainsString($label, $catalogue);
+        }
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}", $room);
         $this->assertStringNotContainsString('if (connected.current) onLeave()', $room);
         $this->assertStringContainsString('await stopAll();', $controls);
         $this->assertStringContainsString('await onLeave(() => room.disconnect());', $controls);
         $this->assertStringContainsString('await current.onLeave?.();', $provider);
         $this->assertStringContainsString('disabled={ending}', $show);
-        $this->assertStringContainsString('Retry reconciliation', $show);
+        $this->assertStringContainsString("t('meetings.show.retryReconciliation')", $show);
         $this->assertStringNotContainsString('livekit_identity', $room.$controls);
         $this->assertStringNotContainsString('livekit_room_name', $room.$controls);
     }

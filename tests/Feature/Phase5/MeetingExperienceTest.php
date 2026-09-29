@@ -26,8 +26,8 @@ class MeetingExperienceTest extends TestCase
     {
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
 
-        $this->assertStringContainsString("onError={() => setConnectionError('Unable to join the meeting. Please try again.')}", $component);
-        $this->assertStringContainsString("onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}", $component);
+        $this->assertStringContainsString("onError={() => setConnectionError(t('meetingRoom.errors.roomJoinFailed'))}", $component);
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}", $component);
         $this->assertStringNotContainsString('connected.current) onLeave()', $component);
         $this->assertStringContainsString('useConnectionState', $component);
         $this->assertStringNotContainsString('onReconnecting=', $component);
@@ -84,7 +84,7 @@ class MeetingExperienceTest extends TestCase
         $this->assertStringContainsString('localParticipant.setCameraEnabled(desiredCamera)', $room);
         $this->assertStringContainsString('localParticipant.setMicrophoneEnabled(desiredMicrophone)', $room);
         $this->assertStringContainsString('Promise.allSettled', $room);
-        $this->assertStringContainsString('Resume screen sharing', $controls);
+        $this->assertStringContainsString("t('meetingRoom.controlCenter.resumeScreenShare')", $controls);
         $this->assertStringContainsString('screenShareIntentChange', $controls);
         $this->assertStringNotContainsString('setScreenShareEnabled(true)', $room.$controls);
         $this->assertStringContainsString('disabled={!available || share.pending}', $controls);
@@ -100,7 +100,7 @@ class MeetingExperienceTest extends TestCase
         $this->assertStringContainsString('if (connection !== \'connected\' || mediaRestoreStarted.current) return;', $room);
         $this->assertStringContainsString('Promise.allSettled', $room);
         $this->assertStringContainsString('setMediaReady(true)', $room);
-        $this->assertStringContainsString('could not be restored. Check browser permissions or device availability.', $room);
+        $this->assertStringContainsString("t('meetingRoom.stage.restoreFailed'", $room);
     }
 
     public function test_full_and_mini_modes_share_one_room_without_mode_cleanup_stopping_screen_share(): void

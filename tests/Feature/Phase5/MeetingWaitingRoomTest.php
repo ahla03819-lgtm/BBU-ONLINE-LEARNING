@@ -207,7 +207,7 @@ class MeetingWaitingRoomTest extends TestCase
         $moderation = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingModeration.js'));
         $sidePanel = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingSidePanel.jsx'));
 
-        foreach (['useMeetingModeration', 'WaitingSection', 'MeetingParticipantAvatar', 'waiting-room/requests', 'window.setTimeout(refresh, 5000)', 'window.clearTimeout(timer)', 'meeting.can_manage_join_requests', 'No participants are waiting for approval.'] as $contract) {
+        foreach (['useMeetingModeration', 'WaitingSection', 'MeetingParticipantAvatar', 'waiting-room/requests', 'window.setTimeout(refresh, 5000)', 'window.clearTimeout(timer)', 'meeting.can_manage_join_requests', "t('meetingRoom.waitingRoom.empty')"] as $contract) {
             $this->assertStringContainsString($contract, $component.$moderation.$sidePanel);
         }
 
