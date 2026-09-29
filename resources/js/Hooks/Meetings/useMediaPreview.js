@@ -1,17 +1,20 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {useTranslation} from '../../i18n/LocaleProvider';
 
-const friendlyMediaError = (error, device) => {
-    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return `${device} permission was blocked. Allow access in your browser settings, then try again.`;
-    if (error?.name === 'NotFoundError') return `No ${device.toLowerCase()} was found. Connect one and try again.`;
-    if (error?.name === 'NotReadableError') return `${device} is being used by another application. Close it there, then try again.`;
-    if (error?.name === 'OverconstrainedError') return `The selected ${device.toLowerCase()} is no longer available. Choose another device.`;
+// Device names are translated labels; each error branch owns its own sentence.
+const friendlyMediaError = (error, device, t) => {
+    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return t('meetingRoom.lobby.mediaError.permissionBlocked', {device});
+    if (error?.name === 'NotFoundError') return t('meetingRoom.lobby.mediaError.notFound', {device});
+    if (error?.name === 'NotReadableError') return t('meetingRoom.lobby.mediaError.inUse', {device});
+    if (error?.name === 'OverconstrainedError') return t('meetingRoom.lobby.mediaError.unavailable', {device});
 
-    return `We could not start your ${device.toLowerCase()}. Please try again.`;
+    return t('meetingRoom.lobby.mediaError.startFailed', {device});
 };
 
-const labelFor = (device, fallback, index) => device.label || `${fallback} ${index + 1}`;
+const labelFor = (device, fallback, index, t) => device.label || t('meetingRoom.controlCenter.deviceNumber', {device: fallback, index: index + 1});
 
 export default function useMediaPreview() {
+    const {t} = useTranslation();
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const meterContextRef = useRef(null);
@@ -66,7 +69,7 @@ export default function useMediaPreview() {
 
     const prepare = useCallback(async (nextCamera = cameraEnabled, nextMicrophone = microphoneEnabled, nextCameraId = cameraId, nextMicrophoneId = microphoneId) => {
         if (!navigator.mediaDevices?.getUserMedia) {
-            setError('Media devices are unavailable in this browser.');
+            setError(t('meetingRoom.lobby.deviceUnavailable'));
             return false;
         }
         stop();
@@ -85,7 +88,7 @@ export default function useMediaPreview() {
         } catch (problem) {
             setCameraEnabled(false);
             setMicrophoneEnabled(false);
-            setError(friendlyMediaError(problem, nextCamera && nextMicrophone ? 'camera or microphone' : nextCamera ? 'Camera' : 'Microphone'));
+            setError(friendlyMediaError(problem, t(nextCamera && nextMicrophone ? 'meetingRoom.lobby.mediaError.cameraOrMicrophone' : nextCamera ? 'meetingRoom.controlCenter.cameraLabel' : 'meetingRoom.controlCenter.microphoneLabel'), t));
             return false;
         }
     }, [cameraEnabled, microphoneEnabled, cameraId, microphoneId, enumerate, stop]);
@@ -126,7 +129,7 @@ export default function useMediaPreview() {
         }
         const Context = window.AudioContext || window.webkitAudioContext;
         if (!Context || !stream) {
-            setError('Microphone testing is unavailable in this browser.');
+            setError(t('meetingRoom.lobby.micTestUnavailable'));
             return;
         }
         stopMeter();
@@ -158,7 +161,7 @@ export default function useMediaPreview() {
             window.setTimeout(() => setTestingSpeaker(false), 900);
         } catch {
             setTestingSpeaker(false);
-            setError('We could not play a speaker test. Check your output device and try again.');
+            setError(t('meetingRoom.lobby.speakerTestFailed'));
         }
     }, [speakerId, speakerSelectionSupported]);
 
@@ -177,9 +180,9 @@ export default function useMediaPreview() {
         chooseCamera, chooseMicrophone, setSpeakerId, toggleCamera, toggleMicrophone, testMicrophone,
         testSpeaker, microphoneLevel, testingMicrophone, testingSpeaker, speakerSelectionSupported,
         labels: {
-            camera: (device, index) => labelFor(device, 'Camera', index),
-            microphone: (device, index) => labelFor(device, 'Microphone', index),
-            speaker: (device, index) => labelFor(device, 'Speaker', index),
+            camera: (device, index) => labelFor(device, t('meetingRoom.lobby.cameraLabel'), index, t),
+            microphone: (device, index) => labelFor(device, t('meetingRoom.lobby.microphoneLabel'), index, t),
+            speaker: (device, index) => labelFor(device, t('meetingRoom.lobby.speakerLabel'), index, t),
         },
         error, stop,
     };

@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import Icon from '../../UI/Icon';
+import {useTranslation} from '../../../i18n/LocaleProvider';
 
 function safeAvatarUrl(value) {
     if (typeof value !== 'string') return null;
@@ -22,6 +23,7 @@ function avatarUrlFromMetadata(metadata) {
 }
 
 export default function MeetingParticipantAvatar({participant, name: suppliedName, avatarUrl: suppliedAvatarUrl, size = 'xl', alt, className = ''}) {
+    const {t} = useTranslation();
     const name = suppliedName?.trim() || participant?.name?.trim();
     const avatarUrl = safeAvatarUrl(suppliedAvatarUrl) || avatarUrlFromMetadata(participant?.metadata);
     const [imageFailed, setImageFailed] = useState(false);
@@ -32,11 +34,11 @@ export default function MeetingParticipantAvatar({participant, name: suppliedNam
     useEffect(() => setImageFailed(false), [avatarUrl]);
 
     if (!name) {
-        return <span className="grid h-28 w-28 place-items-center rounded-full border-4 border-white/15 bg-slate-700 text-slate-300 shadow-xl sm:h-36 sm:w-36" aria-label="Participant avatar unavailable"><Icon name="user" className="h-12 w-12 sm:h-16 sm:w-16"/></span>;
+        return <span className="grid h-28 w-28 place-items-center rounded-full border-4 border-white/15 bg-slate-700 text-slate-300 shadow-xl sm:h-36 sm:w-36" aria-label={t('meetingRoom.stage.avatarUnavailable')}><Icon name="user" className="h-12 w-12 sm:h-16 sm:w-16"/></span>;
     }
 
     if (avatarUrl && !imageFailed) {
-        return <img src={avatarUrl} alt={alt ?? `Profile photo for ${name}`} onError={() => setImageFailed(true)} className={`inline-flex shrink-0 rounded-full object-cover ${sizes[size] || sizes.md} ${avatarClass}`}/>;
+        return <img src={avatarUrl} alt={alt ?? t('meetingRoom.stage.profilePhotoFor', {name})} onError={() => setImageFailed(true)} className={`inline-flex shrink-0 rounded-full object-cover ${sizes[size] || sizes.md} ${avatarClass}`}/>;
     }
 
     return <span aria-hidden="true" className={`inline-flex shrink-0 items-center justify-center rounded-full bg-indigo-100 font-bold text-indigo-700 ${sizes[size] || sizes.md} ${avatarClass}`}>{initials}</span>;

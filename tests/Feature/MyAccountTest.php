@@ -246,8 +246,9 @@ class MyAccountTest extends TestCase
         $page = file_get_contents(resource_path('js/Pages/MyAccount/Show.jsx'));
         $topbar = file_get_contents(resource_path('js/Components/UI/AppTopbar.jsx'));
         $avatar = file_get_contents(resource_path('js/Components/UI/UserAvatar.jsx'));
+        $catalogue = file_get_contents(resource_path('js/i18n/en.js'));
 
-        foreach (['Profile', 'Security', 'Notifications & Sounds', 'Appearance', 'Application sounds', 'role="switch"', 'This preference is stored only in this browser.', 'Profile photo', 'Change photo', 'Save photo', 'Remove photo', 'image/jpeg,image/png,image/webp'] as $contract) {
+        foreach (["account.sections.profile", "account.sections.security", "account.sections.notifications", "account.sections.appearance", 'Application sounds', 'role="switch"', 'This preference is stored only in this browser.', 'Profile photo', "t('account.profile.changePhoto')", "t(photoForm.processing ? 'account.profile.savingPhoto' : 'account.profile.savePhoto')", 'Remove photo', 'image/jpeg,image/png,image/webp'] as $contract) {
             $this->assertStringContainsString($contract, $page);
         }
         $this->assertStringContainsString('object-cover', $avatar);
@@ -258,9 +259,12 @@ class MyAccountTest extends TestCase
             $this->assertStringContainsString($contract, $page);
         }
         $this->assertStringNotContainsString('overflow-x-auto', $page);
-        foreach (['My Account', 'Settings', 'Sign out', '/my-account'] as $contract) {
+        foreach (["t('topbar.myAccount')", "t('topbar.settings')", "t('topbar.signOut')", '/my-account'] as $contract) {
             $this->assertStringContainsString($contract, $topbar);
         }
+        $this->assertStringContainsString("myAccount: 'My Account'", $catalogue);
+        $this->assertStringContainsString("settings: 'Settings'", $catalogue);
+        $this->assertStringContainsString("signOut: 'Sign out'", $catalogue);
         $this->assertStringNotContainsString('soundsEnabled', $topbar);
         $this->assertStringNotContainsString('onToggleSounds', $topbar);
     }

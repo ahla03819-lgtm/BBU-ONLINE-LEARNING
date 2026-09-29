@@ -1,4 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
+import {useTranslation} from '../../i18n/LocaleProvider';
 import {LiveKitRoom, RoomAudioRenderer, StartAudio, useConnectionState, useLocalParticipant, useParticipants, useRoomContext, useTracks, VideoTrack} from '@livekit/components-react';
 import {Track} from 'livekit-client';
 import Icon from '../UI/Icon';
@@ -31,6 +32,7 @@ function useCallTimer(startedAt, serverClock) {
 }
 
 function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, serverClock}) {
+    const {t} = useTranslation();
     const panelRef = useRef(null);
     const dragRef = useRef(null);
     const [position, setPosition] = useState(null);
@@ -125,26 +127,26 @@ function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage
         }
     };
 
-    return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[85] w-[calc(100vw-1.5rem)] max-w-[22rem] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40 ${position ? 'left-0 top-0' : 'bottom-4 right-4'}`} aria-label="Mini call window">
-        <header role="group" aria-label="Move call window" tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
+    return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[85] w-[calc(100vw-1.5rem)] max-w-[22rem] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40 ${position ? 'left-0 top-0' : 'bottom-4 right-4'}`} aria-label={t('conversations.miniCallWindow')}>
+        <header role="group" aria-label={t('conversations.moveCallWindow')} tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
             <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-white">{call.name}</p>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">{call.type === 'video' ? 'Video call' : 'Audio call'}</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">{t(call.type === 'video' ? 'conversations.videoCall' : 'conversations.audioCall')}</p>
             </div>
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-200">{connectionLabel(connection)} · {timer}</span>
+            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-200">{connectionLabel(connection, t)} · {timer}</span>
         </header>
-        <button type="button" onClick={onReturn} className="relative block aspect-video w-full overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#334155,#0f172a_72%)] text-left focus:outline-none focus:ring-2 focus:ring-sky-400" aria-label="Return to call">
-            {call.type === 'video' && remoteCameraTrack?.publication ? <VideoTrack trackRef={remoteCameraTrack} className="h-full w-full object-cover"/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-slate-200"><UserAvatar name={remoteDisplayName(call, remoteCameraTrack?.participant)} avatarUrl={remoteAvatar(call, remoteCameraTrack?.participant)} size="lg" className="border-0 shadow-lg shadow-slate-900/30"/><p className="max-w-[12rem] text-sm font-semibold">{remoteDisplayName(call, remoteCameraTrack?.participant)}</p></div>}
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3"><span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] font-bold text-white">{mode === 'mini' ? 'Mini view' : 'Full view'}</span><span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] font-bold text-white">{timer}</span></div>
+        <button type="button" onClick={onReturn} className="relative block aspect-video w-full overflow-hidden bg-[radial-gradient(circle_at_50%_20%,#334155,#0f172a_72%)] text-left focus:outline-none focus:ring-2 focus:ring-sky-400" aria-label={t('conversations.returnToCall')}>
+            {call.type === 'video' && remoteCameraTrack?.publication ? <VideoTrack trackRef={remoteCameraTrack} className="h-full w-full object-cover"/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-slate-200"><UserAvatar name={remoteDisplayName(call, remoteCameraTrack?.participant, t('common.participant'))} avatarUrl={remoteAvatar(call, remoteCameraTrack?.participant)} size="lg" className="border-0 shadow-lg shadow-slate-900/30"/><p className="max-w-[12rem] text-sm font-semibold">{remoteDisplayName(call, remoteCameraTrack?.participant)}</p></div>}
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3"><span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] font-bold text-white">{t(mode === 'mini' ? 'conversations.miniView' : 'conversations.fullView')}</span><span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] font-bold text-white">{timer}</span></div>
         </button>
         <div className="flex items-center justify-between gap-2 p-3">
             <div className="flex items-center gap-2">
-                <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => {setMicrophoneUnavailable(true); setMediaMessage('Microphone access is blocked. Allow microphone access and select Unmute to retry.');}} label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}/>
-                {call.type === 'video' && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => {setCameraUnavailable(true); setMediaMessage('Camera unavailable. The audio call continues; allow camera access and select Camera On to retry.');}} label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}/>}
+                <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => {setMicrophoneUnavailable(true); setMediaMessage(t('conversations.micBlocked'));}} label={t(isMicrophoneEnabled ? 'conversations.muteMicrophone' : 'conversations.unmuteMicrophone')} requiredSuffix={t('conversations.permissionRequired')}/>
+                {call.type === 'video' && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => {setCameraUnavailable(true); setMediaMessage(t('conversations.cameraBlocked'));}} label={t(isCameraEnabled ? 'conversations.turnCameraOff' : 'conversations.turnCameraOn')} requiredSuffix={t('conversations.permissionRequired')}/>}
             </div>
             <div className="flex items-center gap-2">
-                <button type="button" onClick={onReturn} className="rounded-xl bg-sky-600 px-3 py-2 text-[11px] font-bold text-white">Return</button>
-                <button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-[11px] font-bold text-rose-100 disabled:opacity-60">{leaving ? 'Ending' : 'End'}</button>
+                <button type="button" onClick={onReturn} className="rounded-xl bg-sky-600 px-3 py-2 text-[11px] font-bold text-white">{t('conversations.return')}</button>
+                <button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-[11px] font-bold text-rose-100 disabled:opacity-60">{t(leaving ? 'conversations.ending' : 'conversations.end')}</button>
             </div>
         </div>
         {mediaMessage && <p role="status" className="border-t border-white/10 px-3 py-2 text-xs text-amber-200">{mediaMessage}</p>}
@@ -152,6 +154,7 @@ function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage
 }
 
 function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, serverClock}) {
+    const {t} = useTranslation();
     const timer = useCallTimer(call.started_at, serverClock);
     const {localParticipant, isMicrophoneEnabled, isCameraEnabled} = useLocalParticipant();
     const connection = useConnectionState();
@@ -160,7 +163,7 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
     const remoteTrack = cameraTracks.find((track) => !track.participant.isLocal);
     const localTrack = cameraTracks.find((track) => track.participant.isLocal);
     const otherParticipant = remoteTrack?.participant || participants.find((participant) => !participant.isLocal);
-    const remoteName = remoteDisplayName(call, otherParticipant);
+    const remoteName = remoteDisplayName(call, otherParticipant, t('common.participant'));
     const canShowCamera = call.type === 'video';
 
     return <div className="fixed inset-0 z-[80] bg-slate-950/80 px-4 py-5 backdrop-blur-sm sm:px-6 lg:px-8">
@@ -173,7 +176,7 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
                 <div className="flex items-center gap-2">
                     <span role="status" className={`rounded-full border px-3 py-1 text-xs font-bold ${connection === 'connected' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}`}>{connectionLabel(connection)}</span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-100">{timer}</span>
-                    <button type="button" onClick={() => onModeChange('mini')} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white">Mini view</button>
+                    <button type="button" onClick={() => onModeChange('mini')} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white">{t('conversations.miniView')}</button>
                 </div>
             </header>
 
@@ -188,19 +191,19 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
 
                 <aside className="flex flex-col gap-4">
                     <div className="rounded-[24px] border border-slate-700 bg-slate-900/80 p-4">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">You</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('common.you')}</p>
                         <div className="mt-4 overflow-hidden rounded-2xl border border-slate-700 bg-[radial-gradient(circle_at_50%_25%,#374151,#111827)]">
                                     {canShowCamera && isCameraEnabled && localTrack ? <div className="h-44 w-full"><VideoTrack trackRef={localTrack} className="h-full w-full object-cover"/></div> : <div className="flex h-44 flex-col items-center justify-center gap-3 px-4 text-center"><UserAvatar name="You" size="lg" className="border-0 shadow-lg shadow-slate-900/30"/><p className="text-sm font-semibold text-slate-200">{cameraUnavailable ? 'Camera unavailable' : canShowCamera ? 'Camera is off' : 'Audio-only call'}</p></div>}
                         </div>
                     </div>
 
                     <div className="rounded-[24px] border border-slate-700 bg-slate-900/80 p-4">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Controls</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('conversations.controls')}</p>
                         <div className="mt-4 flex flex-wrap items-center gap-3">
                             <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => {setMicrophoneUnavailable(true); setMediaMessage('Microphone access is blocked. Allow microphone access and select Unmute to retry.');}} label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}/>
                             {canShowCamera && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => {setCameraUnavailable(true); setMediaMessage('Camera unavailable. The audio call continues; allow camera access and select Camera On to retry.');}} label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}/>}
-                            <button type="button" onClick={() => onModeChange('mini')} className="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white">Mini</button>
-                            <button type="button" onClick={onLeave} className="ml-auto rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white">End call</button>
+                            <button type="button" onClick={() => onModeChange('mini')} className="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white">{t('conversations.mini')}</button>
+                            <button type="button" onClick={onLeave} className="ml-auto rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white">{t('conversations.endCall')}</button>
                         </div>
                     </div>
                 </aside>
@@ -210,17 +213,17 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
     </div>;
 }
 
-function connectionLabel(connection) {
-    if (connection === 'connected') return 'Connected';
-    if (connection === 'reconnecting' || connection === 'signalReconnecting') return 'Reconnecting';
-    if (connection === 'disconnected') return 'Disconnected';
-    return 'Connecting';
+function connectionLabel(connection, t) {
+    if (connection === 'connected') return t('meetingRoom.connection.connected');
+    if (connection === 'reconnecting' || connection === 'signalReconnecting') return t('meetingRoom.connection.reconnecting');
+    if (connection === 'disconnected') return t('meetingRoom.connection.disconnected');
+    return t('meetingRoom.connection.connecting');
 }
 
-function remoteDisplayName(call, participant) {
+function remoteDisplayName(call, participant, fallback = 'Participant') {
     const identityId = participant?.identity?.split(':').at(-1);
     const known = call.participants?.find((person) => String(person.id) === identityId);
-    return participant?.name || known?.name || call.initiator?.name || 'Participant';
+    return participant?.name || known?.name || call.initiator?.name || fallback;
 }
 
 function remoteAvatar(call, participant) {
@@ -228,7 +231,7 @@ function remoteAvatar(call, participant) {
     return call.participants?.find((person) => String(person.id) === identityId)?.avatar_url || call.initiator?.avatar_url;
 }
 
-function TrackButton({source, enabled, unavailable, localParticipant, onFailure, label}) {
+function TrackButton({source, enabled, unavailable, localParticipant, onFailure, label, requiredSuffix}) {
     const [busy, setBusy] = useState(false);
     const icon = source === Track.Source.Camera ? (enabled ? 'video' : 'video-off') : (enabled ? 'mic' : 'mic-off');
 
@@ -245,7 +248,7 @@ function TrackButton({source, enabled, unavailable, localParticipant, onFailure,
         }
     };
 
-    return <button type="button" onClick={toggle} disabled={busy} aria-label={label} aria-pressed={enabled} title={unavailable ? `${label} (permission required)` : label} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white disabled:opacity-50"><Icon name={icon} className="h-5 w-5"/></button>;
+    return <button type="button" onClick={toggle} disabled={busy} aria-label={label} aria-pressed={enabled} title={unavailable ? `${label}${requiredSuffix}` : label} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white disabled:opacity-50"><Icon name={icon} className="h-5 w-5"/></button>;
 }
 
 function ActiveConversationCall({call, mode, audioOnly, mediaIntent, mediaIntentKey, serverClock, onLeave, onModeChange}) {

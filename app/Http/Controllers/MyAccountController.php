@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\MyAccount\UpdateAvatarRequest;
+use App\Http\Requests\MyAccount\UpdateLocaleRequest;
 use App\Http\Requests\MyAccount\UpdatePasswordRequest;
 use App\Http\Requests\MyAccount\UpdateProfileRequest;
+use App\Support\Locale;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -33,6 +36,7 @@ class MyAccountController extends Controller
                 'email' => $user->email,
                 'avatar_url' => $user->avatarUrl(),
                 'roles' => $user->getRoleNames()->values(),
+                'locale' => $user->preferredLocale(),
                 'context' => $context,
             ],
         ]);
@@ -122,6 +126,26 @@ class MyAccountController extends Controller
         }
 
         return to_route('my-account.profile')->with('success', 'Your profile photo has been removed.');
+    }
+
+    /**
+     * Stores the application language for the current account.
+     *
+     * The header selector and the Appearance section both persist through this
+     * one route, so the preference has a single source of truth. JSON callers
+     * get a direct response instead of a redirect, because a redirected PUT
+     * would be replayed against the redirect target and rejected.
+     */
+    public function updateLocale(UpdateLocaleRequest $request): JsonResponse|RedirectResponse
+    {
+        $user = $request->user();
+        $user->update(['locale' => Locale::normalize($request->validated('locale'))]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['locale' => $user->preferredLocale()]);
+        }
+
+        return to_route('my-account.show', ['section' => 'appearance'])->with('success', 'Your language preference has been updated.');
     }
 
     private function deleteStoredAvatar($user, mixed $path, string $context): void

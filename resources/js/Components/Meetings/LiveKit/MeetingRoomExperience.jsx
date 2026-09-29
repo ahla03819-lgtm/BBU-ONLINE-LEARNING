@@ -11,6 +11,7 @@ import MeetingStage from './MeetingStage';
 import {HostControlsPanel, MeetingChatPanel, MeetingInfoPanel, ParticipantsPanel} from './MeetingSidePanel';
 import {authorizedMeetingLink, localCameraTrackClass} from './meetingView';
 import {writeMeetingMediaIntent} from './meetingMediaIntent';
+import {useTranslation} from '../../../i18n/LocaleProvider';
 import {clampMiniWindowPosition, dragMiniWindowPosition, shouldStartMiniWindowDrag} from './meetingMiniWindowPosition';
 import {sharedMeetingElapsedSeconds} from './meetingElapsedTime';
 import '@livekit/components-styles';
@@ -49,18 +50,19 @@ function useMeetingNavigationGuard(active) {
 }
 
 function ConnectionStatus({error}) {
+    const {t} = useTranslation();
     const state = useConnectionState();
-    const labels = {connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', signalReconnecting: 'Reconnecting…', disconnected: 'Disconnected'};
-    const text = error || labels[state] || 'Connecting…';
+    const text = error || t(`meetingRoom.connection.${state}`) || t('meetingRoom.connection.connecting');
     const variant = error || state === 'disconnected' ? 'bg-red-400 text-red-300' : state === 'connected' ? 'bg-emerald-400 text-emerald-300' : 'bg-amber-300 text-amber-300';
 
     return <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-200" aria-live="polite"><span className={`h-2.5 w-2.5 rounded-full ${variant} ${state !== 'connected' && !error ? 'animate-pulse' : ''}`}/>{text}</p>;
 }
 
 function RoomSummary() {
+    const {t} = useTranslation();
     const participants = useParticipants();
 
-    return <div className="flex items-center gap-2 rounded-xl bg-white/[.1] px-3 py-2 text-sm font-semibold text-white" aria-label={`${participants.length} meeting participants`}><Icon name="users" className="h-4 w-4"/>{participants.length}</div>;
+    return <div className="flex items-center gap-2 rounded-xl bg-white/[.1] px-3 py-2 text-sm font-semibold text-white" aria-label={t('meetingRoom.stage.participantsLabel', {count: participants.length})}><Icon name="users" className="h-4 w-4"/>{participants.length}</div>;
 }
 
 function MeetingRoomSounds({meeting}) {
@@ -96,6 +98,7 @@ function MeetingRoomSounds({meeting}) {
 }
 
 function WaitingRoomRequests({meeting, schoolClass}) {
+    const {t} = useTranslation();
     const [requests, setRequests] = useState([]);
     const [deciding, setDeciding] = useState(null);
     const [message, setMessage] = useState('');
@@ -127,12 +130,12 @@ function WaitingRoomRequests({meeting, schoolClass}) {
             const response = await fetch(`${url}/${reference}`, {method: 'PATCH', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json', 'Content-Type': 'application/json'}, body: JSON.stringify({decision})});
             if (!response.ok) throw new Error();
             setRequests((items) => items.filter((request) => request.reference !== reference));
-            setMessage(decision === 'admitted' ? 'Participant admitted.' : 'Participant denied.');
-        } catch { setMessage('Unable to update this join request. Please try again.'); }
+            setMessage(t(decision === 'admitted' ? 'meetingRoom.waitingRoom.admitted' : 'meetingRoom.waitingRoom.denied'));
+        } catch { setMessage(t('meetingRoom.waitingRoom.updateFailed')); }
         finally { setDeciding(null); }
     };
 
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">Waiting room</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? `${requests.length} participant${requests.length === 1 ? '' : 's'} waiting` : 'No requests right now'}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Auto refresh</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">No participants are waiting for approval.</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">Requested {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>Admit</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>Deny</button></div></div>)}</div></section>;
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">{t('meetingRoom.waitingRoom.title')}</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? t('meetingRoom.waitingRoom.waitingCount', {count: requests.length}) : t('meetingRoom.waitingRoom.noneRightNow')}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>{t('meetingRoom.waitingRoom.autoRefresh')}</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">{t('meetingRoom.waitingRoom.empty')}</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">{t('common.requested')} {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>{t('meetingRoom.waitingRoom.admit')}</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>{t('meetingRoom.waitingRoom.deny')}</button></div></div>)}</div></section>;
 }
 
 function useMeetingElapsedTime(meeting, clock) {
@@ -176,6 +179,7 @@ function ReactionOverlay({events}) {
 }
 
 function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, mediaMessage, mediaIntentKey, mediaReady, onMessage, onLeave, onReturn}) {
+    const {t} = useTranslation();
     const panelRef = useRef(null);
     const dragRef = useRef(null);
     const [position, setPosition] = useState(null);
@@ -191,8 +195,7 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     const cameras = useTracks([{source: Track.Source.Camera, withPlaceholder: false}]);
     const preview = screens[0] || cameras.find((track) => !track.participant.isLocal) || cameras[0];
     const featuredParticipant = speakers[0] || preview?.participant || participants.find((participant) => !participant.isLocal) || localParticipant;
-    const labels = {connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', signalReconnecting: 'Reconnecting…', disconnected: 'Disconnected'};
-    const status = connectionError || labels[connection] || 'Connecting…';
+    const status = connectionError || t(`meetingRoom.connection.${connection}`) || t('meetingRoom.connection.connecting');
     const available = connection === 'connected' && meeting.status === 'active';
     const clampToViewport = useCallback(() => {
         const panel = panelRef.current;
@@ -279,28 +282,29 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
         }
     };
 
-    return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[70] flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/50 sm:w-[22rem] sm:max-w-[22rem] ${position ? 'left-0 top-0' : 'inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-5 sm:right-5'}`} aria-label="Mini meeting window">
-        <header role="group" aria-label="Move mini meeting window" tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex shrink-0 select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
+    return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[70] flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/50 sm:w-[22rem] sm:max-w-[22rem] ${position ? 'left-0 top-0' : 'inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-5 sm:right-5'}`} aria-label={t('meetingRoom.stage.miniWindow')}>
+        <header role="group" aria-label={t('meetingRoom.stage.moveMiniWindow')} tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex shrink-0 select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
             <span className="min-w-0 truncate text-sm font-bold" title={meeting.title}>{meeting.title}</span>
             <ConnectionStatus error={connectionError}/>
         </header>
-        <button type="button" onClick={onReturn} className="relative block aspect-video w-full shrink-0 overflow-hidden bg-[radial-gradient(circle_at_50%_25%,#374151,#111827_70%)] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-300" aria-label="Return to meeting">
-            {preview?.publication ? <VideoTrack trackRef={preview} className={`h-full w-full object-cover ${localCameraTrackClass(preview)}`}/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-300"><MeetingParticipantAvatar participant={featuredParticipant} size="lg"/><p className="text-sm font-semibold">Meeting is still running</p><p className="text-xs text-slate-400">Video will appear when a participant shares it.</p></div>}
+        <button type="button" onClick={onReturn} className="relative block aspect-video w-full shrink-0 overflow-hidden bg-[radial-gradient(circle_at_50%_25%,#374151,#111827_70%)] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-300" aria-label={t('meetingRoom.stage.returnToMeeting')}>
+            {preview?.publication ? <VideoTrack trackRef={preview} className={`h-full w-full object-cover ${localCameraTrackClass(preview)}`}/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-300"><MeetingParticipantAvatar participant={featuredParticipant} size="lg"/><p className="text-sm font-semibold">{t('meetingRoom.stage.stillRunning')}</p><p className="text-xs text-slate-400">{t('meetingRoom.stage.shareHint')}</p></div>}
             <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2 py-1 text-xs font-bold text-white">{status}{elapsedTime && ` · ${elapsedTime}`}</div>
         </button>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 p-3">
-            <div className="flex items-center gap-1.5" aria-label="Device controls">
-                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage('Camera could not be enabled. Check browser permissions or device availability.'); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5.5 w-5.5"/></TrackToggle>
-                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage('Microphone could not be enabled. Check browser permissions or device availability.'); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5.5 w-5.5"/></TrackToggle>
+            <div className="flex items-center gap-1.5" aria-label={t('meetingRoom.stage.deviceControls')}>
+                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage(t('meetingRoom.controlCenter.cameraEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isCameraEnabled ? 'meetingRoom.controlCenter.turnCameraOff' : 'meetingRoom.controlCenter.turnCameraOn')} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5.5 w-5.5"/></TrackToggle>
+                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage(t('meetingRoom.controlCenter.micEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isMicrophoneEnabled ? 'meetingRoom.controlCenter.muteMicrophone' : 'meetingRoom.controlCenter.unmuteMicrophone')} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5.5 w-5.5"/></TrackToggle>
             </div>
-            <div className="flex items-center gap-2"><button type="button" onClick={onReturn} className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300">Return to meeting</button><button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-wait disabled:opacity-60">{leaving ? 'Leaving' : 'Leave'}</button></div>
+            <div className="flex items-center gap-2"><button type="button" onClick={onReturn} className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300">{t('meetingRoom.stage.returnToMeeting')}</button><button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-wait disabled:opacity-60">{t(leaving ? 'meetingRoom.controlCenter.leaving' : 'meetingRoom.controlCenter.leave')}</button></div>
         </div>
         {mediaMessage && <p className="px-3 pb-3 text-xs text-amber-200" role="status">{mediaMessage}</p>}
-        <p className="sr-only">{schoolClass.name} meeting controls</p>
+        <p className="sr-only">{t('meetingRoom.stage.controlLabel', {className: schoolClass.name})}</p>
     </aside>;
 }
 
 function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
+    const {t} = useTranslation();
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
     const [copied, setCopied] = useState('');
@@ -336,10 +340,10 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
             });
 
             const failedDevices = [];
-            if (cameraNeedsChange && cameraResult.status === 'rejected') failedDevices.push('Camera');
-            if (microphoneNeedsChange && microphoneResult.status === 'rejected') failedDevices.push('microphone');
+            if (cameraNeedsChange && cameraResult.status === 'rejected') failedDevices.push('meetingRoom.controlCenter.camera');
+            if (microphoneNeedsChange && microphoneResult.status === 'rejected') failedDevices.push('meetingRoom.controlCenter.mic');
             if (failedDevices.length) {
-                onMediaMessage(`${failedDevices.join(' and ')} could not be restored. Check browser permissions or device availability.`);
+                onMediaMessage(t('meetingRoom.stage.restoreFailed', {devices: failedDevices.map((key) => t(key)).join(t('meetingRoom.stage.deviceSeparator'))}));
             }
             setMediaReady(true);
         };
@@ -348,14 +352,14 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
     }, [connection, initialMedia.camera, initialMedia.microphone, isCameraEnabled, isMicrophoneEnabled, localParticipant, mediaIntent, mediaIntentKey, onMediaMessage]);
     const copyMeetingLink = useCallback(async () => {
         if (!meetingLink || !navigator.clipboard?.writeText) {
-            setCopied('Copying the meeting link is unavailable in this browser.');
+            setCopied(t('meetingRoom.errors.copyUnavailable'));
             return;
         }
         try {
             await navigator.clipboard.writeText(meetingLink);
-            setCopied('Meeting link copied.');
+            setCopied(t('meetingRoom.errors.linkCopied'));
         } catch {
-            setCopied('Unable to copy the meeting link.');
+            setCopied(t('meetingRoom.errors.linkCopyFailed'));
         }
     }, [meetingLink]);
 
@@ -363,7 +367,7 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
 
     return <><MeetingRoomSounds meeting={meeting}/><div className={`fixed inset-x-0 bottom-0 top-14 z-10 grid overflow-y-auto bg-slate-950 p-3 sm:p-4 lg:left-56 lg:p-6 ${panel ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
         <section className="meeting-room-content relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
-            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>BBU LIVE CLASS</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus error={connectionError}/><ElapsedTime value={elapsedTime}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label="Enable meeting audio" className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
+            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>{t('meetingRoom.stage.liveClass')}</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus error={connectionError}/><ElapsedTime value={elapsedTime}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label={t('meetingRoom.stage.enableAudio')} className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
             <ReactionOverlay events={signals.reactionEvents}/>
             {(mediaMessage || moderation.message) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderation.message}</div>}
             <div className="relative z-0 min-h-0 flex-1 py-3"><MeetingStage view={view} onViewChange={setView}/></div>
@@ -375,6 +379,7 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
 }
 
 export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, mode = 'full', onReturn, onLeave}) {
+    const {t} = useTranslation();
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
     const [connectionError, setConnectionError] = useState('');
     const [mediaMessage, setMediaMessage] = useState('');
@@ -384,8 +389,8 @@ export default function MeetingRoomExperience({credentials, meeting, clock, scho
 
     return <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio={audio} video={video}
         onConnected={() => setConnectionError('')}
-        onError={() => setConnectionError('Unable to join the meeting. Please try again.')}
-        onDisconnected={() => setConnectionError('The meeting connection was interrupted. Refresh to reconnect.')}
+        onError={() => setConnectionError(t('meetingRoom.errors.roomJoinFailed'))}
+        onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
         <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
     </LiveKitRoom>;

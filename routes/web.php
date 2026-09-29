@@ -84,6 +84,7 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     Route::post('/my-account/avatar', [MyAccountController::class, 'updateAvatar'])->name('my-account.avatar.update');
     Route::delete('/my-account/avatar', [MyAccountController::class, 'destroyAvatar'])->name('my-account.avatar.destroy');
     Route::put('/my-account/security', [MyAccountController::class, 'updatePassword'])->name('my-account.security.update');
+    Route::put('/my-account/locale', [MyAccountController::class, 'updateLocale'])->name('my-account.locale.update');
     Route::get('/classes', [ClassWorkspaceController::class, 'index'])->name('classes.index');
     Route::post('/classes/join', [ClassJoinController::class, 'store'])->middleware('throttle:class-join-code')->name('classes.join');
     Route::get('/classes/{schoolClass}', [ClassWorkspaceController::class, 'show'])->name('classes.show');

@@ -7,10 +7,11 @@ export function localCameraTrackClass(trackRef) {
 }
 
 // All view choices stay in the mounted room's React state; they never change grants.
+// Labels are translation keys so the interface language can change without touching view state.
 export const meetingViews = [
-    {id: 'gallery', label: 'Gallery', description: 'See everyone together', icon: 'users'},
-    {id: 'speaker', label: 'Speaker / Focus', description: 'Follow the speaker or focus a person', icon: 'user'},
-    {id: 'screen', label: 'Screen-share focus', description: 'Keep shared content on the main stage', icon: 'screen'},
+    {id: 'gallery', labelKey: 'meetingRoom.views.gallery', descriptionKey: 'meetingRoom.views.galleryDescription', icon: 'users'},
+    {id: 'speaker', labelKey: 'meetingRoom.views.speaker', descriptionKey: 'meetingRoom.views.speakerDescription', icon: 'user'},
+    {id: 'screen', labelKey: 'meetingRoom.views.screen', descriptionKey: 'meetingRoom.views.screenDescription', icon: 'screen'},
 ];
 
 export function selectMeetingStage({view, cameras, screens, speakers, focusedIdentity}) {

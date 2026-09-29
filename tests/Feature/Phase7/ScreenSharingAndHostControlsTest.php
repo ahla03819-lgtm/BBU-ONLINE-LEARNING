@@ -106,10 +106,12 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $moderation = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingModeration.js'));
         $view = file_get_contents(resource_path('js/Components/Meetings/LiveKit/meetingView.js'));
         $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
+        $catalogue = file_get_contents(resource_path('js/i18n/en.js'));
 
-        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'Screen shared by', 'Share screen', 'Stop sharing screen', 'setScreenShareEnabled(false)', 'removing === record.reference', 'Participant removed.', 'Unable to remove the participant.', 'Reconnecting…'] as $contract) {
+        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'meetingRoom.stage.sharedBy', 'meetingRoom.controlCenter.shareScreen', 'meetingRoom.controlCenter.stopSharingScreen', 'setScreenShareEnabled(false)', 'removing === record.reference', 'Participant removed.', 'meetingRoom.panels.removeFailed'] as $contract) {
             $this->assertStringContainsString($contract, $component.$controls.$sidePanel.$stage.$moderation);
         }
+        $this->assertStringContainsString('reconnecting: \'Reconnecting…\'', $catalogue);
         $this->assertStringContainsString("connection === 'connected' && meeting.status === 'active'", $controls);
         $this->assertStringContainsString("['ending', 'ended', 'cancelled']", $controls);
         $this->assertStringNotContainsString('livekit_identity', $component.$controls.$sidePanel.$stage.$moderation);
