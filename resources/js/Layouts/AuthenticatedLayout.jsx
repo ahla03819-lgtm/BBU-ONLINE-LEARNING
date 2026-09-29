@@ -8,10 +8,36 @@ import UserAvatar from '../Components/UI/UserAvatar';
 import AnnouncementPopup, {clearAnnouncementSession} from '../Components/Announcements/AnnouncementPopup';
 import {usePersistentMeeting} from '../Providers/PersistentMeetingProvider';
 import {usePersistentConversationCall} from '../Providers/PersistentConversationCallProvider';
+import {useTranslation} from '../i18n/LocaleProvider';
+
+const pageTitles = {
+    'MyAccount/Show': 'account.title',
+    Dashboard: 'nav.items.dashboard',
+    'Classes/Index': 'nav.items.classes',
+    'Classes/Show': 'nav.items.classes',
+    'Attendance/Index': 'nav.items.attendance',
+    'Attendance/MyAttendance': 'nav.items.myAttendance',
+    'Results/Index': 'nav.items.results',
+    'Results/MyResults': 'nav.items.myResults',
+    Calendar: 'nav.items.calendar',
+    'Calendar/Index': 'nav.items.calendar',
+    'Meetings/Index': 'nav.items.meetings',
+    'Meetings/Show': 'meetings.show.detailsTitle',
+    'Meetings/Lobby': 'meetingRoom.lobby.title',
+    'Meetings/Room': 'meetings.title',
+    'Meetings/Attendance': 'meetings.title',
+    'Meetings/Create': 'meetings.create.title',
+    'Meetings/Edit': 'meetings.edit.title',
+    'Collaboration/Index': 'nav.items.collaboration',
+    'Conversations/Index': 'nav.items.chats',
+    'Conversations/CallRoom': 'nav.items.chats',
+    'Notifications/Index': 'nav.items.notifications',
+};
 
 export default function AuthenticatedLayout({ children }) {
     const page = usePage();
     const { auth, flash, notificationInbox } = page.props;
+    const { t } = useTranslation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
@@ -48,11 +74,11 @@ export default function AuthenticatedLayout({ children }) {
     };
 
     const navigation = useMemo(() => [
-        {label: 'Workspace', items: [{label: 'Dashboard', href: '/dashboard', component: 'Dashboard', icon: 'home'}, {label: 'Classes', href: auth.permissions.includes('classes.view') ? '/classes' : null, component: 'Classes/Index', icon: 'school'}]},
-        {label: 'Learning', items: [{label: 'Attendance', href: canManageAttendance ? '/attendance' : canViewOwnAttendance ? '/my-attendance' : null, component: canManageAttendance ? 'Attendance/Index' : 'Attendance/MyAttendance', icon: 'calendar'}, {label: canViewOwnResults ? 'My Results' : 'Results', href: canViewOwnResults ? '/my-results' : canViewResults ? '/results' : null, component: canViewOwnResults ? 'Results/MyResults' : 'Results/Index', icon: 'chart'}, {label: 'Coursework', href: null, icon: 'clipboard', visible: auth.permissions.includes('assignments.view')}, {label: 'Calendar', href: auth.permissions.includes('meetings.view') || auth.permissions.includes('assignments.view') ? '/calendar' : null, component: 'Calendar/Index', icon: 'calendar'}, {label: 'Meetings', href: null, icon: 'video', visible: auth.permissions.includes('meetings.view')}]},
-        {label: 'Communication', items: [{label: 'Collaboration', href: auth.permissions.includes('channels.view') ? '/collaboration' : null, component: 'Collaboration/Index', icon: 'messages'}, {label: 'Chats', href: auth.permissions.includes('classes.view') ? '/conversations' : null, component: 'Conversations/Index', icon: 'messages'}, {label: 'Notifications', href: canViewNotifications ? '/notifications' : null, component: 'Notifications/Index', icon: 'bell', badge: unreadCount}]},
-        {label: 'Administration', items: [{label: 'Academic settings', href: canManageAcademics ? '/academics' : null, component: 'Academics/Index', icon: 'settings'}, {label: 'Students & teachers', href: canManagePeople ? '/people' : null, component: 'People/Index', icon: 'users'}, {label: 'Users & permissions', href: canViewUsers ? '/users' : null, component: 'Users/Index', icon: 'users'}]},
-    ].map((group) => ({...group, items: group.items.filter((item) => item.href || item.visible)})).filter((group) => group.items.length), [auth.permissions, canManageAcademics, canManagePeople, canManageAttendance, canViewOwnAttendance, canViewOwnResults, canViewResults, canViewNotifications, unreadCount]);
+        {label: t('nav.groups.workspace'), items: [{label: t('nav.items.dashboard'), href: '/dashboard', component: 'Dashboard', icon: 'home'}, {label: t('nav.items.classes'), href: auth.permissions.includes('classes.view') ? '/classes' : null, component: 'Classes/Index', icon: 'school'}]},
+        {label: t('nav.groups.learning'), items: [{label: t('nav.items.attendance'), href: canManageAttendance ? '/attendance' : canViewOwnAttendance ? '/my-attendance' : null, component: canManageAttendance ? 'Attendance/Index' : 'Attendance/MyAttendance', icon: 'calendar'}, {label: t(canViewOwnResults ? 'nav.items.myResults' : 'nav.items.results'), href: canViewOwnResults ? '/my-results' : canViewResults ? '/results' : null, component: canViewOwnResults ? 'Results/MyResults' : 'Results/Index', icon: 'chart'}, {label: t('nav.items.coursework'), href: null, icon: 'clipboard', visible: auth.permissions.includes('assignments.view')}, {label: t('nav.items.calendar'), href: auth.permissions.includes('meetings.view') || auth.permissions.includes('assignments.view') ? '/calendar' : null, component: 'Calendar/Index', icon: 'calendar'}, {label: t('nav.items.meetings'), href: null, icon: 'video', visible: auth.permissions.includes('meetings.view')}]},
+        {label: t('nav.groups.communication'), items: [{label: t('nav.items.collaboration'), href: auth.permissions.includes('channels.view') ? '/collaboration' : null, component: 'Collaboration/Index', icon: 'messages'}, {label: t('nav.items.chats'), href: auth.permissions.includes('classes.view') ? '/conversations' : null, component: 'Conversations/Index', icon: 'messages'}, {label: t('nav.items.notifications'), href: canViewNotifications ? '/notifications' : null, component: 'Notifications/Index', icon: 'bell', badge: unreadCount}]},
+        {label: t('nav.groups.administration'), items: [{label: t('nav.items.academicSettings'), href: canManageAcademics ? '/academics' : null, component: 'Academics/Index', icon: 'settings'}, {label: t('nav.items.people'), href: canManagePeople ? '/people' : null, component: 'People/Index', icon: 'users'}, {label: t('nav.items.users'), href: canViewUsers ? '/users' : null, component: 'Users/Index', icon: 'users'}]},
+    ].map((group) => ({...group, items: group.items.filter((item) => item.href || item.visible)})).filter((group) => group.items.length), [auth.permissions, canManageAcademics, canManagePeople, canManageAttendance, canViewOwnAttendance, canViewOwnResults, canViewResults, canViewNotifications, unreadCount, t]);
 
     useEffect(() => {
         const close = (event) => event.key === 'Escape' && setSidebarOpen(false);
@@ -72,31 +98,31 @@ export default function AuthenticatedLayout({ children }) {
         return removeBeforeListener;
     }, [auth.user.id]);
 
-    const title = page.component === 'MyAccount/Show'
-        ? 'My Account'
+    const title = pageTitles[page.component]
+        ? t(pageTitles[page.component])
         : (page.component.split('/').pop().replace(/([A-Z])/g, ' $1').trim() || 'BBU ONLINE LEARNING');
 
     const incomingInitiator = incomingCall?.initiator ?? {};
     const outgoingInitiator = outgoingCall?.initiator ?? {};
-    const incomingCallerName = incomingInitiator.name ?? 'Caller';
-    const outgoingCallerName = outgoingInitiator.name ?? 'Caller';
+    const incomingCallerName = incomingInitiator.name ?? t('conversations.caller');
+    const outgoingCallerName = outgoingInitiator.name ?? t('conversations.caller');
 
     const renderIncomingCall = incomingCall && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4">
             <section role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
                 <UserAvatar name={incomingCallerName} avatarUrl={incomingInitiator.avatar_url} size="lg" className="mx-auto"/>
-                <p className="mt-4 text-sm text-slate-500">Incoming {incomingCall.type ?? 'audio'} call</p>
+                <p className="mt-4 text-sm text-slate-500">{t('conversations.incomingCall', {type: t(`conversations.${incomingCall.type ?? 'audio'}`)})}</p>
                 <h2 className="mt-1 text-xl font-bold text-slate-900">{incomingCallerName}</h2>
                 <p className="mt-1 text-sm text-slate-600">{incomingCall.name}</p>
                 <div className="mt-6 flex justify-center gap-3">
-                    <button onClick={handleDecline} className="rounded-xl border border-rose-200 px-4 py-2.5 font-bold text-rose-700">Decline</button>
+                    <button onClick={handleDecline} className="rounded-xl border border-rose-200 px-4 py-2.5 font-bold text-rose-700">{t('conversations.decline')}</button>
                     {incomingCall.type === 'video' ? (
                         <>
-                            <button onClick={() => handleAccept(false)} className="rounded-xl bg-blue-800 px-4 py-2.5 font-bold text-white">Accept</button>
-                            <button onClick={() => handleAccept(true)} className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 font-bold text-slate-700">Audio only</button>
+                            <button onClick={() => handleAccept(false)} className="rounded-xl bg-blue-800 px-4 py-2.5 font-bold text-white">{t('conversations.accept')}</button>
+                            <button onClick={() => handleAccept(true)} className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 font-bold text-slate-700">{t('conversations.audioOnly')}</button>
                         </>
                     ) : (
-                        <button onClick={() => handleAccept(false)} className="rounded-xl bg-blue-800 px-4 py-2.5 font-bold text-white">Accept</button>
+                        <button onClick={() => handleAccept(false)} className="rounded-xl bg-blue-800 px-4 py-2.5 font-bold text-white">{t('conversations.accept')}</button>
                     )}
                 </div>
             </section>
@@ -108,11 +134,11 @@ export default function AuthenticatedLayout({ children }) {
             <div className="flex items-center gap-3">
                 <UserAvatar name={outgoingCallerName} avatarUrl={outgoingInitiator.avatar_url} size="md"/>
                 <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-600">{outgoingCall.type === 'video' ? 'Video call' : 'Audio call'}</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-600">{outgoingCall.type === 'video' ? t('conversations.videoCall') : t('conversations.audioCall')}</p>
                     <h3 className="truncate text-base font-bold text-slate-900">{outgoingCallerName}</h3>
-                    <p className="text-sm text-slate-600">Calling…</p>
+                    <p className="text-sm text-slate-600">{t('conversations.calling')}</p>
                 </div>
-                <button type="button" onClick={() => cancelOutgoingCall(outgoingCall)} className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-700">Cancel</button>
+                <button type="button" onClick={() => cancelOutgoingCall(outgoingCall)} className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-bold text-rose-700">{t('common.cancel')}</button>
             </div>
         </div>
     );

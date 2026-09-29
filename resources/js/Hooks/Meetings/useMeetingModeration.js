@@ -1,8 +1,10 @@
 import {useEffect, useRef, useState} from 'react';
 import {useAppSounds} from '../../Sound/AppSounds';
+import {useTranslation} from '../../i18n/LocaleProvider';
 
 // These are the existing policy-protected HTTP actions, never LiveKit data commands.
 export default function useMeetingModeration({meeting, schoolClass, connected, participantIdentities}) {
+    const {t} = useTranslation();
     const [records, setRecords] = useState([]);
     const [requests, setRequests] = useState([]);
     const [waitingLoaded, setWaitingLoaded] = useState(false);
@@ -38,7 +40,7 @@ export default function useMeetingModeration({meeting, schoolClass, connected, p
         };
         const refresh = async () => {
             await Promise.allSettled([
-                load('participants', (data) => { setRecords(data.participants); setRosterError(''); }, () => { setRecords([]); setRosterError('Unable to refresh participant controls. Retrying…'); }),
+                load('participants', (data) => { setRecords(data.participants); setRosterError(''); }, () => { setRecords([]); setRosterError(t('meetingRoom.controlCenter.moderationFailed')); }),
                 meeting.can_manage_join_requests ? load('waiting-room/requests', (data) => {
                     const references = new Set(data.requests.map((request) => request.reference));
                     if (knownRequests.current) references.forEach((reference) => {
@@ -46,14 +48,14 @@ export default function useMeetingModeration({meeting, schoolClass, connected, p
                     });
                     knownRequests.current = references;
                     setRequests(data.requests); setWaitingLoaded(true); setWaitingError('');
-                }, () => { setRequests([]); setWaitingLoaded(false); setWaitingError('Unable to refresh the waiting room. Retrying…'); }) : Promise.resolve(),
+                }, () => { setRequests([]); setWaitingLoaded(false); setWaitingError(t('meetingRoom.waitingRoom.moderationFailed')); }) : Promise.resolve(),
             ]);
             if (!disposed && !controller.signal.aborted) timer = window.setTimeout(refresh, 5000);
         };
         if (!meeting.can_manage_join_requests) { setRequests([]); setWaitingLoaded(false); }
         refresh();
         return () => { disposed = true; controller.abort(); window.clearTimeout(timer); };
-    }, [available, base, meeting.uuid, meeting.can_manage_join_requests, participantIdentities, revision, sounds]);
+    }, [available, base, meeting.uuid, meeting.can_manage_join_requests, participantIdentities, revision, sounds, t]);
 
     const perform = async (key, url, method, body, success) => {
         if (!available || busyRef.current) return;
@@ -66,7 +68,7 @@ export default function useMeetingModeration({meeting, schoolClass, connected, p
             if (!response.ok) throw new Error();
             if (mounted.current) setMessage(success);
         } catch {
-            if (mounted.current) setMessage(key === 'end' ? 'Unable to end this meeting. Please try again.' : key.startsWith('remove:') ? 'Unable to remove the participant. Please try again.' : 'Unable to update this join request. Please try again.');
+            if (mounted.current) setMessage(key === 'end' ? t('meetingRoom.panels.endFailed') : key.startsWith('remove:') ? t('meetingRoom.panels.removeFailed') : t('meetingRoom.errors.updateRequestFailed'));
         } finally {
             busyRef.current = null;
             if (mounted.current) { setBusy(null); setRevision((value) => value + 1); }
