@@ -167,42 +167,76 @@ body { background: var(--bbu-canvas); color: var(--bbu-ink); @apply antialiased;
     container-type: inline-size;
 }
 
+/* Shared screens are letterboxed into the stage they are given: fill the box,
+   keep the aspect ratio, never crop. Higher specificity than the LiveKit
+   default so the stage wins regardless of stylesheet order. */
+.edway-live-room .meeting-shared-content,
+.edway-live-room .lk-participant-media-video[data-lk-source="screen_share"] {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+}
+
+/* Desktop control dock: one row, no wrapping. Secondary controls collapse into
+   the More menu as the meeting column narrows (for example when Host Controls,
+   Chat or People is open). */
+.meeting-control-bar {
+    flex-wrap: nowrap;
+}
+
 .meeting-more-utility,
 .meeting-more-narrow {
     display: none;
 }
 
-@container (max-width: 1240px) {
-    .meeting-control-bar--panel-open .meeting-control-secondary {
+@container (max-width: 1480px) {
+    .meeting-control-bar .meeting-control-secondary {
         display: none;
-    }
-
-    .meeting-control-bar--panel-open .meeting-device-control {
-        min-width: 130px;
-    }
-
-    .meeting-control-bar--panel-open .meeting-device-toggle {
-        min-width: 64px;
     }
 }
 
-@container (max-width: 1040px) {
-    .meeting-control-bar--panel-open .meeting-control-utility {
+@container (max-width: 1180px) {
+    .meeting-control-bar .meeting-control-utility {
         display: none;
     }
 
-    .meeting-control-bar--panel-open .meeting-more-utility {
+    .meeting-control-bar .meeting-device-control {
+        min-width: 118px;
+    }
+
+    .meeting-control-bar .meeting-device-toggle {
+        min-width: 56px;
+    }
+
+    .meeting-control-bar .meeting-more-utility {
         display: flex;
     }
 }
 
-@container (max-width: 860px) {
-    .meeting-control-bar--panel-open .meeting-control-chat,
-    .meeting-control-bar--panel-open .meeting-control-people {
+@container (max-width: 960px) {
+    .meeting-control-bar .meeting-control-chat,
+    .meeting-control-bar .meeting-control-people {
         display: none;
     }
 
-    .meeting-control-bar--panel-open .meeting-more-narrow {
+    .meeting-control-bar .meeting-more-narrow {
         display: flex;
+    }
+}
+
+@container (max-width: 640px) {
+    .meeting-control-bar {
+        flex-wrap: wrap;
+    }
+
+    .meeting-control-bar .meeting-device-control {
+        min-width: 0;
+        flex: 1 1 40%;
+    }
+
+    .meeting-control-bar .meeting-device-toggle {
+        min-width: 0;
+        flex: 1;
     }
 }
