@@ -12,12 +12,15 @@ import {usePersistentMeeting} from '../../Providers/PersistentMeetingProvider';
 import {localCameraMirrorClass} from '../../Components/Meetings/LiveKit/meetingView';
 import {clearMeetingMediaIntent, meetingMediaIntentKey, readMeetingMediaIntent, writeMeetingMediaIntent} from '../../Components/Meetings/LiveKit/meetingMediaIntent';
 import {useTranslation} from '../../i18n/LocaleProvider';
+import {noticeKey, noticeRaw, renderNotice} from '../../i18n/notice';
 
 export default function Lobby({schoolClass, meeting: initialMeeting, resumeSession = false}) {
     const {t} = useTranslation();
     const [meeting, setMeeting] = useState(initialMeeting);
     const [joining, setJoining] = useState(false);
-    const [error, setError] = useState('');
+    // A notice descriptor, not a translated string: server text stays raw and the
+    // catalog fallbacks resolve at render time.
+    const [error, setError] = useState(null);
     const [joinRequest, setJoinRequest] = useState(initialMeeting.join_request);
     const [pendingRequests, setPendingRequests] = useState([]);
     const [deciding, setDeciding] = useState(null);
@@ -40,7 +43,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
         events.forEach((event) => channel.listen(`.meeting.${event}`, updateMeeting));
         const removed = ({participant}) => {
             if (participant.reference !== meeting.participant_reference) return;
-            setError(t('meetingRoom.errors.removed'));
+            setError(noticeKey('meetingRoom.errors.removed'));
             if (activeMeeting?.meeting.uuid === meeting.uuid) leaveMeeting();
             media.stop();
         };
@@ -93,17 +96,18 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
         if (!meeting.can_join || meeting.status !== 'active' || joining) return;
         if (activeMeeting) {
             if (activeMeeting.meeting.uuid === meeting.uuid) return returnToMeeting();
-            setError(t('meetingRoom.errors.alreadyInAnother'));
+            setError(noticeKey('meetingRoom.errors.alreadyInAnother'));
             return;
         }
-        setJoining(true); setError(''); media.stop();
+        setJoining(true); setError(null); media.stop();
+
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
             if (!response.ok) {
                 if ([401, 403, 404].includes(response.status)) clearMeetingMediaIntent(mediaIntentKey);
-                throw new Error(data.message || data.errors?.meeting?.[0] || t('meetingRoom.errors.joinFailed'));
+                throw new Error(data.message || data.errors?.meeting?.[0] || '');
             }
             const clock = {serverNowAt: data.server_now_at, receivedAt: performance.now()};
             const roomUrl = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`;
@@ -133,7 +137,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                 },
             });
             if (!started.ok) throw new Error(started.message);
-        } catch (problem) { setError(problem.message === 'Failed to fetch' ? t('meetingRoom.errors.providerUnavailable') : problem.message); }
+        } catch (problem) { setError(problem.message === 'Failed to fetch' ? noticeKey('meetingRoom.errors.providerUnavailable') : noticeRaw(problem.message) || noticeKey('meetingRoom.errors.joinFailed')); }
         finally { setJoining(false); }
     };
     useEffect(() => {
@@ -147,31 +151,31 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
     const join = async () => {
         if (meeting.can_bypass_waiting_room || (joinRequest?.status === 'admitted' && joinRequest?.can_enter)) return issueToken();
         if (!meeting.can_join || meeting.status !== 'active' || joining) return;
-        setJoining(true); setError('');
+        setJoining(true); setError(null);
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
-            if (!response.ok) throw new Error(data.message || t('meetingRoom.errors.requestFailed'));
+            if (!response.ok) throw new Error(data.message || '');
             setJoinRequest(data.request);
-        } catch (problem) { setError(problem.message || t('meetingRoom.errors.requestFailed')); }
+        } catch (problem) { setError(noticeRaw(problem.message) || noticeKey('meetingRoom.errors.requestFailed')); }
         finally { setJoining(false); }
     };
     const cancelRequest = async () => {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
         const data = await response.json();
-        if (response.ok) setJoinRequest(data.request); else setError(data.message || t('meetingRoom.errors.cancelRequestFailed'));
+        if (response.ok) setJoinRequest(data.request); else setError(noticeRaw(data.message) || noticeKey('meetingRoom.errors.cancelRequestFailed'));
     };
     const decide = async (reference, decision) => {
         if (deciding) return;
-        setDeciding(reference); setError('');
+        setDeciding(reference); setError(null);
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room/requests/${reference}`, {method: 'PATCH', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json', 'Content-Type': 'application/json'}, body: JSON.stringify({decision})});
             if (!response.ok) throw new Error();
             setPendingRequests((items) => items.filter((request) => request.reference !== reference));
-        } catch { setError(t('meetingRoom.errors.updateRequestFailed')); }
+        } catch { setError(noticeKey('meetingRoom.errors.updateRequestFailed')); }
         finally { setDeciding(null); }
     };
     const classContext = `${schoolClass.name}${schoolClass.section ? ` · ${schoolClass.section}` : ''}${meeting.subject ? ` · ${meeting.subject.code} ${meeting.subject.name}` : ''}`;
@@ -183,7 +187,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,.75fr)]">
                 <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-[#151729] p-3 shadow-[0_20px_40px_rgba(24,24,52,.2)]"><div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_72%_0%,rgba(129,111,255,.4),transparent_55%)]"/><div className="relative flex items-center justify-between px-2 pb-3 text-xs font-semibold text-slate-300"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400"/>{t('meetingRoom.lobby.deviceCheck')}</span><span>{t('meetingRoom.lobby.previewOnly')}</span></div><div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-[#292c54] to-[#0b0c19]"><video ref={media.videoRef} autoPlay muted playsInline className={`h-full w-full object-cover ${localCameraMirrorClass}`} aria-label={t('meetingRoom.lobby.cameraPreviewLabel')}/>{!media.cameraEnabled && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-300"><span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-violet-200"><Icon name="video-off" className="h-7 w-7"/></span><p className="text-sm font-medium">{t('meetingRoom.lobby.cameraIsOff')}</p><button className="rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20" onClick={media.toggleCamera}>{t('meetingRoom.lobby.turnOnCamera')}</button></div>}</div><p className="relative px-2 pt-3 text-xs leading-5 text-slate-400">{t('meetingRoom.lobby.previewHint')}</p></section>
                 <SectionCard className="p-6" title={t(`meetingRoom.lobby.${joinRequest?.status === 'pending' ? 'waitingRoom' : 'readyToJoin'}`)}
-                description={t(`meetingRoom.lobby.${joinRequest?.status === 'pending' ? 'waitingDescription' : 'readyDescription'}`)}>{media.error && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">{media.error}</p>}{error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}{joinRequest?.status === 'pending' ? <WaitingRoom request={joinRequest} onCancel={cancelRequest}/> : <><div className="mt-5 grid grid-cols-2 gap-3"><DeviceToggle enabled={media.cameraEnabled} icon={media.cameraEnabled ? 'video' : 'video-off'} label={t(media.cameraEnabled ? 'meetingRoom.lobby.cameraOn' : 'meetingRoom.lobby.cameraOff')} onClick={media.toggleCamera}/><DeviceToggle enabled={media.microphoneEnabled} icon={media.microphoneEnabled ? 'mic' : 'mic-off'} label={t(media.microphoneEnabled ? 'meetingRoom.lobby.micOn' : 'meetingRoom.lobby.micOff')} onClick={media.toggleMicrophone}/></div><DeviceSelect label={t('meetingRoom.lobby.cameraLabel')} icon="video" value={media.cameraId} onChange={(event) => media.chooseCamera(event.target.value)} options={media.devices.cameras} optionLabel={media.labels.camera} defaultLabel={t('meetingRoom.lobby.defaultCamera')}/><DeviceSelect label={t('meetingRoom.lobby.microphoneLabel')} icon="mic" value={media.microphoneId} onChange={(event) => media.chooseMicrophone(event.target.value)} options={media.devices.microphones} optionLabel={media.labels.microphone} defaultLabel={t('meetingRoom.lobby.defaultMicrophone')}/><div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">{t('meetingRoom.lobby.microphoneTest')}</p><p className="mt-0.5 text-xs text-slate-500">{t('meetingRoom.lobby.microphoneTestHint')}</p></div><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testMicrophone}>{t(media.testingMicrophone ? 'meetingRoom.lobby.stopTest' : 'meetingRoom.lobby.testMic')}</button></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-100" style={{width: `${media.microphoneLevel}%`}}/></div></div><DeviceSelect label={t('meetingRoom.lobby.speakerLabel')} icon="volume" value={media.speakerId} onChange={(event) => media.setSpeakerId(event.target.value)} options={media.devices.speakers} optionLabel={media.labels.speaker} defaultLabel={t('meetingRoom.lobby.defaultSpeaker')} disabled={!media.speakerSelectionSupported}/><div className="mt-2 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">{t(media.speakerSelectionSupported ? 'meetingRoom.lobby.speakerHint' : 'meetingRoom.lobby.speakerDefaultHint')}</p><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testSpeaker}>{t(media.testingSpeaker ? 'meetingRoom.lobby.playing' : 'meetingRoom.lobby.testSpeaker')}</button><audio ref={media.speakerRef} preload="none" className="hidden"/></div><button className="btn mt-6 w-full justify-center py-3" disabled={!meeting.can_join || meeting.status !== 'active' || joining} onClick={join}><Icon name="video" className="h-4 w-4"/>{joining
+                description={t(`meetingRoom.lobby.${joinRequest?.status === 'pending' ? 'waitingDescription' : 'readyDescription'}`)}>{media.error && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">{renderNotice(media.error, t)}</p>}{error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{renderNotice(error, t)}</p>}{joinRequest?.status === 'pending' ? <WaitingRoom request={joinRequest} onCancel={cancelRequest}/> : <><div className="mt-5 grid grid-cols-2 gap-3"><DeviceToggle enabled={media.cameraEnabled} icon={media.cameraEnabled ? 'video' : 'video-off'} label={t(media.cameraEnabled ? 'meetingRoom.lobby.cameraOn' : 'meetingRoom.lobby.cameraOff')} onClick={media.toggleCamera}/><DeviceToggle enabled={media.microphoneEnabled} icon={media.microphoneEnabled ? 'mic' : 'mic-off'} label={t(media.microphoneEnabled ? 'meetingRoom.lobby.micOn' : 'meetingRoom.lobby.micOff')} onClick={media.toggleMicrophone}/></div><DeviceSelect label={t('meetingRoom.lobby.cameraLabel')} icon="video" value={media.cameraId} onChange={(event) => media.chooseCamera(event.target.value)} options={media.devices.cameras} optionLabel={media.labels.camera} defaultLabel={t('meetingRoom.lobby.defaultCamera')}/><DeviceSelect label={t('meetingRoom.lobby.microphoneLabel')} icon="mic" value={media.microphoneId} onChange={(event) => media.chooseMicrophone(event.target.value)} options={media.devices.microphones} optionLabel={media.labels.microphone} defaultLabel={t('meetingRoom.lobby.defaultMicrophone')}/><div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">{t('meetingRoom.lobby.microphoneTest')}</p><p className="mt-0.5 text-xs text-slate-500">{t('meetingRoom.lobby.microphoneTestHint')}</p></div><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testMicrophone}>{t(media.testingMicrophone ? 'meetingRoom.lobby.stopTest' : 'meetingRoom.lobby.testMic')}</button></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-100" style={{width: `${media.microphoneLevel}%`}}/></div></div><DeviceSelect label={t('meetingRoom.lobby.speakerLabel')} icon="volume" value={media.speakerId} onChange={(event) => media.setSpeakerId(event.target.value)} options={media.devices.speakers} optionLabel={media.labels.speaker} defaultLabel={t('meetingRoom.lobby.defaultSpeaker')} disabled={!media.speakerSelectionSupported}/><div className="mt-2 flex items-center justify-between gap-3"><p className="text-xs text-slate-500">{t(media.speakerSelectionSupported ? 'meetingRoom.lobby.speakerHint' : 'meetingRoom.lobby.speakerDefaultHint')}</p><button type="button" className="btn-secondary shrink-0 px-3 py-2 text-xs" onClick={media.testSpeaker}>{t(media.testingSpeaker ? 'meetingRoom.lobby.playing' : 'meetingRoom.lobby.testSpeaker')}</button><audio ref={media.speakerRef} preload="none" className="hidden"/></div><button className="btn mt-6 w-full justify-center py-3" disabled={!meeting.can_join || meeting.status !== 'active' || joining} onClick={join}><Icon name="video" className="h-4 w-4"/>{joining
                         ? t('meetingRoom.lobby.joining')
                         : joinRequest?.status === 'admitted' && joinRequest?.can_enter
                             ? t('meetingRoom.lobby.enterLiveClass')

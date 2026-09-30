@@ -1,15 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from '../../i18n/LocaleProvider';
-
-// Device names are translated labels; each error branch owns its own sentence.
-const friendlyMediaError = (error, device, t) => {
-    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return t('meetingRoom.lobby.mediaError.permissionBlocked', {device});
-    if (error?.name === 'NotFoundError') return t('meetingRoom.lobby.mediaError.notFound', {device});
-    if (error?.name === 'NotReadableError') return t('meetingRoom.lobby.mediaError.inUse', {device});
-    if (error?.name === 'OverconstrainedError') return t('meetingRoom.lobby.mediaError.unavailable', {device});
-
-    return t('meetingRoom.lobby.mediaError.startFailed', {device});
-};
+import {noticeKey} from '../../i18n/notice';
+import {friendlyMediaError} from './mediaPreviewError';
 
 const labelFor = (device, fallback, index, t) => device.label || t('meetingRoom.controlCenter.deviceNumber', {device: fallback, index: index + 1});
 
@@ -26,7 +18,8 @@ export default function useMediaPreview() {
     const [speakerId, setSpeakerId] = useState('');
     const [cameraEnabled, setCameraEnabled] = useState(false);
     const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
-    const [error, setError] = useState('');
+    // A notice descriptor, not a translated string: see resources/js/i18n/notice.js
+    const [error, setError] = useState(null);
     const [microphoneLevel, setMicrophoneLevel] = useState(0);
     const [testingMicrophone, setTestingMicrophone] = useState(false);
     const [testingSpeaker, setTestingSpeaker] = useState(false);
@@ -69,11 +62,11 @@ export default function useMediaPreview() {
 
     const prepare = useCallback(async (nextCamera = cameraEnabled, nextMicrophone = microphoneEnabled, nextCameraId = cameraId, nextMicrophoneId = microphoneId) => {
         if (!navigator.mediaDevices?.getUserMedia) {
-            setError(t('meetingRoom.lobby.deviceUnavailable'));
+            setError(noticeKey('meetingRoom.lobby.deviceUnavailable'));
             return false;
         }
         stop();
-        setError('');
+        setError(null);
         if (!nextCamera && !nextMicrophone) return true;
 
         try {
@@ -88,7 +81,7 @@ export default function useMediaPreview() {
         } catch (problem) {
             setCameraEnabled(false);
             setMicrophoneEnabled(false);
-            setError(friendlyMediaError(problem, t(nextCamera && nextMicrophone ? 'meetingRoom.lobby.mediaError.cameraOrMicrophone' : nextCamera ? 'meetingRoom.controlCenter.cameraLabel' : 'meetingRoom.controlCenter.microphoneLabel'), t));
+            setError(friendlyMediaError(problem, nextCamera && nextMicrophone ? 'meetingRoom.lobby.mediaError.cameraOrMicrophone' : nextCamera ? 'meetingRoom.controlCenter.cameraLabel' : 'meetingRoom.controlCenter.microphoneLabel'));
             return false;
         }
     }, [cameraEnabled, microphoneEnabled, cameraId, microphoneId, enumerate, stop]);
@@ -129,7 +122,7 @@ export default function useMediaPreview() {
         }
         const Context = window.AudioContext || window.webkitAudioContext;
         if (!Context || !stream) {
-            setError(t('meetingRoom.lobby.micTestUnavailable'));
+            setError(noticeKey('meetingRoom.lobby.micTestUnavailable'));
             return;
         }
         stopMeter();
@@ -152,7 +145,7 @@ export default function useMediaPreview() {
     const testSpeaker = useCallback(async () => {
         const audio = speakerRef.current;
         if (!audio) return;
-        setError('');
+        setError(null);
         try {
             if (speakerSelectionSupported && speakerId) await audio.setSinkId(speakerId);
             audio.src = 'data:audio/wav;base64,UklGRl4AAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YToAAAAAAB4eOTlPT0M5Hh4AAAAeHjk5T09DOx4eAAAAHh45OU9PQzseHgAAAB4eOTlPT0M7Hh4AAAA=';
@@ -161,7 +154,7 @@ export default function useMediaPreview() {
             window.setTimeout(() => setTestingSpeaker(false), 900);
         } catch {
             setTestingSpeaker(false);
-            setError(t('meetingRoom.lobby.speakerTestFailed'));
+            setError(noticeKey('meetingRoom.lobby.speakerTestFailed'));
         }
     }, [speakerId, speakerSelectionSupported]);
 

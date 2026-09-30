@@ -146,7 +146,7 @@ class MeetingExperienceReliabilityTest extends TestCase
         foreach (['connecting: \'Connecting…\'', 'connected: \'Connected\'', 'reconnecting: \'Reconnecting…\'', 'disconnected: \'Disconnected\''] as $label) {
             $this->assertStringContainsString($label, $catalogue);
         }
-        $this->assertStringContainsString("onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}", $room);
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError(noticeKey('meetingRoom.errors.interrupted'))}", $room);
         $this->assertStringNotContainsString('if (connected.current) onLeave()', $room);
         $this->assertStringContainsString('await stopAll();', $controls);
         $this->assertStringContainsString('await onLeave(() => room.disconnect());', $controls);
