@@ -247,7 +247,7 @@ export default {
             join: 'Join meeting',
             hostPrefix: 'Host:',
         },
-        schedule: {
+        scheduleInfo: {
             endsPrefix: 'Ends',
         },
         status: {

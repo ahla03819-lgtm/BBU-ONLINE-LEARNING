@@ -506,7 +506,7 @@ export default {
             join: 'ចូលរួមកិច្ចប្រជុំ',
             hostPrefix: 'ម្ចាស់៖',
         },
-        schedule: {
+        scheduleInfo: {
             endsPrefix: 'បញ្ចប់',
         },
         status: {
