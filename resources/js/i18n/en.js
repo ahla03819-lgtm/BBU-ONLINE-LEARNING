@@ -538,6 +538,11 @@ export default {
             miniWindow: 'Mini meeting window',
             moveMiniWindow: 'Move mini meeting window',
             deviceControls: 'Device controls',
+            fullscreen: {
+                enter: 'Full screen',
+                exit: 'Exit full screen',
+                unavailable: 'Full screen is unavailable in this browser',
+            },
         },
     },
 

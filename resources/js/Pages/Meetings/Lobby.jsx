@@ -13,6 +13,7 @@ import {localCameraMirrorClass} from '../../Components/Meetings/LiveKit/meetingV
 import {clearMeetingMediaIntent, meetingMediaIntentKey, readMeetingMediaIntent, writeMeetingMediaIntent} from '../../Components/Meetings/LiveKit/meetingMediaIntent';
 import {useTranslation} from '../../i18n/LocaleProvider';
 import {noticeKey, noticeRaw, renderNotice} from '../../i18n/notice';
+import useMeetingFullscreen, {exitFullscreenAfterJoinFailure} from '../../Hooks/Meetings/useMeetingFullscreen';
 
 export default function Lobby({schoolClass, meeting: initialMeeting, resumeSession = false}) {
     const {t} = useTranslation();
@@ -33,6 +34,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
     const knownPendingRequests = useRef(null);
     const previousMeetingStatus = useRef(meeting.status);
     const resumeAttempted = useRef(false);
+    const {enterFullscreen, exitFullscreen, fullscreenSupported} = useMeetingFullscreen();
 
     useEffect(() => {
         if (!echo) return;
@@ -101,6 +103,13 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
         }
         setJoining(true); setError(null); media.stop();
 
+        // Request fullscreen directly from the user gesture, before any await
+        const fullscreenResult = await enterFullscreen();
+        if (!fullscreenResult.ok && fullscreenResult.reason !== 'unsupported') {
+            // Fullscreen was denied but we continue joining anyway
+            // Could optionally show a notice here
+        }
+
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/token`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
@@ -137,7 +146,10 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                 },
             });
             if (!started.ok) throw new Error(started.message);
-        } catch (problem) { setError(problem.message === 'Failed to fetch' ? noticeKey('meetingRoom.errors.providerUnavailable') : noticeRaw(problem.message) || noticeKey('meetingRoom.errors.joinFailed')); }
+        } catch (problem) {
+            await exitFullscreenAfterJoinFailure(fullscreenResult, exitFullscreen);
+            setError(problem.message === 'Failed to fetch' ? noticeKey('meetingRoom.errors.providerUnavailable') : noticeRaw(problem.message) || noticeKey('meetingRoom.errors.joinFailed'));
+        }
         finally { setJoining(false); }
     };
     useEffect(() => {
