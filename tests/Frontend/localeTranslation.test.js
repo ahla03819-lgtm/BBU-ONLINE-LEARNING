@@ -212,3 +212,24 @@ test('humanizeKey keeps a missing key readable', () => {
     assert.equal(humanizeKey('nav.items.myResults'), 'My Results');
     assert.equal(humanizeKey('some_key'), 'Some key');
 });
+
+test('meetings.schedule returns the action label, not the nested scheduleInfo object', () => {
+    const enTranslator = translatorFor('en');
+    const kmTranslator = translatorFor('km');
+
+    // The action label "Schedule meeting" / "កំណត់កិច្ចប្រជុំ" should be returned
+    assert.equal(enTranslator('meetings.schedule'), 'Schedule meeting');
+    assert.equal(kmTranslator('meetings.schedule'), 'កំណត់កិច្ចប្រជុំ');
+
+    // The nested scheduleInfo object should be accessible separately
+    assert.equal(enTranslator('meetings.scheduleInfo.endsPrefix'), 'Ends');
+    assert.equal(kmTranslator('meetings.scheduleInfo.endsPrefix'), 'បញ្ចប់');
+
+    // Ensure no duplicate 'schedule' key exists inside meetings catalogue
+    const walk = (source, prefix = '') => Object.entries(source).flatMap(([key, value]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        return value && typeof value === 'object' ? walk(value, path) : [path];
+    });
+    const scheduleKeys = walk(en.meetings).filter((path) => path === 'schedule' || path === 'scheduleInfo.endsPrefix');
+    assert.deepEqual(scheduleKeys, ['schedule', 'scheduleInfo.endsPrefix']);
+});

@@ -81,6 +81,19 @@ class MeetingPolicy
             || ($participant->meeting_id === $meeting->id && ! $participant->removed_at && $participant->user_id !== $user->id);
     }
 
+    public function muteParticipant(User $user, Meeting $meeting, ?MeetingParticipant $participant = null): bool
+    {
+        if (! $this->removeParticipant($user, $meeting)) {
+            return false;
+        }
+
+        return ! $participant
+            || ($participant->meeting_id === $meeting->id
+                && ! $participant->removed_at
+                && $participant->user_id !== $user->id
+                && $participant->user_id !== $meeting->host_user_id);
+    }
+
     public function issueToken(User $user, Meeting $meeting): bool
     {
         if (! ($user->can('meetings.tokens.issue')

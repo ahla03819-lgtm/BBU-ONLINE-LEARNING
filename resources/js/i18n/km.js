@@ -506,7 +506,7 @@ export default {
             join: 'ចូលរួមកិច្ចប្រជុំ',
             hostPrefix: 'ម្ចាស់៖',
         },
-        schedule: {
+        scheduleInfo: {
             endsPrefix: 'បញ្ចប់',
         },
         status: {
@@ -736,6 +736,14 @@ export default {
             cameraOn: 'កាមេរាបើក',
             cameraOff: 'កាមេរាបិទ',
             sharingScreen: 'កំពុងចែករំលែកអេក៚រ',
+            mute: 'បិទសំឡេង',
+            muting: 'កំពុងបិទសំឡេង…',
+            muteParticipant: 'បិទសំឡេង {name}',
+            participantMuted: 'បានបិទសំឡេងអ្នកចូលរួម។',
+            muteFailed: 'មិនអាចបិទសំឡេងអ្នកចូលរួមបានទេ។',
+            alreadyMuted: 'អ្នកចូលរួមបានបិទសំឡេងរួចហើយ។',
+            noActiveMicrophone: 'អ្នកចូលរួមមិនមានមីក្រូហ្វូនសកម្មទេ។',
+            participantNotPresent: 'អ្នកចូលរួមមិននៅក្នុងកិច្ចប្រជុំទេ។',
             remove: 'ដកចេញ',
             removing: 'កំពុងដកចេញ…',
             removeParticipant: 'ដកចេញ {name}',
@@ -747,6 +755,9 @@ export default {
             ending: 'កំពុងបញ្ចប់…',
             endFailed: 'មិនអាចបញ្ចប់កិច្ចប្រជុំនេះបានទេ។ សូមព្យាយាមម្តងទៀត។',
             removeFailed: 'មិនអាចដកចេញអ្នកចូលចូលកម្មវិធីបានទេ។ សូមព្យាយាមម្តងទៀត។',
+            participantRemoved: 'បានដកចេញអ្នកចូលចូលកម្មវិធី។',
+            joinRequestRejected: 'ស្នើចូលបានបដិសេធ។',
+            endRequestSent: 'បានផ្ញើសំណើបញ្ចប់កិច្ចប្រជុំ។',
             endWarning: 'ការបញ្ចប់កិច្ចប្រជុំនឹងផ្គាច់អ្នកទាំងអស់។',
             class: 'ថ្នាក់',
             starts: 'ចាប់ផ្តើម',
@@ -789,6 +800,11 @@ export default {
             miniWindow: 'បង្ទូរកិច្ចប្រជុំតូច',
             moveMiniWindow: 'ផ្លាស់ទីបង្ទូរកិច្ចប្រជុំតូច',
             deviceControls: 'ការគ្រប់គ្រងឧបករណ៍',
+            fullscreen: {
+                enter: 'ពេញអេក្រង់',
+                exit: 'ចាកចេញពីពេញអេក្រង់',
+                unavailable: 'មុខងារពេញអេក្រង់មិនអាចប្រើបានក្នុងកម្មវិធីរុករកនេះទេ',
+            },
         },
     },
 

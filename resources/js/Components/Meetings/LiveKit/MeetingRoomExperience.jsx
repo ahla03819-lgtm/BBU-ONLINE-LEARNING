@@ -12,8 +12,11 @@ import {HostControlsPanel, MeetingChatPanel, MeetingInfoPanel, ParticipantsPanel
 import {authorizedMeetingLink, localCameraTrackClass} from './meetingView';
 import {writeMeetingMediaIntent} from './meetingMediaIntent';
 import {useTranslation} from '../../../i18n/LocaleProvider';
+import {hasNotice, noticeKey, renderFirstNotice, renderNotice} from '../../../i18n/notice';
 import {clampMiniWindowPosition, dragMiniWindowPosition, shouldStartMiniWindowDrag} from './meetingMiniWindowPosition';
 import {sharedMeetingElapsedSeconds} from './meetingElapsedTime';
+import useMeetingFullscreen from '../../../Hooks/Meetings/useMeetingFullscreen';
+import {useFullscreenContext} from '../../../Providers/FullscreenProvider';
 import '@livekit/components-styles';
 
 const MEETING_HISTORY_GUARD = '__edwayMeetingHistoryGuard';
@@ -49,13 +52,15 @@ function useMeetingNavigationGuard(active) {
     }, [active]);
 }
 
-function ConnectionStatus({error}) {
+function ConnectionStatus({notice}) {
     const {t} = useTranslation();
     const state = useConnectionState();
-    const text = error || t(`meetingRoom.connection.${state}`) || t('meetingRoom.connection.connecting');
-    const variant = error || state === 'disconnected' ? 'bg-red-400 text-red-300' : state === 'connected' ? 'bg-emerald-400 text-emerald-300' : 'bg-amber-300 text-amber-300';
+    // Resolved on every render so a notice already on screen follows the locale.
+    const noticeText = renderNotice(notice, t);
+    const text = noticeText || t(`meetingRoom.connection.${state}`) || t('meetingRoom.connection.connecting');
+    const variant = noticeText || state === 'disconnected' ? 'bg-red-400 text-red-300' : state === 'connected' ? 'bg-emerald-400 text-emerald-300' : 'bg-amber-300 text-amber-300';
 
-    return <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-200" aria-live="polite"><span className={`h-2.5 w-2.5 rounded-full ${variant} ${state !== 'connected' && !error ? 'animate-pulse' : ''}`}/>{text}</p>;
+    return <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-200" aria-live="polite"><span className={`h-2.5 w-2.5 rounded-full ${variant} ${state !== 'connected' && !noticeText ? 'animate-pulse' : ''}`}/>{text}</p>;
 }
 
 function RoomSummary() {
@@ -101,7 +106,7 @@ function WaitingRoomRequests({meeting, schoolClass}) {
     const {t} = useTranslation();
     const [requests, setRequests] = useState([]);
     const [deciding, setDeciding] = useState(null);
-    const [message, setMessage] = useState('');
+    const [message, setMessage] = useState(null);
     const url = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room/requests`;
     const sounds = useAppSounds();
     const knownRequests = useRef(null);
@@ -124,18 +129,18 @@ function WaitingRoomRequests({meeting, schoolClass}) {
 
     const decide = async (reference, decision) => {
         if (deciding) return;
-        setDeciding(reference); setMessage('');
+        setDeciding(reference); setMessage(null);
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
             const response = await fetch(`${url}/${reference}`, {method: 'PATCH', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json', 'Content-Type': 'application/json'}, body: JSON.stringify({decision})});
             if (!response.ok) throw new Error();
             setRequests((items) => items.filter((request) => request.reference !== reference));
-            setMessage(t(decision === 'admitted' ? 'meetingRoom.waitingRoom.admitted' : 'meetingRoom.waitingRoom.denied'));
-        } catch { setMessage(t('meetingRoom.waitingRoom.updateFailed')); }
+            setMessage(noticeKey(decision === 'admitted' ? 'meetingRoom.waitingRoom.admitted' : 'meetingRoom.waitingRoom.denied'));
+        } catch { setMessage(noticeKey('meetingRoom.waitingRoom.updateFailed')); }
         finally { setDeciding(null); }
     };
 
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">{t('meetingRoom.waitingRoom.title')}</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? t('meetingRoom.waitingRoom.waitingCount', {count: requests.length}) : t('meetingRoom.waitingRoom.noneRightNow')}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>{t('meetingRoom.waitingRoom.autoRefresh')}</span></div>{message && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{message}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">{t('meetingRoom.waitingRoom.empty')}</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">{t('common.requested')} {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>{t('meetingRoom.waitingRoom.admit')}</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>{t('meetingRoom.waitingRoom.deny')}</button></div></div>)}</div></section>;
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-slate-950">{t('meetingRoom.waitingRoom.title')}</h2><p className="mt-1 text-xs text-slate-500">{requests.length ? t('meetingRoom.waitingRoom.waitingCount', {count: requests.length}) : t('meetingRoom.waitingRoom.noneRightNow')}</p></div><span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500"/>{t('meetingRoom.waitingRoom.autoRefresh')}</span></div>{hasNotice(message) && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">{renderNotice(message, t)}</p>}<div className="mt-3 space-y-3">{requests.length === 0 ? <p className="rounded-xl bg-violet-50 px-3 py-3 text-sm text-slate-600">{t('meetingRoom.waitingRoom.empty')}</p> : requests.map((request) => <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3" key={request.reference}><div className="flex items-start gap-3"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="md" alt=""/><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{request.display_name}</p><p className="mt-1 text-xs text-slate-500">{t('common.requested')} {new Date(request.requested_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</p></div></div><div className="mt-3 flex justify-end gap-2"><button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'admitted')}>{t('meetingRoom.waitingRoom.admit')}</button><button className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50" disabled={deciding !== null} onClick={() => decide(request.reference, 'denied')}>{t('meetingRoom.waitingRoom.deny')}</button></div></div>)}</div></section>;
 }
 
 function useMeetingElapsedTime(meeting, clock) {
@@ -178,7 +183,7 @@ function ReactionOverlay({events}) {
     return <div className="pointer-events-none absolute inset-x-0 top-24 z-20 flex flex-col items-center gap-2" aria-live="polite">{events.map((event) => <div key={event.id} className="animate-[bounce_1s_ease-in-out] rounded-full border border-white/20 bg-slate-950/70 px-4 py-2 text-lg shadow-xl backdrop-blur"><span>{event.reaction}</span><span className="ml-2 text-xs font-bold text-white">{event.sender.name}</span></div>)}</div>;
 }
 
-function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, mediaMessage, mediaIntentKey, mediaReady, onMessage, onLeave, onReturn}) {
+function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, mediaMessage, mediaIntentKey, mediaReady, onMessage, onLeave, onReturn, isFullscreen, exitFullscreen}) {
     const {t} = useTranslation();
     const panelRef = useRef(null);
     const dragRef = useRef(null);
@@ -195,7 +200,7 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     const cameras = useTracks([{source: Track.Source.Camera, withPlaceholder: false}]);
     const preview = screens[0] || cameras.find((track) => !track.participant.isLocal) || cameras[0];
     const featuredParticipant = speakers[0] || preview?.participant || participants.find((participant) => !participant.isLocal) || localParticipant;
-    const status = connectionError || t(`meetingRoom.connection.${connection}`) || t('meetingRoom.connection.connecting');
+    const status = renderNotice(connectionError, t) || t(`meetingRoom.connection.${connection}`) || t('meetingRoom.connection.connecting');
     const available = connection === 'connected' && meeting.status === 'active';
     const clampToViewport = useCallback(() => {
         const panel = panelRef.current;
@@ -275,6 +280,9 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
         setLeaving(true);
         try {
             await Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)]);
+            if (isFullscreen) {
+                await exitFullscreen();
+            }
             await onLeave(() => room.disconnect());
         } finally {
             leavingRef.current = false;
@@ -285,7 +293,7 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     return <aside ref={panelRef} style={position ? {left: position.left, top: position.top} : undefined} className={`fixed z-[70] flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/50 sm:w-[22rem] sm:max-w-[22rem] ${position ? 'left-0 top-0' : 'inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-5 sm:right-5'}`} aria-label={t('meetingRoom.stage.miniWindow')}>
         <header role="group" aria-label={t('meetingRoom.stage.moveMiniWindow')} tabIndex={0} onKeyDown={moveWithKeyboard} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag} className={`flex shrink-0 select-none items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-3 py-2 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}>
             <span className="min-w-0 truncate text-sm font-bold" title={meeting.title}>{meeting.title}</span>
-            <ConnectionStatus error={connectionError}/>
+            <ConnectionStatus notice={connectionError}/>
         </header>
         <button type="button" onClick={onReturn} className="relative block aspect-video w-full shrink-0 overflow-hidden bg-[radial-gradient(circle_at_50%_25%,#374151,#111827_70%)] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-300" aria-label={t('meetingRoom.stage.returnToMeeting')}>
             {preview?.publication ? <VideoTrack trackRef={preview} className={`h-full w-full object-cover ${localCameraTrackClass(preview)}`}/> : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-300"><MeetingParticipantAvatar participant={featuredParticipant} size="lg"/><p className="text-sm font-semibold">{t('meetingRoom.stage.stillRunning')}</p><p className="text-xs text-slate-400">{t('meetingRoom.stage.shareHint')}</p></div>}
@@ -293,21 +301,21 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
         </button>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 p-3">
             <div className="flex items-center gap-1.5" aria-label={t('meetingRoom.stage.deviceControls')}>
-                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage(t('meetingRoom.controlCenter.cameraEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isCameraEnabled ? 'meetingRoom.controlCenter.turnCameraOff' : 'meetingRoom.controlCenter.turnCameraOn')} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5.5 w-5.5"/></TrackToggle>
-                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage(t('meetingRoom.controlCenter.micEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isMicrophoneEnabled ? 'meetingRoom.controlCenter.muteMicrophone' : 'meetingRoom.controlCenter.unmuteMicrophone')} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5.5 w-5.5"/></TrackToggle>
+                <TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage(noticeKey('meetingRoom.controlCenter.cameraEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isCameraEnabled ? 'meetingRoom.controlCenter.turnCameraOff' : 'meetingRoom.controlCenter.turnCameraOn')} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5.5 w-5.5"/></TrackToggle>
+                <TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage(noticeKey('meetingRoom.controlCenter.micEnableFailed')); }} className="rounded-xl border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isMicrophoneEnabled ? 'meetingRoom.controlCenter.muteMicrophone' : 'meetingRoom.controlCenter.unmuteMicrophone')} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5.5 w-5.5"/></TrackToggle>
             </div>
             <div className="flex items-center gap-2"><button type="button" onClick={onReturn} className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300">{t('meetingRoom.stage.returnToMeeting')}</button><button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-wait disabled:opacity-60">{t(leaving ? 'meetingRoom.controlCenter.leaving' : 'meetingRoom.controlCenter.leave')}</button></div>
         </div>
-        {mediaMessage && <p className="px-3 pb-3 text-xs text-amber-200" role="status">{mediaMessage}</p>}
+        {hasNotice(mediaMessage) && <p className="px-3 pb-3 text-xs text-amber-200" role="status">{renderNotice(mediaMessage, t)}</p>}
         <p className="sr-only">{t('meetingRoom.stage.controlLabel', {className: schoolClass.name})}</p>
     </aside>;
 }
 
-function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError}) {
+function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, onLeave, onReturn, mode, mediaMessage, onMediaMessage, connectionError, isFullscreen, exitFullscreen}) {
     const {t} = useTranslation();
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
-    const [copied, setCopied] = useState('');
+    const [copied, setCopied] = useState(null);
     const connection = useConnectionState();
     const {localParticipant, isCameraEnabled, isMicrophoneEnabled} = useLocalParticipant();
     const mediaRestoreStarted = useRef(false);
@@ -343,7 +351,11 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
             if (cameraNeedsChange && cameraResult.status === 'rejected') failedDevices.push('meetingRoom.controlCenter.camera');
             if (microphoneNeedsChange && microphoneResult.status === 'rejected') failedDevices.push('meetingRoom.controlCenter.mic');
             if (failedDevices.length) {
-                onMediaMessage(t('meetingRoom.stage.restoreFailed', {devices: failedDevices.map((key) => t(key)).join(t('meetingRoom.stage.deviceSeparator'))}));
+                // The device names and their separator are translated too, so they
+                // are resolved lazily instead of being frozen into the params.
+                onMediaMessage(noticeKey('meetingRoom.stage.restoreFailed', {
+                    devices: (translate) => failedDevices.map((key) => translate(key)).join(translate('meetingRoom.stage.deviceSeparator')),
+                }));
             }
             setMediaReady(true);
         };
@@ -352,46 +364,75 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
     }, [connection, initialMedia.camera, initialMedia.microphone, isCameraEnabled, isMicrophoneEnabled, localParticipant, mediaIntent, mediaIntentKey, onMediaMessage]);
     const copyMeetingLink = useCallback(async () => {
         if (!meetingLink || !navigator.clipboard?.writeText) {
-            setCopied(t('meetingRoom.errors.copyUnavailable'));
+            setCopied(noticeKey('meetingRoom.errors.copyUnavailable'));
             return;
         }
         try {
             await navigator.clipboard.writeText(meetingLink);
-            setCopied(t('meetingRoom.errors.linkCopied'));
+            setCopied(noticeKey('meetingRoom.errors.linkCopied'));
         } catch {
-            setCopied(t('meetingRoom.errors.linkCopyFailed'));
+            setCopied(noticeKey('meetingRoom.errors.linkCopyFailed'));
         }
     }, [meetingLink]);
 
-    if (mode === 'mini') return <><MeetingRoomSounds meeting={meeting}/><RoomAudioRenderer/><MiniMeetingWindow meeting={meeting} schoolClass={schoolClass} elapsedTime={elapsedTime} connectionError={connectionError} mediaMessage={mediaMessage} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onMessage={onMediaMessage} onReturn={onReturn} onLeave={onLeave}/></>;
+    if (mode === 'mini') return <><MeetingRoomSounds meeting={meeting}/><RoomAudioRenderer/><MiniMeetingWindow meeting={meeting} schoolClass={schoolClass} elapsedTime={elapsedTime} connectionError={connectionError} mediaMessage={mediaMessage} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onMessage={onMediaMessage} onReturn={onReturn} onLeave={onLeave} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/></>;
 
-    return <><MeetingRoomSounds meeting={meeting}/><div className={`fixed inset-x-0 bottom-0 top-14 z-10 grid overflow-y-auto bg-slate-950 p-3 sm:p-4 lg:left-56 lg:p-6 ${panel ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
-        <section className="meeting-room-content relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]">
-            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>{t('meetingRoom.stage.liveClass')}</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus error={connectionError}/><ElapsedTime value={elapsedTime}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label={t('meetingRoom.stage.enableAudio')} className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
+    return <><MeetingRoomSounds meeting={meeting}/><div className={`fixed z-10 grid overflow-y-auto bg-slate-950 ${isFullscreen ? 'inset-0 p-0' : 'inset-x-0 bottom-0 top-14 p-3 sm:p-4 lg:left-56 lg:p-6'} ${panel ? 'xl:grid-cols-[minmax(0,1fr)_22rem]' : ''}`}>
+        <section className={`meeting-room-content relative flex min-h-[42rem] min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[radial-gradient(circle_at_18%_12%,rgba(104,91,224,.24),transparent_34%),linear-gradient(145deg,#171b28,#0a0d14_70%)] ${isFullscreen ? 'p-3 shadow-none' : 'p-3 shadow-[0_24px_64px_rgba(20,19,50,.32)]'}`}>
+            <header className="relative z-10 flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>{t('meetingRoom.stage.liveClass')}</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus notice={connectionError}/><ElapsedTime value={elapsedTime}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label={t('meetingRoom.stage.enableAudio')} className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
             <ReactionOverlay events={signals.reactionEvents}/>
-            {(mediaMessage || moderation.message) && <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{mediaMessage || moderation.message}</div>}
+            {hasNotice(mediaMessage) || hasNotice(moderation.message) ? <div className="relative z-10 mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{renderFirstNotice([mediaMessage, moderation.message], t)}</div> : null}
             <div className="relative z-0 min-h-0 flex-1 py-3"><MeetingStage view={view} onViewChange={setView}/></div>
             <RoomAudioRenderer/>
-            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage}/>
+            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
         </section>
-        {panel && <aside className="min-h-0 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:pl-4">{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} moderation={moderation}/> : panel === 'host' ? <HostControlsPanel meeting={meeting} moderation={moderation} onClose={() => setPanel(null)} onPeople={() => setPanel('people')} onInfo={() => setPanel('info')}/> : panel === 'info' ? <MeetingInfoPanel meeting={meeting} schoolClass={schoolClass} count={participants.length} meetingLink={meetingLink} onCopy={copyMeetingLink} copied={copied} onClose={() => setPanel(null)}/> : panel === 'devices' ? <MeetingDeviceSettings onClose={() => setPanel(null)} onMessage={onMediaMessage}/> : null}</aside>}
+        {panel && <aside className={`min-h-0 xl:overflow-y-auto xl:pl-4 ${isFullscreen ? 'xl:max-h-full' : 'xl:max-h-[calc(100vh-8rem)]'}`}>{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} moderation={moderation}/> : panel === 'host' ? <HostControlsPanel meeting={meeting} moderation={moderation} onClose={() => setPanel(null)} onPeople={() => setPanel('people')} onInfo={() => setPanel('info')}/> : panel === 'info' ? <MeetingInfoPanel meeting={meeting} schoolClass={schoolClass} count={participants.length} meetingLink={meetingLink} onCopy={copyMeetingLink} copied={copied} onClose={() => setPanel(null)}/> : panel === 'devices' ? <MeetingDeviceSettings onClose={() => setPanel(null)} onMessage={onMediaMessage}/> : null}</aside>}
     </div></>;
 }
 
 export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, mode = 'full', onReturn, onLeave}) {
-    const {t} = useTranslation();
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
-    const [connectionError, setConnectionError] = useState('');
-    const [mediaMessage, setMediaMessage] = useState('');
+    const [connectionError, setConnectionError] = useState(null);
+    const [mediaMessage, setMediaMessage] = useState(null);
+    const {isFullscreen, exitFullscreen} = useMeetingFullscreen();
+    const {setIsFullscreen, setIsMeetingRoom} = useFullscreenContext();
 
     const audio = initialMedia.microphone ? (initialMedia.microphoneId ? {deviceId: initialMedia.microphoneId} : true) : false;
     const video = initialMedia.camera ? (initialMedia.cameraId ? {deviceId: initialMedia.cameraId} : true) : false;
 
+    // Sync fullscreen state with global context
+    useEffect(() => {
+        setIsFullscreen(isFullscreen);
+        setIsMeetingRoom(true);
+    }, [isFullscreen, setIsFullscreen, setIsMeetingRoom]);
+
+    // Clean up on unmount
+    useEffect(() => {
+        return () => {
+            setIsMeetingRoom(false);
+        };
+    }, [setIsMeetingRoom]);
+
+    // Exit fullscreen when user explicitly leaves the meeting
+    const handleLeave = useCallback(async (cleanup) => {
+        if (isFullscreen) {
+            await exitFullscreen();
+        }
+        await onLeave(cleanup);
+    }, [isFullscreen, exitFullscreen, onLeave]);
+
+    // Exit fullscreen when meeting ends, is ending, or is cancelled
+    useEffect(() => {
+        if (['ending', 'ended', 'cancelled'].includes(meeting.status) && isFullscreen) {
+            exitFullscreen();
+        }
+    }, [meeting.status, isFullscreen, exitFullscreen]);
+
     return <LiveKitRoom token={credentials.token} serverUrl={credentials.server_url} connect audio={audio} video={video}
-        onConnected={() => setConnectionError('')}
-        onError={() => setConnectionError(t('meetingRoom.errors.roomJoinFailed'))}
-        onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}
+        onConnected={() => setConnectionError(null)}
+        onError={() => setConnectionError(noticeKey('meetingRoom.errors.roomJoinFailed'))}
+        onDisconnected={() => setConnectionError(noticeKey('meetingRoom.errors.interrupted'))}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
-        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={onLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError}/>
+        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={handleLeave} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
     </LiveKitRoom>;
 }

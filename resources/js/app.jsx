@@ -5,12 +5,13 @@ import {AppSoundsProvider} from './Sound/AppSounds';
 import {PersistentMeetingProvider} from './Providers/PersistentMeetingProvider';
 import {PersistentConversationCallProvider} from './Providers/PersistentConversationCallProvider';
 import {LocaleProvider} from './i18n/LocaleProvider';
+import {FullscreenProvider} from './Providers/FullscreenProvider';
 import './realtime/echo';
 
 function InertiaConversationCallLayout({children}) {
     // The locale lives here, inside the Inertia tree, so it can read the shared
     // account preference and stay mounted across visits.
-    return <LocaleProvider><PersistentMeetingProvider><PersistentConversationCallProvider>{children}</PersistentConversationCallProvider></PersistentMeetingProvider></LocaleProvider>;
+    return <LocaleProvider><FullscreenProvider><PersistentMeetingProvider><PersistentConversationCallProvider>{children}</PersistentConversationCallProvider></PersistentMeetingProvider></FullscreenProvider></LocaleProvider>;
 }
 
 createInertiaApp({

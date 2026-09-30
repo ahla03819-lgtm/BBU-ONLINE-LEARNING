@@ -26,8 +26,8 @@ class MeetingExperienceTest extends TestCase
     {
         $component = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingRoomExperience.jsx'));
 
-        $this->assertStringContainsString("onError={() => setConnectionError(t('meetingRoom.errors.roomJoinFailed'))}", $component);
-        $this->assertStringContainsString("onDisconnected={() => setConnectionError(t('meetingRoom.errors.interrupted'))}", $component);
+        $this->assertStringContainsString("onError={() => setConnectionError(noticeKey('meetingRoom.errors.roomJoinFailed'))}", $component);
+        $this->assertStringContainsString("onDisconnected={() => setConnectionError(noticeKey('meetingRoom.errors.interrupted'))}", $component);
         $this->assertStringNotContainsString('connected.current) onLeave()', $component);
         $this->assertStringContainsString('useConnectionState', $component);
         $this->assertStringNotContainsString('onReconnecting=', $component);
@@ -100,7 +100,7 @@ class MeetingExperienceTest extends TestCase
         $this->assertStringContainsString('if (connection !== \'connected\' || mediaRestoreStarted.current) return;', $room);
         $this->assertStringContainsString('Promise.allSettled', $room);
         $this->assertStringContainsString('setMediaReady(true)', $room);
-        $this->assertStringContainsString("t('meetingRoom.stage.restoreFailed'", $room);
+        $this->assertStringContainsString("noticeKey('meetingRoom.stage.restoreFailed'", $room);
     }
 
     public function test_full_and_mini_modes_share_one_room_without_mode_cleanup_stopping_screen_share(): void

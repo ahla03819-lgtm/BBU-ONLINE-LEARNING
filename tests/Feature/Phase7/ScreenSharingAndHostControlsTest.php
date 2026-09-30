@@ -108,9 +108,12 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
         $catalogue = file_get_contents(resource_path('js/i18n/en.js'));
 
-        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'meetingRoom.stage.sharedBy', 'meetingRoom.controlCenter.shareScreen', 'meetingRoom.controlCenter.stopSharingScreen', 'setScreenShareEnabled(false)', 'removing === record.reference', 'Participant removed.', 'meetingRoom.panels.removeFailed'] as $contract) {
+        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'meetingRoom.stage.sharedBy', 'meetingRoom.controlCenter.shareScreen', 'meetingRoom.controlCenter.stopSharingScreen', 'setScreenShareEnabled(false)', 'removing === record.reference', "noticeKey('meetingRoom.panels.participantRemoved')", 'meetingRoom.panels.removeFailed'] as $contract) {
             $this->assertStringContainsString($contract, $component.$controls.$sidePanel.$stage.$moderation);
         }
+        // The removal success notice is translated at render time; the English copy
+        // must stay exactly what the old hardcoded string rendered.
+        $this->assertStringContainsString("participantRemoved: 'Participant removed.'", $catalogue);
         $this->assertStringContainsString('reconnecting: \'Reconnecting…\'', $catalogue);
         $this->assertStringContainsString("connection === 'connected' && meeting.status === 'active'", $controls);
         $this->assertStringContainsString("['ending', 'ended', 'cancelled']", $controls);

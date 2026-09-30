@@ -14,14 +14,17 @@ export function conversationCallMediaOutcome({microphoneStatus, cameraStatus = n
     const microphoneUnavailable = microphoneStatus === 'rejected';
     const cameraUnavailable = cameraStatus === 'rejected';
 
+    // A catalogue key, never a rendered sentence: the component turns this into a
+    // notice descriptor so the message is translated for the active locale and
+    // follows a language switch while it is on screen.
     return {
         microphoneUnavailable,
         cameraUnavailable,
-        message: microphoneUnavailable
-            ? 'Microphone access is blocked. Allow microphone access and select Unmute to retry.'
+        messageKey: microphoneUnavailable
+            ? 'conversations.micBlocked'
             : cameraUnavailable
-                ? 'Camera unavailable. The audio call continues; allow camera access and select Camera On to retry.'
-                : '',
+                ? 'conversations.cameraBlocked'
+                : null,
     };
 }
 

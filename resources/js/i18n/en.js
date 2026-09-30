@@ -247,7 +247,7 @@ export default {
             join: 'Join meeting',
             hostPrefix: 'Host:',
         },
-        schedule: {
+        scheduleInfo: {
             endsPrefix: 'Ends',
         },
         status: {
@@ -474,6 +474,14 @@ export default {
             cameraOn: 'Camera on',
             cameraOff: 'Camera off',
             sharingScreen: 'Sharing screen',
+            mute: 'Mute',
+            muting: 'Muting…',
+            muteParticipant: 'Mute {name}',
+            participantMuted: 'Participant muted.',
+            muteFailed: 'Unable to mute participant.',
+            alreadyMuted: 'Participant is already muted.',
+            noActiveMicrophone: 'Participant has no active microphone.',
+            participantNotPresent: 'Participant is not present.',
             remove: 'Remove',
             removing: 'Removing…',
             removeParticipant: 'Remove {name}',
@@ -485,6 +493,9 @@ export default {
             ending: 'Ending…',
             endFailed: 'Unable to end this meeting. Please try again.',
             removeFailed: 'Unable to remove the participant. Please try again.',
+            participantRemoved: 'Participant removed.',
+            joinRequestRejected: 'Join request rejected.',
+            endRequestSent: 'End meeting request sent.',
             endWarning: 'Ending the meeting disconnects everyone.',
             class: 'Class',
             starts: 'Starts',
@@ -527,6 +538,11 @@ export default {
             miniWindow: 'Mini meeting window',
             moveMiniWindow: 'Move mini meeting window',
             deviceControls: 'Device controls',
+            fullscreen: {
+                enter: 'Full screen',
+                exit: 'Exit full screen',
+                unavailable: 'Full screen is unavailable in this browser',
+            },
         },
     },
 

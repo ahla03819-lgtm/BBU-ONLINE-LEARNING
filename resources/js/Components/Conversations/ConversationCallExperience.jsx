@@ -1,5 +1,6 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from '../../i18n/LocaleProvider';
+import {noticeKey, renderNotice} from '../../i18n/notice';
 import {LiveKitRoom, RoomAudioRenderer, StartAudio, useConnectionState, useLocalParticipant, useParticipants, useRoomContext, useTracks, VideoTrack} from '@livekit/components-react';
 import {Track} from 'livekit-client';
 import Icon from '../UI/Icon';
@@ -31,7 +32,7 @@ function useCallTimer(startedAt, serverClock) {
     return formatDuration(conversationCallDurationSeconds(startedAt, now, serverClock));
 }
 
-function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, serverClock}) {
+function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, onTrackFailure, serverClock}) {
     const {t} = useTranslation();
     const panelRef = useRef(null);
     const dragRef = useRef(null);
@@ -141,19 +142,19 @@ function MiniConversationCallWindow({call, mode, onReturn, onLeave, mediaMessage
         </button>
         <div className="flex items-center justify-between gap-2 p-3">
             <div className="flex items-center gap-2">
-                <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => {setMicrophoneUnavailable(true); setMediaMessage(t('conversations.micBlocked'));}} label={t(isMicrophoneEnabled ? 'conversations.muteMicrophone' : 'conversations.unmuteMicrophone')} requiredSuffix={t('conversations.permissionRequired')}/>
-                {call.type === 'video' && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => {setCameraUnavailable(true); setMediaMessage(t('conversations.cameraBlocked'));}} label={t(isCameraEnabled ? 'conversations.turnCameraOff' : 'conversations.turnCameraOn')} requiredSuffix={t('conversations.permissionRequired')}/>}
+                <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => onTrackFailure(Track.Source.Microphone)} label={t(isMicrophoneEnabled ? 'conversations.muteMicrophone' : 'conversations.unmuteMicrophone')} requiredSuffix={t('conversations.permissionRequired')}/>
+                {call.type === 'video' && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => onTrackFailure(Track.Source.Camera)} label={t(isCameraEnabled ? 'conversations.turnCameraOff' : 'conversations.turnCameraOn')} requiredSuffix={t('conversations.permissionRequired')}/>}
             </div>
             <div className="flex items-center gap-2">
                 <button type="button" onClick={onReturn} className="rounded-xl bg-sky-600 px-3 py-2 text-[11px] font-bold text-white">{t('conversations.return')}</button>
                 <button type="button" onClick={leave} disabled={leaving} className="rounded-xl border border-rose-400/40 bg-rose-600/15 px-3 py-2 text-[11px] font-bold text-rose-100 disabled:opacity-60">{t(leaving ? 'conversations.ending' : 'conversations.end')}</button>
             </div>
         </div>
-        {mediaMessage && <p role="status" className="border-t border-white/10 px-3 py-2 text-xs text-amber-200">{mediaMessage}</p>}
+        {mediaMessage && <p role="status" className="border-t border-white/10 px-3 py-2 text-xs text-amber-200">{renderNotice(mediaMessage, t)}</p>}
     </aside>;
 }
 
-function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, serverClock}) {
+function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage, cameraUnavailable, microphoneUnavailable, onTrackFailure, serverClock}) {
     const {t} = useTranslation();
     const timer = useCallTimer(call.started_at, serverClock);
     const {localParticipant, isMicrophoneEnabled, isCameraEnabled} = useLocalParticipant();
@@ -200,8 +201,8 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
                     <div className="rounded-[24px] border border-slate-700 bg-slate-900/80 p-4">
                         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('conversations.controls')}</p>
                         <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => {setMicrophoneUnavailable(true); setMediaMessage('Microphone access is blocked. Allow microphone access and select Unmute to retry.');}} label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}/>
-                            {canShowCamera && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => {setCameraUnavailable(true); setMediaMessage('Camera unavailable. The audio call continues; allow camera access and select Camera On to retry.');}} label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}/>}
+                            <TrackButton source={Track.Source.Microphone} enabled={isMicrophoneEnabled} unavailable={microphoneUnavailable} localParticipant={localParticipant} onFailure={() => onTrackFailure(Track.Source.Microphone)} label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}/>
+                            {canShowCamera && <TrackButton source={Track.Source.Camera} enabled={isCameraEnabled} unavailable={cameraUnavailable} localParticipant={localParticipant} onFailure={() => onTrackFailure(Track.Source.Camera)} label={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}/>}
                             <button type="button" onClick={() => onModeChange('mini')} className="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white">{t('conversations.mini')}</button>
                             <button type="button" onClick={onLeave} className="ml-auto rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white">{t('conversations.endCall')}</button>
                         </div>
@@ -209,7 +210,7 @@ function FullConversationCallOverlay({call, onModeChange, onLeave, mediaMessage,
                 </aside>
             </div>
         </div>
-        {mediaMessage && <p role="status" className="absolute bottom-4 left-1/2 max-w-lg -translate-x-1/2 rounded-xl border border-amber-300/30 bg-slate-950 px-4 py-3 text-sm text-amber-100 shadow-xl">{mediaMessage}</p>}
+        {mediaMessage && <p role="status" className="absolute bottom-4 left-1/2 max-w-lg -translate-x-1/2 rounded-xl border border-amber-300/30 bg-slate-950 px-4 py-3 text-sm text-amber-100 shadow-xl">{renderNotice(mediaMessage, t)}</p>}
     </div>;
 }
 
@@ -258,7 +259,8 @@ function ActiveConversationCall({call, mode, audioOnly, mediaIntent, mediaIntent
     const mediaRestoreStarted = useRef(false);
     const [cameraUnavailable, setCameraUnavailable] = useState(false);
     const [microphoneUnavailable, setMicrophoneUnavailable] = useState(false);
-    const [mediaMessage, setMediaMessage] = useState('');
+    // A notice descriptor, not a translated string: see resources/js/i18n/notice.js
+    const [mediaMessage, setMediaMessage] = useState(null);
     const mediaPlan = conversationCallMediaPlan({callType: call.type, audioOnly, mediaIntent});
 
     useEffect(() => {
@@ -280,7 +282,7 @@ function ActiveConversationCall({call, mode, audioOnly, mediaIntent, mediaIntent
                 microphoneEnabled: desiredMicrophone && microphoneResult.status === 'fulfilled',
                 ...(call.type === 'video' ? {cameraEnabled: desiredCamera && cameraResult?.status === 'fulfilled'} : {}),
             });
-            setMediaMessage(outcome.message);
+            setMediaMessage(noticeKey(outcome.messageKey));
         });
     }, [call.type, connection, localParticipant, mediaIntent, mediaIntentKey, mediaPlan]);
 
@@ -294,11 +296,11 @@ function ActiveConversationCall({call, mode, audioOnly, mediaIntent, mediaIntent
     useEffect(() => {
         if (isMicrophoneEnabled) {
             setMicrophoneUnavailable(false);
-            if (!cameraUnavailable) setMediaMessage('');
+            if (!cameraUnavailable) setMediaMessage(null);
         }
         if (isCameraEnabled) {
             setCameraUnavailable(false);
-            setMediaMessage('');
+            setMediaMessage(null);
         }
     }, [isCameraEnabled, isMicrophoneEnabled]);
 
@@ -310,7 +312,17 @@ function ActiveConversationCall({call, mode, audioOnly, mediaIntent, mediaIntent
         await onLeave?.(() => room.disconnect());
     };
 
-    const overlayProps = {call, mode, onModeChange, onLeave: leave, mediaMessage, cameraUnavailable, microphoneUnavailable, serverClock};
+    // Both the mini window and the full overlay report a blocked device here, so
+    // the three pieces of state stay owned here and updated in one place.
+    const trackFailed = useCallback((source) => {
+        const camera = source === Track.Source.Camera;
+
+        if (camera) setCameraUnavailable(true);
+        else setMicrophoneUnavailable(true);
+        setMediaMessage(noticeKey(camera ? 'conversations.cameraBlocked' : 'conversations.micBlocked'));
+    }, []);
+
+    const overlayProps = {call, mode, onModeChange, onLeave: leave, mediaMessage, cameraUnavailable, microphoneUnavailable, onTrackFailure: trackFailed, serverClock};
     return <>
         {mode === 'mini'
             ? <MiniConversationCallWindow {...overlayProps} onReturn={() => onModeChange?.('full')}/>

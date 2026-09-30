@@ -4,8 +4,11 @@ namespace App\Services\LiveKit;
 
 use Agence104\LiveKit\RoomCreateOptions;
 use Agence104\LiveKit\RoomServiceClient;
+use App\Enums\MeetingMicrophoneMuteResult;
 use App\Enums\MeetingProviderState;
 use Illuminate\Support\Facades\Log;
+use Livekit\TrackSource;
+use Livekit\TrackType;
 use Throwable;
 use Twirp\Error;
 use Twirp\ErrorCode;
@@ -102,6 +105,48 @@ final class SdkLiveKitRoomManager implements LiveKitRoomManager
             $this->logFailure('remove_participant', $error);
 
             return MeetingProviderState::Unknown;
+        }
+    }
+
+    public function muteParticipantMicrophone(string $roomName, string $identity): MeetingMicrophoneMuteResult
+    {
+        if (! $this->configured()) {
+            $this->configurationFailure('mute_participant_microphone');
+
+            return MeetingMicrophoneMuteResult::ProviderFailure;
+        }
+
+        try {
+            $participant = $this->client()->getParticipant($roomName, $identity);
+            $microphones = collect(iterator_to_array($participant->getTracks()))
+                ->filter(fn ($track) => $track->getType() === TrackType::AUDIO
+                    && $track->getSource() === TrackSource::MICROPHONE);
+
+            if ($microphones->isEmpty()) {
+                return MeetingMicrophoneMuteResult::NoActiveMicrophone;
+            }
+
+            $microphone = $microphones->first(fn ($track) => ! $track->getMuted());
+            if (! $microphone) {
+                return MeetingMicrophoneMuteResult::AlreadyMuted;
+            }
+
+            // Moderation is deliberately one-way: this service never sends muted=false.
+            $this->client()->mutePublishedTrack($roomName, $identity, $microphone->getSid(), true);
+
+            return MeetingMicrophoneMuteResult::Muted;
+        } catch (Error $error) {
+            if ($error->getErrorCode() !== ErrorCode::NotFound) {
+                $this->logFailure('mute_participant_microphone', $error);
+            }
+
+            return $error->getErrorCode() === ErrorCode::NotFound
+                ? MeetingMicrophoneMuteResult::ParticipantNotPresent
+                : MeetingMicrophoneMuteResult::ProviderFailure;
+        } catch (Throwable $error) {
+            $this->logFailure('mute_participant_microphone', $error);
+
+            return MeetingMicrophoneMuteResult::ProviderFailure;
         }
     }
 
