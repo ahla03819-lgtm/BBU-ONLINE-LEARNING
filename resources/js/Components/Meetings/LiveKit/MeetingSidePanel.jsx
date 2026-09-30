@@ -4,6 +4,7 @@ import Icon from '../../UI/Icon';
 import MeetingParticipantAvatar from './MeetingParticipantAvatar';
 import {participantConnectionKey, sortRaisedParticipants} from './meetingView';
 import {useTranslation} from '../../../i18n/LocaleProvider';
+import {canShowMuteParticipant} from './participantMicrophoneModeration';
 import {noticeKey, noticeRaw, renderNotice} from '../../../i18n/notice';
 
 function timestamp(value) {
@@ -86,9 +87,12 @@ export function ParticipantsPanel({meeting, onClose, raisedHands, moderation}) {
             const record = recordsByKey.get(keys[participant.identity]);
             const raised = Boolean(raisedHands[participant.identity]);
             const removing = moderation.busy?.startsWith('remove:') ? moderation.busy.slice(7) : null;
+            const muting = moderation.busy?.startsWith('mute:') ? moderation.busy.slice(5) : null;
+            const canMute = canShowMuteParticipant({canManageParticipants: meeting.can_manage_participants, participant, record, available: moderation.available});
             return <div key={participant.identity} className={`rounded-2xl border p-3 ${raised ? 'border-amber-200 bg-amber-50/60' : 'border-transparent hover:bg-slate-50'}`}>
                 <div className="flex items-center gap-3"><MeetingParticipantAvatar participant={participant} size="sm"/><div className="min-w-0 flex-1"><p className="break-words text-sm font-bold text-slate-900">{participant.name || t('common.participant')}{participant.isLocal ? ` (${t('common.you')})` : ''}</p><p className={`mt-0.5 text-xs font-medium ${record?.is_host ? 'text-violet-700' : 'text-slate-500'}`}>{record?.is_host ? t('meetingRoom.panels.organizer') : t('common.participant')}</p></div>{raised && <span className="rounded-lg bg-amber-100 p-1.5 text-amber-800" role="img" aria-label={t('meetingRoom.panels.handRaised')}><Icon name="hand" className="h-4 w-4"/></span>}</div>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600"><span className="inline-flex items-center gap-1" aria-label={t(participant.isMicrophoneEnabled ? 'meetingRoom.panels.micStateOn' : 'meetingRoom.panels.micStateMuted')}><Icon name={participant.isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-3.5 w-3.5"/>{t(participant.isMicrophoneEnabled ? 'meetingRoom.panels.micOn' : 'meetingRoom.panels.micMuted')}</span><span className="inline-flex items-center gap-1" aria-label={t(participant.isCameraEnabled ? 'meetingRoom.panels.cameraOn' : 'meetingRoom.panels.cameraOff')}><Icon name={participant.isCameraEnabled ? 'video' : 'video-off'} className="h-3.5 w-3.5"/>{t(participant.isCameraEnabled ? 'meetingRoom.panels.cameraOn' : 'meetingRoom.panels.cameraOff')}</span>{participant.isScreenShareEnabled && <span className="inline-flex items-center gap-1 font-bold text-sky-700"><Icon name="screen" className="h-3.5 w-3.5"/>{t('meetingRoom.panels.sharingScreen')}</span>}</div>
+                {canMute && <button type="button" disabled={!moderation.available || moderation.busy !== null} onClick={() => moderation.mute(record)} className="mr-2 mt-2 min-h-9 rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 disabled:opacity-50" aria-label={t('meetingRoom.panels.muteParticipant', {name: participant.name || t('common.participant')})}>{t(muting === record.reference ? 'meetingRoom.panels.muting' : 'meetingRoom.panels.mute')}</button>}
                 {meeting.can_manage_participants && record?.can_remove && !participant.isLocal && <button type="button" disabled={!moderation.available || moderation.busy !== null} onClick={() => moderation.remove(record)} className="mt-2 min-h-9 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-600 disabled:opacity-50" aria-label={t('meetingRoom.panels.removeParticipant', {name: participant.name || t('common.participant')})}>{t(removing === record.reference ? 'meetingRoom.panels.removing' : 'meetingRoom.panels.remove')}</button>}
             </div>;
         })}</div>

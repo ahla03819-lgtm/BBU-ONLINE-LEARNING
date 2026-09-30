@@ -2,6 +2,7 @@
 
 namespace App\Services\LiveKit;
 
+use App\Enums\MeetingMicrophoneMuteResult;
 use App\Enums\MeetingProviderState;
 
 interface LiveKitRoomManager
@@ -13,4 +14,6 @@ interface LiveKitRoomManager
     public function inspect(string $roomName): MeetingProviderState;
 
     public function removeParticipant(string $roomName, string $identity): MeetingProviderState;
+
+    public function muteParticipantMicrophone(string $roomName, string $identity): MeetingMicrophoneMuteResult;
 }

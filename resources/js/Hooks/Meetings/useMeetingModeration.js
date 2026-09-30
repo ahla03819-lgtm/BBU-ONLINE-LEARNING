@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {useAppSounds} from '../../Sound/AppSounds';
 import {noticeKey} from '../../i18n/notice';
+import {canStartMuteParticipant, muteResultTranslationKey, requestParticipantMute} from '../../Components/Meetings/LiveKit/participantMicrophoneModeration';
 
 // These are the existing policy-protected HTTP actions, never LiveKit data commands.
 export default function useMeetingModeration({meeting, schoolClass, connected, participantIdentities}) {
@@ -80,6 +81,23 @@ export default function useMeetingModeration({meeting, schoolClass, connected, p
         if (!window.confirm(`Remove ${record.display_name || 'this participant'} from this meeting? They will not be able to rejoin.`)) return;
         return perform(`remove:${record.reference}`, `${base}/participants/${record.reference}`, 'DELETE', null, noticeKey('meetingRoom.panels.participantRemoved'));
     };
+    const mute = async (record) => {
+        if (!canStartMuteParticipant({available, canManageParticipants: meeting.can_manage_participants, record, busy: busyRef.current})) return;
+        const key = `mute:${record.reference}`;
+        busyRef.current = key; setBusy(key); setMessage(null);
+        activePoll.current?.abort();
+        try {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+            const response = await requestParticipantMute({base, reference: record.reference, csrf});
+            const data = await response.json().catch(() => ({}));
+            if (mounted.current) setMessage(noticeKey(muteResultTranslationKey(data.result, response.ok)));
+        } catch {
+            if (mounted.current) setMessage(noticeKey('meetingRoom.panels.muteFailed'));
+        } finally {
+            busyRef.current = null;
+            if (mounted.current) { setBusy(null); setRevision((value) => value + 1); }
+        }
+    };
     const decide = (request, decision) => {
         if (!meeting.can_manage_join_requests || !['admitted', 'denied'].includes(decision) || busyRef.current || !available) return;
         if (decision === 'denied' && !window.confirm(`Reject the join request from ${request.display_name}?`)) return;
@@ -89,5 +107,5 @@ export default function useMeetingModeration({meeting, schoolClass, connected, p
         if (!meeting.can_end || busyRef.current || !available || !window.confirm('End this active meeting for everyone?')) return;
         return perform('end', `/school-classes/${schoolClass.id}/meetings/${meeting.uuid}/end`, 'POST', null, noticeKey('meetingRoom.panels.endRequestSent'));
     };
-    return {records, requests, waitingLoaded, rosterError, waitingError, message, busy, available, remove, decide, end};
+    return {records, requests, waitingLoaded, rosterError, waitingError, message, busy, available, mute, remove, decide, end};
 }

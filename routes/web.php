@@ -211,6 +211,7 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests', [MeetingJoinRequestController::class, 'index'])->name('meetings.join-requests.index');
         Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests/{joinRequest:public_uuid}', [MeetingJoinRequestController::class, 'update'])->middleware('throttle:meeting-participant-removals')->name('meetings.join-requests.update');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants', [MeetingParticipantController::class, 'index'])->name('meetings.participants.index');
+        Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}/mute', [MeetingParticipantController::class, 'mute'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.mute');
         Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}', [MeetingParticipantController::class, 'destroy'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.destroy');
     });
     Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');

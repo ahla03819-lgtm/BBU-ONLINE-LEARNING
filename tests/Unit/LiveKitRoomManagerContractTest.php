@@ -4,13 +4,19 @@ namespace Tests\Unit;
 
 use Agence104\LiveKit\RoomCreateOptions;
 use Agence104\LiveKit\RoomServiceClient;
+use App\Enums\MeetingMicrophoneMuteResult;
 use App\Enums\MeetingProviderState;
 use App\Services\LiveKit\SdkLiveKitRoomManager;
 use Illuminate\Support\Facades\Log;
 use Livekit\DeleteRoomResponse;
 use Livekit\ListRoomsResponse;
+use Livekit\MuteRoomTrackResponse;
+use Livekit\ParticipantInfo;
 use Livekit\RemoveParticipantResponse;
 use Livekit\Room;
+use Livekit\TrackInfo;
+use Livekit\TrackSource;
+use Livekit\TrackType;
 use Livekit\TwirpError;
 use Mockery;
 use ReflectionClass;
@@ -121,6 +127,44 @@ class LiveKitRoomManagerContractTest extends TestCase
         $unknown = Mockery::mock(RoomServiceClient::class);
         $unknown->shouldReceive('removeParticipant')->andThrow(new RuntimeException('transport detail'));
         $this->assertSame(MeetingProviderState::Unknown, (new SdkLiveKitRoomManager($unknown))->removeParticipant('opaque-room', 'opaque-identity'));
+    }
+
+    public function test_microphone_moderation_resolves_the_provider_track_and_only_mutes(): void
+    {
+        $participant = new ParticipantInfo(['tracks' => [
+            new TrackInfo(['sid' => 'camera-track', 'type' => TrackType::VIDEO, 'source' => TrackSource::CAMERA]),
+            new TrackInfo(['sid' => 'microphone-track', 'type' => TrackType::AUDIO, 'source' => TrackSource::MICROPHONE, 'muted' => false]),
+        ]]);
+        $client = Mockery::mock(RoomServiceClient::class);
+        $client->shouldReceive('getParticipant')->once()->with('opaque-room', 'opaque-identity')->andReturn($participant);
+        $client->shouldReceive('mutePublishedTrack')->once()->with('opaque-room', 'opaque-identity', 'microphone-track', true)->andReturn(new MuteRoomTrackResponse);
+
+        $this->assertSame(MeetingMicrophoneMuteResult::Muted, (new SdkLiveKitRoomManager($client))->muteParticipantMicrophone('opaque-room', 'opaque-identity'));
+    }
+
+    public function test_microphone_moderation_handles_muted_missing_absent_and_provider_failure(): void
+    {
+        $alreadyMuted = Mockery::mock(RoomServiceClient::class);
+        $alreadyMuted->shouldReceive('getParticipant')->andReturn(new ParticipantInfo(['tracks' => [
+            new TrackInfo(['sid' => 'microphone-track', 'type' => TrackType::AUDIO, 'source' => TrackSource::MICROPHONE, 'muted' => true]),
+        ]]));
+        $alreadyMuted->shouldNotReceive('mutePublishedTrack');
+        $this->assertSame(MeetingMicrophoneMuteResult::AlreadyMuted, (new SdkLiveKitRoomManager($alreadyMuted))->muteParticipantMicrophone('opaque-room', 'opaque-identity'));
+
+        $missing = Mockery::mock(RoomServiceClient::class);
+        $missing->shouldReceive('getParticipant')->andReturn(new ParticipantInfo(['tracks' => [
+            new TrackInfo(['sid' => 'screen-audio', 'type' => TrackType::AUDIO, 'source' => TrackSource::SCREEN_SHARE_AUDIO]),
+        ]]));
+        $missing->shouldNotReceive('mutePublishedTrack');
+        $this->assertSame(MeetingMicrophoneMuteResult::NoActiveMicrophone, (new SdkLiveKitRoomManager($missing))->muteParticipantMicrophone('opaque-room', 'opaque-identity'));
+
+        $absent = Mockery::mock(RoomServiceClient::class);
+        $absent->shouldReceive('getParticipant')->andThrow($this->twirpError(ErrorCode::NotFound));
+        $this->assertSame(MeetingMicrophoneMuteResult::ParticipantNotPresent, (new SdkLiveKitRoomManager($absent))->muteParticipantMicrophone('opaque-room', 'opaque-identity'));
+
+        $failed = Mockery::mock(RoomServiceClient::class);
+        $failed->shouldReceive('getParticipant')->andThrow(new RuntimeException('provider transport detail'));
+        $this->assertSame(MeetingMicrophoneMuteResult::ProviderFailure, (new SdkLiveKitRoomManager($failed))->muteParticipantMicrophone('opaque-room', 'opaque-identity'));
     }
 
     public function test_transport_failure_logging_never_contains_provider_details(): void
