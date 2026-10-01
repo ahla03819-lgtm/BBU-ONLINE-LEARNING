@@ -3,6 +3,7 @@
 namespace App\Actions\Meetings;
 
 use App\Enums\MeetingParticipantRole;
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\User;
@@ -57,7 +58,12 @@ final class IssueMeetingToken
 
         try {
             $sources = ['camera', 'microphone'];
-            if (Gate::forUser($actor)->allows('screenShare', $meeting)) {
+            $hasApprovedStudentShare = $meeting->screenShareRequests()
+                ->where('meeting_participant_id', $participant->id)
+                ->whereIn('status', [MeetingScreenShareRequestStatus::Approved->value, MeetingScreenShareRequestStatus::Sharing->value])
+                ->where(fn ($query) => $query->whereNotNull('started_at')->orWhere('expires_at', '>', now()))
+                ->exists();
+            if (Gate::forUser($actor)->allows('screenShare', $meeting) || $hasApprovedStudentShare) {
                 $sources = [...$sources, 'screen_share', 'screen_share_audio'];
             }
             $metadata = json_encode([

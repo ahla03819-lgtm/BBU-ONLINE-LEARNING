@@ -14,5 +14,7 @@ final readonly class VerifiedWebhook
         public ?string $participantSid,
         public CarbonImmutable $occurredAt,
         public string $payloadSha256,
+        public ?int $trackSource = null,
+        public ?string $trackSid = null,
     ) {}
 }

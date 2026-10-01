@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['event_id', 'event_type', 'livekit_room_name', 'participant_identity', 'participant_sid', 'occurred_at', 'payload_sha256', 'status', 'attempts', 'next_attempt_at', 'processed_at', 'processing_error'])]
+#[Fillable(['event_id', 'event_type', 'livekit_room_name', 'participant_identity', 'participant_sid', 'track_source', 'track_sid', 'occurred_at', 'payload_sha256', 'status', 'attempts', 'next_attempt_at', 'processed_at', 'processing_error'])]
 class LiveKitWebhookEvent extends Model
 {
     /** @use HasFactory<LiveKitWebhookEventFactory> */
@@ -28,6 +28,7 @@ class LiveKitWebhookEvent extends Model
         return [
             'status' => LiveKitWebhookStatus::class,
             'attempts' => 'integer',
+            'track_source' => 'integer',
             'occurred_at' => 'datetime',
             'next_attempt_at' => 'datetime',
             'processed_at' => 'datetime',

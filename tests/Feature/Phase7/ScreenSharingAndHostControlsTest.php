@@ -3,12 +3,15 @@
 namespace Tests\Feature\Phase7;
 
 use App\Enums\AccountStatus;
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Enums\SchoolClassStatus;
 use App\Models\AcademicYear;
 use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\MeetingJoinRequest;
+use App\Models\MeetingParticipant;
+use App\Models\MeetingScreenShareRequest;
 use App\Models\SchoolClass;
 use App\Models\StudentProfile;
 use App\Models\TeacherClassAssignment;
@@ -80,6 +83,31 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $this->assertTrue($this->issuer->canPublishData);
     }
 
+    public function test_unexpired_server_approval_restores_student_screen_sources_on_reconnect(): void
+    {
+        $class = $this->activeClass();
+        $teacher = $this->teacher($class);
+        $student = $this->student($class);
+        $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id, 'host_user_id' => $teacher->id]);
+        MeetingJoinRequest::factory()->admitted()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
+        $participant = MeetingParticipant::factory()->create(['meeting_id' => $meeting->id, 'user_id' => $student->id]);
+        MeetingScreenShareRequest::query()->create([
+            'meeting_id' => $meeting->id,
+            'meeting_participant_id' => $participant->id,
+            'requester_user_id' => $student->id,
+            'status' => MeetingScreenShareRequestStatus::Approved,
+            'active_slot' => 1,
+            'requested_at' => now(),
+            'decided_at' => now(),
+            'expires_at' => now()->addMinute(),
+        ]);
+
+        $this->actingAs($student)->postJson(route('meetings.token', [$class, $meeting]))->assertOk();
+
+        $this->assertSame(['camera', 'microphone', 'screen_share', 'screen_share_audio'], $this->issuer->publishSources);
+        $this->assertTrue($this->issuer->canPublishData);
+    }
+
     public function test_lobby_serialization_exposes_only_safe_screen_share_capability(): void
     {
         $class = $this->activeClass();
@@ -94,6 +122,7 @@ class ScreenSharingAndHostControlsTest extends TestCase
             ->missing('meeting.livekit_identity'));
         $this->actingAs($student)->get(route('meetings.lobby', [$class, $meeting]))->assertInertia(fn (Assert $page) => $page
             ->where('meeting.can_screen_share', false)
+            ->where('meeting.requires_screen_share_approval', true)
             ->where('meeting.can_manage_participants', false));
     }
 
@@ -104,12 +133,13 @@ class ScreenSharingAndHostControlsTest extends TestCase
         $sidePanel = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingSidePanel.jsx'));
         $stage = file_get_contents(resource_path('js/Components/Meetings/LiveKit/MeetingStage.jsx'));
         $moderation = file_get_contents(resource_path('js/Hooks/Meetings/useMeetingModeration.js'));
+        $screenShareApproval = file_get_contents(resource_path('js/Components/Meetings/LiveKit/screenShareApproval.js'));
         $view = file_get_contents(resource_path('js/Components/Meetings/LiveKit/meetingView.js'));
         $lobby = file_get_contents(resource_path('js/Pages/Meetings/Lobby.jsx'));
         $catalogue = file_get_contents(resource_path('js/i18n/en.js'));
 
-        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'meetingRoom.stage.sharedBy', 'meetingRoom.controlCenter.shareScreen', 'meetingRoom.controlCenter.stopSharingScreen', 'setScreenShareEnabled(false)', 'removing === record.reference', "noticeKey('meetingRoom.panels.participantRemoved')", 'meetingRoom.panels.removeFailed'] as $contract) {
-            $this->assertStringContainsString($contract, $component.$controls.$sidePanel.$stage.$moderation);
+        foreach (['Track.Source.ScreenShare', 'useTrackToggle', 'isScreenShareEnabled', 'meetingRoom.stage.sharedBy', 'meetingRoom.screenShare.start', 'meetingRoom.controlCenter.stopShare', 'setScreenShareEnabled(false)', 'removing === record.reference', "noticeKey('meetingRoom.panels.participantRemoved')", 'meetingRoom.panels.removeFailed'] as $contract) {
+            $this->assertStringContainsString($contract, $component.$controls.$sidePanel.$stage.$moderation.$screenShareApproval);
         }
         // The removal success notice is translated at render time; the English copy
         // must stay exactly what the old hardcoded string rendered.

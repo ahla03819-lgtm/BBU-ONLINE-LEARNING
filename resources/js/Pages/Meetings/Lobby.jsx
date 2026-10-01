@@ -14,6 +14,7 @@ import {clearMeetingMediaIntent, meetingMediaIntentKey, readMeetingMediaIntent, 
 import {useTranslation} from '../../i18n/LocaleProvider';
 import {noticeKey, noticeRaw, renderNotice} from '../../i18n/notice';
 import useMeetingFullscreen, {exitFullscreenAfterJoinFailure} from '../../Hooks/Meetings/useMeetingFullscreen';
+import {meetingExperienceUrls} from './meetingExperienceUrls';
 
 export default function Lobby({schoolClass, meeting: initialMeeting, resumeSession = false}) {
     const {t} = useTranslation();
@@ -119,7 +120,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                 throw new Error(data.message || data.errors?.meeting?.[0] || '');
             }
             const clock = {serverNowAt: data.server_now_at, receivedAt: performance.now()};
-            const roomUrl = `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/room`;
+            const {roomUrl, lobbyUrl} = meetingExperienceUrls(schoolClass.id, meeting.uuid);
             const savedIntent = resumeSession ? readMeetingMediaIntent(mediaIntentKey) : null;
             const mediaIntent = savedIntent || {
                 microphoneEnabled: media.microphoneEnabled,
@@ -137,7 +138,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                 mediaIntent,
                 mediaIntentKey,
                 roomUrl,
-                lobbyUrl: `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/lobby`,
+                lobbyUrl,
                 onLeave: async () => {
                     if (!meeting.can_bypass_waiting_room && joinRequest?.status === 'admitted') {
                         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;

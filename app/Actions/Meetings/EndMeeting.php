@@ -4,9 +4,11 @@ namespace App\Actions\Meetings;
 
 use App\Contracts\MeetingLifecycleProvider;
 use App\Enums\MeetingProviderState;
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Events\MeetingEnded;
 use App\Events\MeetingEnding;
+use App\Events\MeetingScreenShareRequestChanged;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -39,6 +41,10 @@ class EndMeeting
                 'lifecycle_version' => $locked->lifecycle_version + 1,
                 'last_provider_error' => null,
             ]);
+            $locked->screenShareRequests()->whereNotNull('active_slot')->get()->each(function ($request) {
+                $request->update(['status' => MeetingScreenShareRequestStatus::Expired, 'active_slot' => null, 'completed_at' => now()]);
+                MeetingScreenShareRequestChanged::dispatch($request);
+            });
             $this->audit->log('meeting.end-requested', $locked, $before, $locked->only('status', 'lifecycle_version'));
             MeetingEnding::dispatch($locked);
 

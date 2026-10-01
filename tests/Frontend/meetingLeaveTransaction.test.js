@@ -43,6 +43,21 @@ test('a cancelled lobby navigation keeps the session, preventing a room resume r
     assert.deepEqual(calls, ['cleanup', 'disconnect']);
 });
 
+test('an End fallback navigation clears the disconnected session after cleanup', async () => {
+    const leave = createMeetingLeaveTransaction();
+    const calls = [];
+    const result = await leave({
+        returnToLobby: true,
+        cleanup: async () => { calls.push('cleanup'); },
+        disconnect: async () => { calls.push('disconnect'); },
+        navigate: async () => { calls.push('navigate'); return {status: 'fallback'}; },
+        clearSession: () => { calls.push('clear'); },
+    });
+
+    assert.deepEqual(result, {status: 'fallback'});
+    assert.deepEqual(calls, ['cleanup', 'disconnect', 'navigate', 'clear']);
+});
+
 test('a mini-meeting leave clears locally without navigating away from the underlying page', async () => {
     const leave = createMeetingLeaveTransaction();
     const calls = [];

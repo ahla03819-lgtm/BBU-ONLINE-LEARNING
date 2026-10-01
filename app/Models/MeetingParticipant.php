@@ -55,4 +55,9 @@ class MeetingParticipant extends Model
     {
         return $this->hasMany(MeetingAttendanceSession::class);
     }
+
+    public function screenShareRequests(): HasMany
+    {
+        return $this->hasMany(MeetingScreenShareRequest::class);
+    }
 }

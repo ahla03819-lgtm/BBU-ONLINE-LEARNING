@@ -65,6 +65,20 @@ export function WaitingSection({moderation}) {
     </section>;
 }
 
+function ScreenShareRequestsSection({moderation}) {
+    const {t} = useTranslation();
+    const {screenShareRequests, screenShareError, busy, available, decideScreenShare} = moderation;
+    return <section aria-label={t('meetingRoom.screenShare.requests')} className="mb-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-3">
+        <h3 className="text-sm font-bold text-slate-900">{t('meetingRoom.screenShare.requests')} ({screenShareRequests.length})</h3>
+        {screenShareError && <p className="mt-1 text-xs text-rose-700" role="status">{renderNotice(screenShareError, t)}</p>}
+        {!screenShareError && screenShareRequests.length === 0 && <p className="mt-1 text-xs text-slate-600">{t('meetingRoom.screenShare.noRequests')}</p>}
+        <div className="mt-2 space-y-3">{screenShareRequests.map((request) => <div key={request.reference} className="rounded-xl bg-white p-3">
+            <div className="flex items-center gap-2"><MeetingParticipantAvatar name={request.display_name} avatarUrl={request.avatar_url} size="sm" alt=""/><div className="min-w-0"><p className="break-words text-sm font-bold">{request.display_name}</p><p className="text-xs text-slate-500">{t('meetingRoom.screenShare.wantsToShare')}</p></div></div>
+            <div className="mt-3 flex gap-2"><button type="button" disabled={!available || busy !== null} onClick={() => decideScreenShare(request, 'approved')} className="min-h-10 flex-1 rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-50">{t('meetingRoom.screenShare.approve')}</button><button type="button" disabled={!available || busy !== null} onClick={() => decideScreenShare(request, 'rejected')} className="min-h-10 flex-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-600 disabled:opacity-50">{t('meetingRoom.screenShare.reject')}</button></div>
+        </div>)}</div>
+    </section>;
+}
+
 export function ParticipantsPanel({meeting, onClose, raisedHands, moderation}) {
     const {t} = useTranslation();
     const participants = useParticipants();
@@ -81,6 +95,11 @@ export function ParticipantsPanel({meeting, onClose, raisedHands, moderation}) {
     return <MeetingSidePanel title={t('meetingRoom.panels.peopleCount', {count: participants.length})} icon="users" onClose={onClose}><div className="min-h-0 flex-1 overflow-y-auto p-3">
         {moderation.message && <p className="mb-3 rounded-xl bg-sky-50 p-3 text-xs text-sky-900" role="status">{renderNotice(moderation.message, t)}</p>}
         {meeting.can_manage_join_requests && <WaitingSection moderation={moderation}/>}
+        {/* Moderators watch this panel while a meeting runs, so a pending screen
+            share request has to surface here too, exactly like a waiting room
+            request does. Rendering it only in host controls left the request
+            invisible to anyone moderating from the People panel. */}
+        {meeting.can_manage_screen_share_requests && <ScreenShareRequestsSection moderation={moderation}/>}
         <h3 className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t('meetingRoom.panels.inThisMeeting')}{raisedCount > 0 ? ` · ${t(raisedCount === 1 ? 'meetingRoom.panels.handsRaised' : 'meetingRoom.panels.handsRaisedPlural', {count: raisedCount})}` : ''}</h3>
         {moderation.rosterError && <p className="mb-2 px-2 text-xs text-amber-800" role="status">{renderNotice(moderation.rosterError, t)}</p>}
         <div className="space-y-2">{sortRaisedParticipants(participants, raisedHands).map((participant) => {
@@ -101,11 +120,12 @@ export function ParticipantsPanel({meeting, onClose, raisedHands, moderation}) {
 
 export function HostControlsPanel({meeting, moderation, onClose, onPeople, onInfo}) {
     const {t} = useTranslation();
-    if (!meeting.can_end && !meeting.can_manage_participants && !meeting.can_manage_join_requests) return null;
+    if (!meeting.can_end && !meeting.can_manage_participants && !meeting.can_manage_join_requests && !meeting.can_manage_screen_share_requests) return null;
     const actionClass = 'min-h-11 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-left text-sm font-bold hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-600';
     return <MeetingSidePanel title={t('meetingRoom.panels.hostControls')} icon="settings" onClose={onClose}><div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {moderation.message && <p role="status" className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900">{renderNotice(moderation.message, t)}</p>}
         {meeting.can_manage_join_requests && <WaitingSection moderation={moderation}/>}
+        {meeting.can_manage_screen_share_requests && <ScreenShareRequestsSection moderation={moderation}/>}
         {meeting.can_manage_participants && <button type="button" className={actionClass} onClick={onPeople}>{t('meetingRoom.panels.manageParticipants')}</button>}
         <button type="button" className={actionClass} onClick={onInfo} aria-label={t('meetingRoom.controlCenter.openMeetingInfo')}>{t('meetingRoom.controlCenter.meetingInfo')}</button>
         {meeting.can_end && <div className="border-t border-slate-100 pt-4"><p className="mb-3 text-xs leading-5 text-slate-600">{t('meetingRoom.panels.endWarning')}</p><button type="button" disabled={!moderation.available || moderation.busy !== null} onClick={moderation.end} className="min-h-11 w-full rounded-xl bg-rose-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-50">{t(moderation.busy === 'end' ? 'meetingRoom.panels.ending' : 'meetingRoom.panels.endForEveryone')}</button></div>}

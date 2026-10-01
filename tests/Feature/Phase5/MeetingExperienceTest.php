@@ -84,10 +84,12 @@ class MeetingExperienceTest extends TestCase
         $this->assertStringContainsString('localParticipant.setCameraEnabled(desiredCamera)', $room);
         $this->assertStringContainsString('localParticipant.setMicrophoneEnabled(desiredMicrophone)', $room);
         $this->assertStringContainsString('Promise.allSettled', $room);
-        $this->assertStringContainsString("t('meetingRoom.controlCenter.resumeScreenShare')", $controls);
+        $this->assertStringContainsString('meetingRoom.controlCenter.resumeScreenShare', $controls);
+        $this->assertStringContainsString('const shareLabel = t(shareLabelKey);', $controls);
         $this->assertStringContainsString('screenShareIntentChange', $controls);
         $this->assertStringNotContainsString('setScreenShareEnabled(true)', $room.$controls);
-        $this->assertStringContainsString('disabled={!available || share.pending}', $controls);
+        $this->assertStringContainsString('const screenShareDisabled = !available || share.pending', $controls);
+        $this->assertStringContainsString('if (!shouldStartScreenCapture(shareState)) return;', $controls);
         $this->assertStringContainsString('const stopAll = async () => Promise.allSettled([localParticipant.setCameraEnabled(false), localParticipant.setMicrophoneEnabled(false), localParticipant.setScreenShareEnabled(false)])', $controls);
         $this->assertStringNotContainsString('localParticipant.setScreenShareEnabled(false).catch(() => {})', $controls);
         $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
@@ -150,11 +152,12 @@ class MeetingExperienceTest extends TestCase
         // and only a completed visit may clear the persistent session.
         $this->assertStringContainsString('createMeetingLeaveTransaction()', $provider);
         $this->assertStringContainsString('return new Promise((resolve) => {', $provider);
-        $this->assertStringContainsString('router.visit(current.lobbyUrl, {', $provider);
-        $this->assertStringContainsString("replace: true,", $provider);
-        $this->assertStringContainsString("onCancel: () => { status = 'cancelled'; },", $provider);
+        $this->assertStringContainsString('router.visit(lobbyUrl, {', $provider);
+        $this->assertStringContainsString('replace: true,', $provider);
+        $this->assertStringContainsString('onCancel: () => {', $provider);
+        $this->assertStringContainsString("if (!fallbackNavigation) {\n                                status = 'cancelled';", $provider);
         $this->assertStringContainsString('onFinish: () => resolve({status}),', $provider);
-        $this->assertStringContainsString("if (navigation.status === 'success') operation.clearSession();", $transaction);
+        $this->assertStringContainsString("['success', 'fallback'].includes(navigation.status)", $transaction);
         $this->assertStringNotContainsString('router.visit(current.lobbyUrl, {replace: true});', $provider);
         $this->assertStringContainsString('clearMeetingMediaIntent(current.mediaIntentKey)', $provider);
         $this->assertStringContainsString('await fetch(`/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/waiting-room`', $lobby);
