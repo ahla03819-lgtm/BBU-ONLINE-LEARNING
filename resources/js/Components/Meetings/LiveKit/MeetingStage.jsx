@@ -89,16 +89,29 @@ function CameraTile({trackRef, onFocus, focusedIdentity}) {
 
 function GalleryTile(props) {
     const trackRef = useTrackRefContext();
-    return trackRef.source === Track.Source.ScreenShare ? <ParticipantTile/> : <CameraTile {...props} trackRef={trackRef}/>;
+    return trackRef.source === Track.Source.ScreenShare ? <ScreenShareTile trackRef={trackRef}/> : <CameraTile {...props} trackRef={trackRef}/>;
+}
+
+function SharedContentLabel({trackRef}) {
+    const {t} = useTranslation();
+    const screenOwner = trackRef?.participant?.name || 'Participant';
+    return <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 via-black/20 to-transparent px-3 py-2 text-xs font-medium text-white"><span className="truncate">{t('meetingRoom.stage.screenOf', {name: screenOwner})}</span><span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/30 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-200"><Icon name="screen" className="h-3.5 w-3.5"/>{t('meetingRoom.stage.shared')}</span></div>;
 }
 
 function ScreenSharePreview({trackRef}) {
-    const {t} = useTranslation();
-    const screenOwner = trackRef?.participant?.name || 'Participant';
     return <div className="relative h-full w-full overflow-hidden rounded-2xl bg-slate-950">
-        <VideoTrack trackRef={trackRef} className="h-full w-full object-contain"/>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 via-black/20 to-transparent px-3 py-2 text-xs font-medium text-white"><span className="truncate">{t('meetingRoom.stage.screenOf', {name: screenOwner})}</span><span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/30 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-200"><Icon name="screen" className="h-3.5 w-3.5"/>{t('meetingRoom.stage.shared')}</span></div>
+        <VideoTrack trackRef={trackRef} className="meeting-shared-content"/>
+        <SharedContentLabel trackRef={trackRef}/>
     </div>;
+}
+
+// Screen shares are never cropped: the tile fills its box and the video is
+// letterboxed inside it with object-fit: contain.
+function ScreenShareTile({trackRef}) {
+    return <ParticipantTile trackRef={trackRef} className="h-full w-full overflow-hidden rounded-2xl bg-slate-950">
+        <VideoTrack trackRef={trackRef} className="meeting-shared-content"/>
+        <SharedContentLabel trackRef={trackRef}/>
+    </ParticipantTile>;
 }
 
 export default function MeetingStage({view, onViewChange}) {
@@ -152,26 +165,26 @@ export default function MeetingStage({view, onViewChange}) {
     const stage = selectMeetingStage({view: effectiveView, cameras, screens, speakers: speakers.length ? speakers : [{identity: lastSpeaker}], focusedIdentity});
     const rail = screenShareActive ? [...screens.slice(1), ...cameras] : cameras.filter((track) => track !== stage.primary);
 
-    if (stage.kind === 'gallery') return <section className="h-[clamp(22rem,58vh,48rem)] min-w-0" aria-label={t('meetingRoom.stage.galleryView')}><GridLayout tracks={[...screens, ...cameras]} className="h-full min-w-0 overflow-hidden rounded-2xl"><GalleryTile onFocus={focus} focusedIdentity={focusedIdentity}/></GridLayout></section>;
+    if (stage.kind === 'gallery') return <section className="h-full min-h-0 min-w-0" aria-label={t('meetingRoom.stage.galleryView')}><GridLayout tracks={[...screens, ...cameras]} className="h-full min-w-0 overflow-hidden rounded-2xl"><GalleryTile onFocus={focus} focusedIdentity={focusedIdentity}/></GridLayout></section>;
 
     if (screenShareActive) {
         const railItems = rail.filter(Boolean);
         const showRail = !contentFocus && railItems.length > 0;
 
-        return <section className="min-w-0" aria-label={t('meetingRoom.stage.sharedLayout')}>
-            <div className="flex min-h-0 flex-col gap-3 xl:flex-row">
-                <div className="relative min-w-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+        return <section className="flex h-full min-h-0 min-w-0 flex-col" aria-label={t('meetingRoom.stage.sharedLayout')}>
+            <div className="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row">
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                     <div className="absolute right-3 top-3 z-20 flex items-center justify-end">
                         <button type="button" onClick={() => setContentFocus((value) => !value)} className="rounded-lg border border-white/15 bg-slate-950/70 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-100 transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400" aria-label={t(contentFocus ? 'meetingRoom.stage.restoreRail' : 'meetingRoom.stage.focusContent')}>
                             {t(contentFocus ? 'meetingRoom.stage.showParticipants' : 'meetingRoom.stage.focusContent')}
                         </button>
                     </div>
-                    <div className="h-[clamp(20rem,55vh,44rem)] min-w-0">{stage.primary ? <ScreenSharePreview trackRef={stage.primary}/> : <p className="p-6 text-center text-sm text-slate-300">{t('meetingRoom.stage.waitingForShare')}</p>}</div>
+                    <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{stage.primary ? <ScreenSharePreview trackRef={stage.primary}/> : <p className="p-6 text-center text-sm text-slate-300">{t('meetingRoom.stage.waitingForShare')}</p>}</div>
                 </div>
-                {showRail && <aside className="w-full shrink-0 xl:w-[18rem] 2xl:w-[20rem]" aria-label={t('meetingRoom.stage.participantRail')}>
-                    <div className="flex max-h-[16rem] gap-2 overflow-x-auto pb-1 xl:max-h-[calc(100vh-18rem)] xl:flex-col xl:overflow-y-auto xl:pb-0">
-                        {railItems.map((track) => <div key={`${track.participant.identity}:${track.source}`} className="h-28 min-h-[7rem] w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 md:w-48 xl:w-full xl:min-h-[8rem]">
-                            {track.source === Track.Source.ScreenShare ? <ParticipantTile trackRef={track}/> : <CameraTile trackRef={track} onFocus={focus} focusedIdentity={focusedIdentity}/>}
+                {showRail && <aside className="flex w-full shrink-0 flex-col xl:w-[18rem] 2xl:w-[20rem]" aria-label={t('meetingRoom.stage.participantRail')}>
+                    <div className="flex max-h-[16rem] gap-2 overflow-x-auto pb-1 xl:min-h-0 xl:max-h-none xl:flex-1 xl:flex-col xl:overflow-y-auto xl:pb-0">
+                        {railItems.map((track) => <div key={`${track.participant.identity}:${track.source}`} className="h-28 min-h-[7rem] w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 md:w-48 xl:h-32 xl:w-full xl:min-h-[8rem]">
+                            {track.source === Track.Source.ScreenShare ? <ScreenShareTile trackRef={track}/> : <CameraTile trackRef={track} onFocus={focus} focusedIdentity={focusedIdentity}/>}
                         </div>)}
                     </div>
                 </aside>}
@@ -179,12 +192,12 @@ export default function MeetingStage({view, onViewChange}) {
         </section>;
     }
 
-    return <div className="flex min-w-0 flex-col gap-3">
-        <section className="min-w-0 rounded-2xl border border-white/10 bg-black/25 p-2" aria-label={t(stage.kind === 'screen' ? 'meetingRoom.stage.screenFocus' : 'meetingRoom.stage.speakerFocus')}>
-            <p className="mb-2 flex items-center gap-2 px-2 text-xs font-semibold text-slate-200"><Icon name={stage.kind === 'screen' ? 'screen' : 'user'} className="h-4 w-4"/>{stage.kind === 'screen' ? t('meetingRoom.stage.sharedBy', {name: stage.primary.participant.name || t('common.participant')}) : focusedIdentity ? t('meetingRoom.stage.focused') : t('meetingRoom.stage.followingSpeaker')}</p>
-            {view === 'screen' && !screens.length && <p className="mb-2 px-2 text-xs text-slate-300" role="status">{t('meetingRoom.stage.noShare')}</p>}
-            <div className="h-[clamp(19rem,48vh,40rem)] min-w-0">{stage.primary ? stage.kind === 'screen' ? <ParticipantTile trackRef={stage.primary}/> : <CameraTile trackRef={stage.primary} onFocus={focus} focusedIdentity={focusedIdentity}/> : <p className="p-6 text-center text-sm text-slate-300">{t('meetingRoom.stage.waitingForParticipants')}</p>}</div>
+    return <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-white/10 bg-black/25 p-2" aria-label={t(stage.kind === 'screen' ? 'meetingRoom.stage.screenFocus' : 'meetingRoom.stage.speakerFocus')}>
+            <p className="mb-2 flex shrink-0 items-center gap-2 px-2 text-xs font-semibold text-slate-200"><Icon name={stage.kind === 'screen' ? 'screen' : 'user'} className="h-4 w-4"/>{stage.kind === 'screen' ? t('meetingRoom.stage.sharedBy', {name: stage.primary.participant.name || t('common.participant')}) : focusedIdentity ? t('meetingRoom.stage.focused') : t('meetingRoom.stage.followingSpeaker')}</p>
+            {view === 'screen' && !screens.length && <p className="mb-2 shrink-0 px-2 text-xs text-slate-300" role="status">{t('meetingRoom.stage.noShare')}</p>}
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{stage.primary ? stage.kind === 'screen' ? <ScreenShareTile trackRef={stage.primary}/> : <CameraTile trackRef={stage.primary} onFocus={focus} focusedIdentity={focusedIdentity}/> : <p className="p-6 text-center text-sm text-slate-300">{t('meetingRoom.stage.waitingForParticipants')}</p>}</div>
         </section>
-        {rail.length > 0 && <section className="min-w-0" aria-label={t('meetingRoom.stage.participantRail')}><div className="flex gap-2 overflow-x-auto pb-2">{rail.map((track) => <div key={`${track.participant.identity}:${track.source}`} className="h-36 w-48 shrink-0">{track.source === Track.Source.ScreenShare ? <ParticipantTile trackRef={track}/> : <CameraTile trackRef={track} onFocus={focus} focusedIdentity={focusedIdentity}/>}</div>)}</div></section>}
+        {rail.length > 0 && <section className="min-w-0 shrink-0" aria-label={t('meetingRoom.stage.participantRail')}><div className="flex gap-2 overflow-x-auto pb-2">{rail.map((track) => <div key={`${track.participant.identity}:${track.source}`} className="h-36 w-48 shrink-0 overflow-hidden rounded-2xl">{track.source === Track.Source.ScreenShare ? <ScreenShareTile trackRef={track}/> : <CameraTile trackRef={track} onFocus={focus} focusedIdentity={focusedIdentity}/>}</div>)}</div></section>}
     </div>;
 }

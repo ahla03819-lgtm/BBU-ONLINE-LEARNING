@@ -17,11 +17,13 @@ final class SdkLiveKitWebhookVerifier implements LiveKitWebhookVerifier
             ->receive($body, $matches[1]);
         $room = $event->getRoom();
         $participant = $event->getParticipant();
+        $track = $event->getTrack();
 
         return new VerifiedWebhook(
             $event->getId(), $event->getEvent(), $room?->getName(),
             $participant?->getIdentity(), $participant?->getSid(),
             CarbonImmutable::createFromTimestamp((int) $event->getCreatedAt()), hash('sha256', $body),
+            $track?->getSource(), $track?->getSid() ?: null,
         );
     }
 }

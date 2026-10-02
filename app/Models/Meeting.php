@@ -83,4 +83,9 @@ class Meeting extends Model
     {
         return $this->hasMany(MeetingJoinRequest::class);
     }
+
+    public function screenShareRequests(): HasMany
+    {
+        return $this->hasMany(MeetingScreenShareRequest::class);
+    }
 }

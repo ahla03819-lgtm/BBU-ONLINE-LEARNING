@@ -2,7 +2,9 @@
 
 namespace App\Actions\Meetings;
 
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Events\MeetingParticipantRemoved;
+use App\Events\MeetingScreenShareRequestChanged;
 use App\Models\MeetingParticipant;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -34,6 +36,10 @@ final class RemoveMeetingParticipant
                     throw ValidationException::withMessages(['participant' => 'The assigned meeting host cannot be removed.']);
                 }
                 $locked->update(['removed_at' => now(), 'removed_by' => $actor->id, 'removal_reason' => $reason, 'join_reserved_until' => null]);
+                $locked->screenShareRequests()->whereNotNull('active_slot')->get()->each(function ($request) {
+                    $request->update(['status' => MeetingScreenShareRequestStatus::Cancelled, 'active_slot' => null, 'completed_at' => now()]);
+                    MeetingScreenShareRequestChanged::dispatch($request);
+                });
                 $this->audit->log('meeting.participant-removed', $locked, [], ['meeting_id' => $locked->meeting_id, 'reason' => $reason]);
                 MeetingParticipantRemoved::dispatch($locked);
 

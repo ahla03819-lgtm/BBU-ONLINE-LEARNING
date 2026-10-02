@@ -8,6 +8,7 @@ import {readMeetingMediaIntent, screenShareIntentChange, writeMeetingMediaIntent
 import {useTranslation} from '../../../i18n/LocaleProvider';
 import {hasNotice, noticeKey, noticeRaw, renderNotice} from '../../../i18n/notice';
 import useMeetingFullscreen from '../../../Hooks/Meetings/useMeetingFullscreen';
+import {screenShareButtonState, screenShareLabelKey, shouldStartScreenCapture} from './screenShareApproval';
 
 function DeviceSelect({kind, labelKey, onMessage, expanded = false}) {
     const {t} = useTranslation();
@@ -47,7 +48,7 @@ export function MeetingDeviceSettings({onClose, onMessage}) {
     return <MeetingSidePanel title={t('meetingRoom.controlCenter.deviceSettings')} icon="settings" onClose={onClose}><div className="space-y-4 overflow-y-auto p-4"><p className="text-sm text-slate-600">{t('meetingRoom.controlCenter.deviceSettingsHint')}</p><DeviceSelect expanded kind="videoinput" labelKey="meetingRoom.controlCenter.cameraLabel" onMessage={onMessage}/><DeviceSelect expanded kind="audioinput" labelKey="meetingRoom.controlCenter.microphoneLabel" onMessage={onMessage}/></div></MeetingSidePanel>;
 }
 
-export default function MeetingControlCenter({meeting, activePanel, onPanelChange, signals, waitingCount, raisedCount, view, onViewChange, onCopyLink, copied, hasMeetingLink, mediaIntent, mediaIntentKey, mediaReady, onLeave, onMessage, isFullscreen, exitFullscreen}) {
+export default function MeetingControlCenter({meeting, activePanel, onPanelChange, signals, waitingCount, screenShareRequestCount = 0, screenShareApproval, raisedCount, view, onViewChange, onCopyLink, copied, hasMeetingLink, mediaIntent, mediaIntentKey, mediaReady, onLeave, onMessage, isFullscreen, exitFullscreen}) {
     const {t} = useTranslation();
     const connection = useConnectionState();
     const room = useRoomContext();
@@ -55,20 +56,32 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
     const {enterFullscreen, fullscreenSupported} = useMeetingFullscreen();
     const [resumeScreenShare, setResumeScreenShare] = useState(() => readMeetingMediaIntent(mediaIntentKey)?.wasScreenSharing ?? mediaIntent?.wasScreenSharing === true);
     const screenShareWasEnabled = useRef(isScreenShareEnabled);
+    // LiveKit's interaction flag can be false by the time the asynchronous
+    // display-capture publication becomes observable. This one-shot latch is
+    // armed only by the approved Start sharing click below.
+    const pendingApprovedShareStartRef = useRef(false);
     const leavingPage = useRef(false);
     const screenShareChanged = useCallback((enabled, isUserInitiated) => {
         const wasEnabled = screenShareWasEnabled.current;
         screenShareWasEnabled.current = enabled;
         const intent = screenShareIntentChange({enabled, isUserInitiated, wasEnabled, isUnmounting: leavingPage.current});
-        if (intent !== null) writeMeetingMediaIntent(mediaIntentKey, {wasScreenSharing: intent});
-        if (enabled || intent === false) setResumeScreenShare(false);
-    }, [mediaIntentKey]);
-    const share = useTrackToggle({source: Track.Source.ScreenShare, captureOptions: {contentHint: 'text'}, onChange: screenShareChanged, onDeviceError: () => onMessage(noticeKey('meetingRoom.controlCenter.shareUnavailable'))});
+        if (intent) writeMeetingMediaIntent(mediaIntentKey, intent);
+        // The application owns the explicit gesture truth; LiveKit owns the
+        // publication truth. Both are needed, so approval, mount and reconnect
+        // observations can never reconcile by themselves. Fire and forget: a
+        // failure must never stop the local share.
+        if (enabled && meeting.requires_screen_share_approval && pendingApprovedShareStartRef.current) {
+            pendingApprovedShareStartRef.current = false;
+            screenShareApproval?.reconcile();
+        }
+        if (wasEnabled && !enabled && !leavingPage.current && meeting.requires_screen_share_approval) screenShareApproval?.complete();
+    }, [mediaIntentKey, meeting.requires_screen_share_approval, screenShareApproval]);
+    const share = useTrackToggle({source: Track.Source.ScreenShare, captureOptions: {contentHint: 'text'}, onChange: screenShareChanged, onDeviceError: () => { pendingApprovedShareStartRef.current = false; onMessage(noticeKey('meetingRoom.controlCenter.shareUnavailable')); if (meeting.requires_screen_share_approval) screenShareApproval?.complete(); }});
     const [popover, setPopover] = useState(null);
     const [leaving, setLeaving] = useState(false);
     const leavingRef = useRef(false);
     const available = connection === 'connected' && meeting.status === 'active';
-    const canHost = meeting.can_end || meeting.can_manage_participants || meeting.can_manage_join_requests;
+    const canHost = meeting.can_end || meeting.can_manage_participants || meeting.can_manage_join_requests || meeting.can_manage_screen_share_requests;
     const ref = useRef(null);
     const menuRef = useRef(null);
     const trigger = useRef(null);
@@ -80,6 +93,7 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
         window.addEventListener('pagehide', markLeavingPage);
         window.addEventListener('pageshow', resumePage);
         return () => {
+            pendingApprovedShareStartRef.current = false;
             window.removeEventListener('pagehide', markLeavingPage);
             window.removeEventListener('pageshow', resumePage);
         };
@@ -117,19 +131,29 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
     };
     const menuButton = 'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-violet-400';
     const peopleLabel = [t('meetingRoom.controlCenter.openPeople'), waitingCount ? t('meetingRoom.controlCenter.openPeopleWaiting', {count: waitingCount}) : '', raisedCount ? t('meetingRoom.controlCenter.openPeopleRaised', {count: raisedCount}) : ''].join('');
-    const shareLabel = resumeScreenShare && !isScreenShareEnabled ? t('meetingRoom.controlCenter.resumeScreenShare') : isScreenShareEnabled ? t('meetingRoom.controlCenter.stopSharingScreen') : t('meetingRoom.controlCenter.shareScreen');
+    const shareState = screenShareButtonState({canShareDirectly: meeting.can_screen_share, requiresApproval: meeting.requires_screen_share_approval, isSharing: isScreenShareEnabled, requestStatus: screenShareApproval?.status, requesting: screenShareApproval?.requesting});
+    const shareLabelKey = meeting.can_screen_share && resumeScreenShare && !isScreenShareEnabled ? 'meetingRoom.controlCenter.resumeScreenShare' : screenShareLabelKey(shareState);
+    const shareLabel = t(shareLabelKey);
+    const screenShareDisabled = !available || share.pending || ['requesting', 'pending'].includes(shareState);
+    const toggleScreenShare = (event) => {
+        if (shareState === 'request') return screenShareApproval?.request();
+        if (!shouldStartScreenCapture(shareState)) return;
+        if (isScreenShareEnabled) writeMeetingMediaIntent(mediaIntentKey, {wasScreenSharing: false});
+        if (meeting.requires_screen_share_approval && shareState === 'approved') pendingApprovedShareStartRef.current = true;
+        share.buttonProps.onClick(event);
+    };
 
-    return <div ref={ref} onKeyDown={keyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPopover(null); }} aria-label={t('meetingRoom.controlCenter.label')} className={`meeting-control-bar relative mx-auto mt-4 flex w-full max-w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2 shadow-2xl shadow-black/40 sm:gap-3 sm:p-2.5 ${activePanel ? 'meeting-control-bar--panel-open' : ''}`}>
+    return <div ref={ref} onKeyDown={keyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPopover(null); }} aria-label={t('meetingRoom.controlCenter.label')} className={`meeting-control-bar relative mx-auto mt-4 flex w-full max-w-full shrink-0 flex-nowrap items-center justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2 shadow-2xl shadow-black/40 sm:gap-3 sm:p-2.5 ${activePanel ? 'meeting-control-bar--panel-open' : ''}`}>
         <Control className="meeting-control-chat" active={activePanel === 'chat'} onClick={() => togglePanel('chat')} aria-label={t('meetingRoom.controlCenter.openChat')} aria-expanded={activePanel === 'chat'}><Icon name="messages" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.chat')}</Control>
         <Control className="meeting-control-people" active={activePanel === 'people'} onClick={() => togglePanel('people')} aria-label={peopleLabel} aria-expanded={activePanel === 'people'}><span className="relative"><Icon name="users" className="h-5.5 w-5.5"/>{waitingCount > 0 && <span className="absolute -right-3 -top-2 rounded-full bg-amber-300 px-1 text-[9px] text-slate-950">{waitingCount > 99 ? '99+' : waitingCount}</span>}</span>{t('meetingRoom.controlCenter.people')}</Control>
         <Control className="meeting-control-utility" active={signals.localHandRaised} disabled={!available} onClick={() => signals.toggleHand().catch((error) => onMessage(noticeRaw(error.message)))} aria-label={t(signals.localHandRaised ? 'meetingRoom.controlCenter.lowerHand' : 'meetingRoom.controlCenter.raiseHand')} aria-pressed={signals.localHandRaised}><Icon name="hand" className="h-5.5 w-5.5"/>{t(signals.localHandRaised ? 'meetingRoom.controlCenter.lower' : 'meetingRoom.controlCenter.raise')}{raisedCount > 0 ? ` (${raisedCount})` : ''}</Control>
         <Control className="meeting-control-utility" active={popover === 'reactions'} disabled={!available} onClick={(event) => togglePopover('reactions', event)} aria-label={t('meetingRoom.controlCenter.openReactions')} aria-expanded={popover === 'reactions'}><Icon name="smile" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.react')}</Control>
         <div className="meeting-device-control flex items-center rounded-xl border border-white/[.12] bg-white/[.1] min-w-[140px]"><TrackToggle source={Track.Source.Camera} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: !isCameraEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {cameraEnabled: false}); onMessage(noticeKey('meetingRoom.controlCenter.cameraEnableFailed')); }} className="meeting-device-toggle inline-flex min-h-[68px] min-w-[70px] flex-col items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/[.08] focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isCameraEnabled ? 'meetingRoom.controlCenter.turnCameraOff' : 'meetingRoom.controlCenter.turnCameraOn')} aria-pressed={isCameraEnabled}><Icon name={isCameraEnabled ? 'video' : 'video-off'} className="h-5.5 w-5.5"/>{t(isCameraEnabled ? 'meetingRoom.controlCenter.camera' : 'meetingRoom.controlCenter.cameraOff')}</TrackToggle><div className="hidden sm:block"><DeviceSelect kind="videoinput" labelKey="meetingRoom.controlCenter.cameraLabel" onMessage={onMessage}/></div></div>
         <div className="meeting-device-control flex items-center rounded-xl border border-white/[.12] bg-white/[.1] min-w-[140px]"><TrackToggle source={Track.Source.Microphone} showIcon={false} disabled={!available || !mediaReady} onClick={() => writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: !isMicrophoneEnabled})} onChange={(enabled, isUserInitiated) => { if (isUserInitiated) writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: enabled}); }} onDeviceError={() => { writeMeetingMediaIntent(mediaIntentKey, {microphoneEnabled: false}); onMessage(noticeKey('meetingRoom.controlCenter.micEnableFailed')); }} className="meeting-device-toggle inline-flex min-h-[68px] min-w-[70px] flex-col items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/[.08] focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-45" aria-label={t(isMicrophoneEnabled ? 'meetingRoom.controlCenter.muteMicrophone' : 'meetingRoom.controlCenter.unmuteMicrophone')} aria-pressed={isMicrophoneEnabled}><Icon name={isMicrophoneEnabled ? 'mic' : 'mic-off'} className="h-5.5 w-5.5"/>{t(isMicrophoneEnabled ? 'meetingRoom.controlCenter.mic' : 'meetingRoom.controlCenter.muted')}</TrackToggle><div className="hidden sm:block"><DeviceSelect kind="audioinput" labelKey="meetingRoom.controlCenter.microphoneLabel" onMessage={onMessage}/></div></div>
-        {meeting.can_screen_share && <Control active={isScreenShareEnabled} wide={resumeScreenShare && !isScreenShareEnabled} disabled={!available || share.pending} onClick={(event) => { if (isScreenShareEnabled) writeMeetingMediaIntent(mediaIntentKey, {wasScreenSharing: false}); share.buttonProps.onClick(event); }} aria-label={shareLabel} aria-pressed={isScreenShareEnabled}><Icon name="screen" className="h-5.5 w-5.5"/>{t(resumeScreenShare && !isScreenShareEnabled ? 'meetingRoom.controlCenter.resumeScreenShare' : isScreenShareEnabled ? 'meetingRoom.controlCenter.stopShare' : 'meetingRoom.controlCenter.share')}</Control>}
+        {(meeting.can_screen_share || meeting.requires_screen_share_approval) && <Control active={isScreenShareEnabled || shareState === 'approved'} wide={resumeScreenShare || ['requesting', 'pending', 'approved'].includes(shareState)} disabled={screenShareDisabled} onClick={toggleScreenShare} aria-label={shareLabel} aria-pressed={isScreenShareEnabled}><Icon name="screen" className="h-5.5 w-5.5"/>{shareLabel}</Control>}
         <div className="meeting-control-secondary hidden lg:block"><Control active={popover === 'view'} onClick={(event) => togglePopover('view', event)} aria-label={t('meetingRoom.controlCenter.openView')} aria-expanded={popover === 'view'}><Icon name="eye" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.view')}</Control></div>
         {fullscreenSupported && <Control className="meeting-control-utility" active={isFullscreen} onClick={() => isFullscreen ? exitFullscreen() : enterFullscreen()} aria-label={t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')} aria-pressed={isFullscreen}><Icon name={isFullscreen ? 'minimize' : 'maximize'} className="h-5.5 w-5.5"/>{t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}</Control>}
-        {canHost && <div className="meeting-control-secondary hidden lg:block"><Control active={activePanel === 'host'} onClick={() => togglePanel('host')} aria-label={t('meetingRoom.controlCenter.openHostControls')} aria-expanded={activePanel === 'host'}><Icon name="settings" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.host')}</Control></div>}
+        {canHost && <div className="meeting-control-secondary hidden lg:block"><Control active={activePanel === 'host'} onClick={() => togglePanel('host')} aria-label={t('meetingRoom.controlCenter.openHostControls')} aria-expanded={activePanel === 'host'}><span className="relative"><Icon name="settings" className="h-5.5 w-5.5"/>{screenShareRequestCount > 0 && <span className="absolute -right-3 -top-2 rounded-full bg-amber-300 px-1 text-[9px] text-slate-950">{screenShareRequestCount > 99 ? '99+' : screenShareRequestCount}</span>}</span>{t('meetingRoom.controlCenter.host')}</Control></div>}
         <Control className="meeting-control-more shrink-0" active={popover === 'more'} onClick={(event) => togglePopover('more', event)} aria-label={t('meetingRoom.controlCenter.moreControls')} aria-expanded={popover === 'more'}><Icon name="more" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.more')}</Control>
         <Control className="meeting-control-leave shrink-0" danger disabled={leaving} onClick={leave} aria-label={t('meetingRoom.controlCenter.leaveMeeting')}><Icon name="logout" className="h-5.5 w-5.5"/>{t(leaving ? 'meetingRoom.controlCenter.leaving' : 'meetingRoom.controlCenter.leave')}</Control>
         {popover && <div ref={menuRef} className="absolute inset-x-0 bottom-[calc(100%+.75rem)] z-30 mx-auto max-h-[60dvh] max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-[#171a23] p-2 shadow-2xl" role="group" aria-label={t(popover === 'view' ? 'meetingRoom.controlCenter.viewOptions' : popover === 'more' ? 'meetingRoom.controlCenter.moreControls' : 'meetingRoom.controlCenter.openReactions')}>
@@ -144,6 +168,7 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
                 <button type="button" onClick={() => setPopover('view')} className={menuButton} aria-label={t('meetingRoom.controlCenter.openView')}><Icon name="eye" className="h-4 w-4"/>{t('meetingRoom.controlCenter.viewOptions')}</button>
                 {canHost && <button type="button" onClick={() => togglePanel('host')} className={menuButton} aria-label={t('meetingRoom.controlCenter.openHostControls')}><Icon name="settings" className="h-4 w-4"/>{t('meetingRoom.controlCenter.hostControls')}</button>}
                 <button type="button" onClick={() => togglePanel('devices')} className={menuButton}><Icon name="settings" className="h-4 w-4"/>{t('meetingRoom.controlCenter.deviceSettings')}</button>
+                {fullscreenSupported && <button type="button" onClick={() => { isFullscreen ? exitFullscreen() : enterFullscreen(); closePopover(); }} className={`${menuButton} meeting-more-utility`} aria-label={t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}><Icon name={isFullscreen ? 'minimize' : 'maximize'} className="h-4 w-4"/>{t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}</button>}
                 {hasMeetingLink && <button type="button" onClick={onCopyLink} className={menuButton} aria-label={t('meetingRoom.controlCenter.copyMeetingLink')}><Icon name="clipboard" className="h-4 w-4"/>{t('meetingRoom.controlCenter.copyMeetingLink')}</button>}
                 {hasNotice(copied) && <p role="status" className="px-3 py-2 text-xs text-slate-200">{renderNotice(copied, t)}</p>}
             </>}

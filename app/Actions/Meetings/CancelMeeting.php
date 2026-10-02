@@ -2,8 +2,10 @@
 
 namespace App\Actions\Meetings;
 
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Events\MeetingCancelled;
+use App\Events\MeetingScreenShareRequestChanged;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -31,6 +33,10 @@ class CancelMeeting
 
             $before = $locked->only('status', 'lifecycle_version');
             $locked->update(['status' => MeetingStatus::Cancelled, 'lifecycle_version' => $locked->lifecycle_version + 1]);
+            $locked->screenShareRequests()->whereNotNull('active_slot')->get()->each(function ($request) {
+                $request->update(['status' => MeetingScreenShareRequestStatus::Cancelled, 'active_slot' => null, 'completed_at' => now()]);
+                MeetingScreenShareRequestChanged::dispatch($request);
+            });
             $this->audit->log('meeting.cancelled', $locked, $before, $locked->only('status', 'lifecycle_version'));
             if ($this->access->isSuperAdministrator($actor)) {
                 $this->audit->log('meeting.super-admin-override', $locked, [], ['operation' => 'cancel']);

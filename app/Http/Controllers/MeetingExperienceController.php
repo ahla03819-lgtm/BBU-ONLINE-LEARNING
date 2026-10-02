@@ -52,6 +52,8 @@ class MeetingExperienceController extends Controller
                 'can_join' => request()->user()->can('join', $meeting),
                 'can_bypass_waiting_room' => app(MeetingAccess::class)->isAssignedEligibleHost(request()->user(), $meeting),
                 'can_screen_share' => request()->user()->can('screenShare', $meeting),
+                'requires_screen_share_approval' => request()->user()->hasRole('Student'),
+                'can_manage_screen_share_requests' => request()->user()->can('manageScreenShareRequests', $meeting),
                 'can_end' => request()->user()->can('end', $meeting),
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
                 'can_manage_join_requests' => request()->user()->can('manageJoinRequests', $meeting),

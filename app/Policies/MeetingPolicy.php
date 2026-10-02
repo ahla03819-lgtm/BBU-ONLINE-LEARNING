@@ -2,10 +2,12 @@
 
 namespace App\Policies;
 
+use App\Enums\MeetingScreenShareRequestStatus;
 use App\Enums\MeetingStatus;
 use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
+use App\Models\MeetingScreenShareRequest;
 use App\Models\SchoolClass;
 use App\Models\User;
 use App\Services\MeetingAccess;
@@ -126,6 +128,84 @@ class MeetingPolicy
             && $this->access->canParticipateInMeeting($user, $meeting)
             && ($this->access->isAdministrator($user) || $user->hasRole('Teacher'))
             && ! $this->isRemoved($user, $meeting);
+    }
+
+    /**
+     * The static half of the requestScreenShare check.
+     *
+     * Live presence is deliberately NOT part of any policy. A local open
+     * attendance row is not proof that the participant is connected: webhook
+     * delivery is known to be broken, so participant_joined may never have
+     * opened the row and participant_left may never close it. Treating such a
+     * row as authorization evidence is exactly the stale-presence bug this flow
+     * exists to prevent, so presence is established by EnsureCurrentMeetingAttendance
+     * against the LiveKit Room Service, which a policy may never call.
+     *
+     * RequestMeetingScreenShare is the only production caller of this method, and
+     * it verifies provider-current presence (exact participant SID, session still
+     * open) before authorizing. This policy therefore gates structure and access
+     * only, and cannot be satisfied by a stale attendance row.
+     */
+    public function requestScreenShare(User $user, Meeting $meeting, MeetingParticipant $participant): bool
+    {
+        return $this->requestScreenShareStructure($user, $meeting, $participant)
+            && $this->access->canParticipateInMeeting($user, $meeting);
+    }
+
+    /**
+     * The purely structural half of requestScreenShare: role, live meeting,
+     * participant ownership and non-removal. Used to decide whether it is worth
+     * asking the provider to confirm presence at all.
+     */
+    public function requestScreenShareStructure(User $user, Meeting $meeting, MeetingParticipant $participant): bool
+    {
+        return $user->hasRole('Student')
+            && $meeting->status === MeetingStatus::Active
+            && $participant->meeting_id === $meeting->id
+            && $participant->user_id === $user->id
+            && ! $participant->removed_at;
+    }
+
+    /**
+     * Only the student who owns the request may ask the server to re-check it.
+     *
+     * Possession of the public reference is deliberately not enough: the
+     * requester, the participant and the authenticated user must all be the same
+     * person, the participant must still be in the meeting, and the request must
+     * still be an approval in flight. A host or teacher must not be able to use
+     * this endpoint to drive a student's lifecycle.
+     */
+    public function reconcileScreenShareRequest(User $user, Meeting $meeting, MeetingParticipant $participant, MeetingScreenShareRequest $request): bool
+    {
+        return $user->hasRole('Student')
+            && $meeting->status === MeetingStatus::Active
+            && $request->meeting_id === $meeting->id
+            && $request->meeting_participant_id === $participant->id
+            && $request->requester_user_id === $user->id
+            && $participant->user_id === $user->id
+            && $participant->meeting_id === $meeting->id
+            && ! $participant->removed_at
+            && in_array($request->status, [MeetingScreenShareRequestStatus::Approved, MeetingScreenShareRequestStatus::Sharing], true);
+    }
+
+    public function manageScreenShareRequests(User $user, Meeting $meeting): bool
+    {
+        return $meeting->status === MeetingStatus::Active
+            && ($this->access->isAdministrator($user) || $user->hasRole('Teacher'))
+            && $this->access->canManageMeeting($user, $meeting);
+    }
+
+    public function decideScreenShareRequest(User $user, Meeting $meeting, MeetingScreenShareRequest $request): bool
+    {
+        return $request->meeting_id === $meeting->id
+            && $request->requester_user_id !== $user->id
+            && $this->manageScreenShareRequests($user, $meeting);
+    }
+
+    public function completeScreenShareRequest(User $user, Meeting $meeting, MeetingScreenShareRequest $request): bool
+    {
+        return $request->meeting_id === $meeting->id
+            && ($request->requester_user_id === $user->id || $this->manageScreenShareRequests($user, $meeting));
     }
 
     public function reconcile(User $user, Meeting $meeting): bool

@@ -17,9 +17,10 @@ export function PersistentMeetingProvider({children}) {
 
     if (!leaveTransactionRef.current) leaveTransactionRef.current = createMeetingLeaveTransaction();
 
-    const clearSession = useCallback(async ({returnToLobby = false, disconnectRoom} = {}) => {
+    const clearSession = useCallback(async ({returnToLobby = false, disconnectRoom, destination, fallbackNavigation = false} = {}) => {
         const current = sessionRef.current;
         if (!current) return {status: 'cleared'};
+        const lobbyUrl = destination ?? current.lobbyUrl;
 
         return leaveTransactionRef.current({
             returnToLobby,
@@ -42,11 +43,27 @@ export function PersistentMeetingProvider({children}) {
 
                 return new Promise((resolve) => {
                     let status = 'finished';
-                    router.visit(current.lobbyUrl, {
+                    router.visit(lobbyUrl, {
                         replace: true,
                         onSuccess: () => { status = 'success'; },
-                        onError: () => { status = 'error'; },
-                        onCancel: () => { status = 'cancelled'; },
+                        onError: () => {
+                            if (!fallbackNavigation) {
+                                status = 'error';
+                                return;
+                            }
+
+                            status = 'fallback';
+                            window.location.assign(lobbyUrl);
+                        },
+                        onCancel: () => {
+                            if (!fallbackNavigation) {
+                                status = 'cancelled';
+                                return;
+                            }
+
+                            status = 'fallback';
+                            window.location.assign(lobbyUrl);
+                        },
                         onFinish: () => resolve({status}),
                     });
                 });
@@ -93,6 +110,21 @@ export function PersistentMeetingProvider({children}) {
         });
     }, [clearSession]);
 
+    const endMeeting = useCallback((disconnectRoom) => {
+        const current = sessionRef.current;
+        if (!current) return Promise.resolve({status: 'cleared'});
+
+        // Preserve the destination before teardown: Room will unmount once the
+        // successful navigation clears this session.
+        const destination = current.lobbyUrl;
+        return clearSession({
+            returnToLobby: window.location.pathname === meetingPath(current.roomUrl),
+            disconnectRoom,
+            destination,
+            fallbackNavigation: true,
+        });
+    }, [clearSession]);
+
     useEffect(() => router.on('navigate', () => setPathname(window.location.pathname)), []);
 
     useEffect(() => {
@@ -125,16 +157,18 @@ export function PersistentMeetingProvider({children}) {
 
     useEffect(() => {
         if (session && ['ending', 'ended', 'cancelled'].includes(session.meeting.status)) {
-            clearSession({returnToLobby: window.location.pathname === meetingPath(session.roomUrl)});
+            // An Echo terminal update may arrive before the initiating host's
+            // End callback. It must use the same no-blank-screen route as End.
+            endMeeting();
         }
-    }, [clearSession, session]);
+    }, [endMeeting, session]);
 
     const mode = session && pathname === meetingPath(session.roomUrl) ? 'full' : 'mini';
     const value = {activeMeeting: session, startMeeting, leaveMeeting, returnToMeeting};
 
     return <PersistentMeetingContext.Provider value={value}>
         {children}
-        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting}/>}
+        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting} onEnd={endMeeting}/>}
     </PersistentMeetingContext.Provider>;
 }
 

@@ -14,7 +14,7 @@ export function createMeetingLeaveTransaction() {
             }
 
             const navigation = await operation.navigate();
-            if (navigation.status === 'success') operation.clearSession();
+            if (['success', 'fallback'].includes(navigation.status)) operation.clearSession();
 
             return navigation;
         })();
