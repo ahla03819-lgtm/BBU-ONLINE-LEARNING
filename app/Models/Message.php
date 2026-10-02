@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['channel_id', 'sender_id', 'client_uuid', 'type', 'body', 'reply_to_id', 'edited_at', 'hidden_at', 'hidden_by', 'hidden_reason', 'reactions_version'])]
+#[Fillable(['channel_id', 'sender_id', 'client_uuid', 'type', 'body', 'reply_to_id', 'meeting_recording_id', 'edited_at', 'hidden_at', 'hidden_by', 'hidden_reason', 'reactions_version'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -56,6 +56,11 @@ class Message extends Model
         return $this->hasMany(MessageReaction::class);
     }
 
+    public function meetingRecording(): BelongsTo
+    {
+        return $this->belongsTo(MeetingRecording::class, 'meeting_recording_id');
+    }
+
     public function isHidden(): bool
     {
         return $this->hidden_at !== null;
@@ -64,5 +69,17 @@ class Message extends Model
     public function isSystem(): bool
     {
         return $this->type === MessageType::System;
+    }
+
+    /**
+     * A recording card is written and advanced by the server, never by a person.
+     *
+     * It is excluded from the same edit and hide affordances as a system message
+     * so a teacher cannot retitle the authoritative record of what the provider
+     * produced.
+     */
+    public function isServerAuthored(): bool
+    {
+        return $this->isSystem() || $this->type === MessageType::MeetingRecording;
     }
 }
