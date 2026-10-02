@@ -4,6 +4,7 @@ import MeetingRoomExperience from '../Components/Meetings/LiveKit/MeetingRoomExp
 import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMediaIntent';
 import {echo} from '../realtime/echo';
 import {createMeetingLeaveTransaction} from './meetingLeaveTransaction';
+import {useMeetingRecording} from '../Hooks/Meetings/useMeetingRecording';
 
 const PersistentMeetingContext = createContext(null);
 
@@ -76,6 +77,23 @@ export function PersistentMeetingProvider({children}) {
         });
     }, []);
 
+    /**
+     * One recording API per active meeting session.
+     *
+     * It is keyed on the session so a new meeting never inherits the previous
+     * meeting's recording state, and it lives here rather than in the room page so
+     * the recording survives a full-to-mini switch and a reconnect without ever
+     * being re-created.
+     */
+    const recording = useMeetingRecording({
+        meeting: session?.meeting,
+        initialRecording: session?.meeting?.recording,
+        recordingUrl: session?.recordingUrl,
+        leaveUrl: session?.leaveUrl,
+        minDurationMinutes: session?.meeting?.recording_min_duration_minutes,
+        maxDurationMinutes: session?.meeting?.recording_max_duration_minutes,
+    });
+
     const startMeeting = useCallback((nextSession) => {
         const current = sessionRef.current;
 
@@ -104,11 +122,18 @@ export function PersistentMeetingProvider({children}) {
     const leaveMeeting = useCallback((disconnectRoom) => {
         const current = sessionRef.current;
 
+        // This is the application's only explicit leave intent, and it is what lets
+        // a recording this person started be closed. It is announced before the
+        // local teardown but is never awaited into it: leaving must succeed, and
+        // must stay as reliable across a refresh or a reconnect as it always was,
+        // whatever the server happens to say back.
+        void recording.notifyExplicitLeave();
+
         return clearSession({
             returnToLobby: Boolean(current) && window.location.pathname === meetingPath(current.roomUrl),
             disconnectRoom,
         });
-    }, [clearSession]);
+    }, [clearSession, recording]);
 
     const endMeeting = useCallback((disconnectRoom) => {
         const current = sessionRef.current;
@@ -148,12 +173,21 @@ export function PersistentMeetingProvider({children}) {
             }
         };
         channel.listen('.meeting.participant-removed', participantRemoved);
+        const recordingChanged = ({meeting_uuid: meetingUuid, recording: projection}) => {
+            if (!meetingUuid || meetingUuid !== sessionRef.current?.meeting?.uuid) return;
+            // A broadcast carries the same authoritative projection the status
+            // endpoint returns, including its own server clock, so the countdown a
+            // participant sees is still anchored on server time.
+            recording.applyBroadcast({recording: projection, server_now_at: projection?.server_now_at});
+        };
+        channel.listen('.meeting.recording-changed', recordingChanged);
 
         return () => {
             events.forEach((event) => channel.stopListening(`.meeting.${event}`, updateMeeting));
             channel.stopListening('.meeting.participant-removed', participantRemoved);
+            channel.stopListening('.meeting.recording-changed', recordingChanged);
         };
-    }, [clearSession, session?.schoolClass.id]);
+    }, [clearSession, recording.applyBroadcast, session?.schoolClass.id]);
 
     useEffect(() => {
         if (session && ['ending', 'ended', 'cancelled'].includes(session.meeting.status)) {
@@ -168,7 +202,7 @@ export function PersistentMeetingProvider({children}) {
 
     return <PersistentMeetingContext.Provider value={value}>
         {children}
-        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting} onEnd={endMeeting}/>}
+        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} recording={recording} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting} onEnd={endMeeting}/>}
     </PersistentMeetingContext.Provider>;
 }
 

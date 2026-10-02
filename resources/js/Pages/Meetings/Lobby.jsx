@@ -134,6 +134,10 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                 clock,
                 schoolClass,
                 participantReference: meeting.participant_reference,
+                // The recording endpoints follow this meeting, so a new session always
+                // talks to the meeting it is actually in.
+                recordingUrl: `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/recordings`,
+                leaveUrl: `/collaboration/classes/${schoolClass.id}/meetings/${meeting.uuid}/leave`,
                 initialMedia: {camera: media.cameraEnabled, microphone: media.microphoneEnabled, cameraId: media.cameraId, microphoneId: media.microphoneId},
                 mediaIntent,
                 mediaIntentKey,
