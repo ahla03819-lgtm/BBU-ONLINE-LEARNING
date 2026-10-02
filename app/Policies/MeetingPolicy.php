@@ -7,6 +7,7 @@ use App\Enums\MeetingStatus;
 use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
+use App\Models\MeetingRecording;
 use App\Models\MeetingScreenShareRequest;
 use App\Models\SchoolClass;
 use App\Models\User;
@@ -221,6 +222,35 @@ class MeetingPolicy
 
         return $this->access->isAssignedEligibleHost($user, $meeting)
             && $user->can($meeting->status === MeetingStatus::Starting ? 'meetings.start' : 'meetings.end');
+    }
+
+    /**
+     * Recording is a host capability, not a moderation one.
+     *
+     * The permission is the primary gate, so a student cannot reach it at all even
+     * though a student may legitimately be able to manage participants. On top of
+     * that the recording must belong to a live meeting the user may manage, and
+     * only a meeting's assigned eligible host may record it. A teacher assigned to
+     * a different class fails on all three counts.
+     */
+    public function startRecording(User $user, Meeting $meeting): bool
+    {
+        return $user->can('meetings.record')
+            && $meeting->status === MeetingStatus::Active
+            && $this->access->canManageMeeting($user, $meeting)
+            && ($this->access->isAdministrator($user) || $this->access->isAssignedEligibleHost($user, $meeting))
+            && ! $this->isRemoved($user, $meeting);
+    }
+
+    /**
+     * Stopping is granted to anyone who could have started the recording, so a
+     * meeting cannot be left with a capture nobody in the room is allowed to end.
+     * Possession of the recording is checked by the caller; this gates the ability.
+     */
+    public function stopRecording(User $user, Meeting $meeting, MeetingRecording $recording): bool
+    {
+        return $recording->meeting_id === $meeting->id
+            && $this->startRecording($user, $meeting);
     }
 
     private function isRemoved(User $user, Meeting $meeting): bool

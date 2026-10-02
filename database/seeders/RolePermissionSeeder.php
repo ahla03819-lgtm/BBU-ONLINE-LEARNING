@@ -12,7 +12,7 @@ class RolePermissionSeeder extends Seeder
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        $meetingPermissions = ['meetings.view', 'meetings.create', 'meetings.update', 'meetings.cancel', 'meetings.start', 'meetings.end', 'meetings.join', 'meetings.participants.view', 'meetings.participants.remove', 'meetings.tokens.issue', 'meetings.screen-share'];
+        $meetingPermissions = ['meetings.view', 'meetings.create', 'meetings.update', 'meetings.cancel', 'meetings.start', 'meetings.end', 'meetings.join', 'meetings.participants.view', 'meetings.participants.remove', 'meetings.tokens.issue', 'meetings.screen-share', 'meetings.record'];
         $courseworkPermissions = ['assignments.view', 'assignments.create', 'assignments.update', 'assignments.publish', 'assignments.close', 'assignments.archive', 'assignments.restore', 'submissions.view-own', 'submissions.create', 'submissions.update-own', 'submissions.submit', 'submissions.review', 'grades.view-own', 'grades.create', 'grades.update', 'submission-attachments.upload', 'submission-attachments.download'];
         $notificationPermissions = ['notifications.view', 'notifications.mark-read'];
         $attendancePermissions = ['attendance.view', 'attendance.view-own', 'attendance.record', 'attendance.finalize', 'attendance.correct'];
