@@ -45,8 +45,20 @@ abstract class RecordingTestCase extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->recordings = new FakeLiveKitRecordingManager();
+
+        // The base suite pins its own storage arrangement instead of inheriting the
+        // developer's .env. Without this the suite silently changes shape when
+        // RECORDING_DISK is pointed at real object storage, and assertions about
+        // streaming silently start asserting about signed redirects. The hosted
+        // object-storage shape is covered explicitly by MeetingRecordingObjectStorageTest.
+        config([
+            'meeting-recordings.disk' => 'local',
+            'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.output.shared_filesystem' => true,
+        ]);
+
         $this->app->instance(LiveKitRecordingManager::class, $this->recordings);
-        Storage::fake((string) config('meeting-recordings.disk'));
+        Storage::fake('local');
     }
 
     /**
