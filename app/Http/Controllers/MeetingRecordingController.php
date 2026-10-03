@@ -14,10 +14,10 @@ use App\Models\SchoolClass;
 use App\Models\User;
 use App\Support\MeetingRecordingProjection;
 use App\Services\AuditLogger;
+use App\Services\Recordings\MeetingRecordingFileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -129,27 +129,37 @@ class MeetingRecordingController extends Controller
     }
 
     /**
-     * Stream a watchable recording to an authorised viewer.
+     * Hand a watchable recording to an authorised viewer.
      *
      * There is no signed or public URL anywhere in this feature. Playback is an
-     * authenticated, authorised request against this route, streamed from private
-     * storage with the same no-store, nosniff headers the attachment downloads use,
-     * so possession of a recording reference never grants access on its own.
+     * authenticated, authorised request against this route.
+     *
+     * Once authorized, the bytes are served in whichever way the recording's disk
+     * allows. An object store that can pre-sign returns a short-lived read URL minted
+     * for this request alone, so the recording never travels through the application
+     * and the URL expires with the permission that produced it. A disk that cannot
+     * pre-sign is streamed from private storage with the same no-store, nosniff
+     * headers the attachment downloads use. Neither branch stores a permanent URL, so
+     * possession of a recording reference never grants access on its own.
      */
-    public function play(Request $request, SchoolClass $schoolClass, Meeting $meeting, MeetingRecording $recording, AuditLogger $audit): StreamedResponse|RedirectResponse
+    public function play(Request $request, SchoolClass $schoolClass, Meeting $meeting, MeetingRecording $recording, AuditLogger $audit, MeetingRecordingFileStore $files): StreamedResponse|RedirectResponse
     {
         abort_unless($meeting->school_class_id === $schoolClass->id, 404);
         abort_unless($recording->meeting_id === $meeting->id, 404);
 
         $this->authorize('play', $recording);
 
-        $disk = Storage::disk($recording->storage_disk);
+        $disk = $files->disk();
         abort_unless($disk->exists($recording->storage_path), 404, 'Recording unavailable.');
 
         $audit->log('meeting.recording-played', $recording, [], [
             'meeting_id' => $meeting->id,
             'user_id' => $request->user()->id,
         ]);
+
+        if ($url = $files->temporaryUrl($recording)) {
+            return redirect()->away($url);
+        }
 
         return $disk->download(
             $recording->storage_path,

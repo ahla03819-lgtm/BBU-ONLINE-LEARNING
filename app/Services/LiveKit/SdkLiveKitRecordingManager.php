@@ -6,8 +6,6 @@ use Agence104\LiveKit\EgressServiceClient;
 use App\Enums\MeetingRecordingProviderStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
-use Livekit\EncodedFileOutput;
-use Livekit\EncodedFileType;
 use RuntimeException;
 use Throwable;
 use Twirp\Error;
@@ -15,7 +13,12 @@ use Twirp\ErrorCode;
 
 final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
 {
-    public function __construct(private ?EgressServiceClient $sdkClient = null) {}
+    public function __construct(
+        private ?EgressServiceClient $sdkClient = null,
+        private ?LiveKitRecordingOutputFactory $output = null,
+    ) {
+        $this->output ??= new LiveKitRecordingOutputFactory;
+    }
 
     private function client(): EgressServiceClient
     {
@@ -35,16 +38,7 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
         }
 
         try {
-            $output = new EncodedFileOutput([
-                'file_type' => EncodedFileType::MP4,
-                'filepath' => $outputPath,
-                // A manifest would add an HLS playlist this application never
-                // serves, and would leave the provider holding its own index of the
-                // finished file.
-                'disable_manifest' => true,
-            ]);
-
-            $info = $this->client()->startRoomCompositeEgress($roomName, $layout, $output);
+            $info = $this->client()->startRoomCompositeEgress($roomName, $layout, $this->output->make($outputPath));
             $egressId = (string) $info->getEgressId();
             if ($egressId === '') {
                 return new LiveKitRecordingStart(MeetingRecordingProviderStatus::Unknown);
@@ -147,7 +141,30 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
         return is_string($url)
             && filter_var($url, FILTER_VALIDATE_URL) !== false
             && in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)
-            && collect(['api_key', 'api_secret'])->every(fn (string $key) => is_string(config("livekit.$key")) && config("livekit.$key") !== '');
+            && $this->roomCredentialsConfigured()
+            && $this->outputConfigured();
+    }
+
+    private function roomCredentialsConfigured(): bool
+    {
+        return collect(['api_key', 'api_secret'])->every(
+            fn (string $key) => is_string(config("livekit.$key")) && config("livekit.$key") !== ''
+        );
+    }
+
+    /**
+     * Object-storage mode is refused unless it is completely specified, and the two
+     * halves of the storage configuration have to agree with each other.
+     *
+     * Half-configured object storage is the failure mode worth guarding: the
+     * provider would accept the recording and then write it somewhere the
+     * application never looks, so every recording would sit in Processing until the
+     * bounded window failed it. Refusing up front turns that into one clear reason
+     * at the moment the teacher presses Start.
+     */
+    private function outputConfigured(): bool
+    {
+        return $this->output->isUsable();
     }
 
     private function logFailure(string $operation, Throwable $error): void
