@@ -313,7 +313,7 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     </aside>;
 }
 
-function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, onLeave, onEnd, onReturn, mode, mediaMessage, onMediaMessage, connectionError, isFullscreen, exitFullscreen}) {
+function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, recording, onLeave, onEnd, onReturn, mode, mediaMessage, onMediaMessage, connectionError, isFullscreen, exitFullscreen}) {
     const {t} = useTranslation();
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
@@ -403,14 +403,14 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
             {hasNotice(mediaMessage) || hasNotice(moderation.message) ? <div className="relative z-10 mt-3 shrink-0 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{renderFirstNotice([mediaMessage, moderation.message], t)}</div> : null}
             <div className="relative z-0 flex min-h-0 flex-1 flex-col py-3"><MeetingStage view={view} onViewChange={setView}/></div>
             <RoomAudioRenderer/>
-            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} screenShareRequestCount={moderation.screenShareRequests.length} screenShareApproval={screenShareApproval} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
+            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} screenShareRequestCount={moderation.screenShareRequests.length} screenShareApproval={screenShareApproval} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen} recording={recording}/>
         </section>
         {panel && <aside className="flex h-[70vh] min-h-[22rem] shrink-0 flex-col xl:h-full xl:min-h-0 xl:w-[clamp(17rem,24vw,22rem)] xl:pl-4">{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} moderation={moderation}/> : panel === 'host' ? <HostControlsPanel meeting={meeting} moderation={moderation} onClose={() => setPanel(null)} onPeople={() => setPanel('people')} onInfo={() => setPanel('info')}/> : panel === 'info' ? <MeetingInfoPanel meeting={meeting} schoolClass={schoolClass} count={participants.length} meetingLink={meetingLink} onCopy={copyMeetingLink} copied={copied} onClose={() => setPanel(null)}/> : panel === 'devices' ? <MeetingDeviceSettings onClose={() => setPanel(null)} onMessage={onMediaMessage}/> : null}</aside>}
         </div>
     </div></>;
 }
 
-export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, mode = 'full', onReturn, onLeave, onEnd}) {
+export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, recording, mode = 'full', onReturn, onLeave, onEnd}) {
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
     const [connectionError, setConnectionError] = useState(null);
     const [mediaMessage, setMediaMessage] = useState(null);
@@ -466,6 +466,6 @@ export default function MeetingRoomExperience({credentials, meeting, clock, scho
         onError={() => setConnectionError(noticeKey('meetingRoom.errors.roomJoinFailed'))}
         onDisconnected={() => setConnectionError(noticeKey('meetingRoom.errors.interrupted'))}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
-        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={handleLeave} onEnd={handleEnd} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
+        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} recording={recording} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={handleLeave} onEnd={handleEnd} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
     </LiveKitRoom>;
 }

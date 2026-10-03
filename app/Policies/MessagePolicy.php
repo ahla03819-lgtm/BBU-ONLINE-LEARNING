@@ -34,7 +34,7 @@ class MessagePolicy
         return $user->can('messages.update-own')
             && $message->sender_id === $user->id
             && ! $message->isHidden()
-            && ! $message->isSystem()
+            && ! $message->isServerAuthored()
             && $message->created_at->gte(now()->subMinutes(15))
             && $this->create($user, $message->channel);
     }
@@ -44,7 +44,7 @@ class MessagePolicy
         return $user->can('messages.hide-own')
             && $message->sender_id === $user->id
             && ! $message->isHidden()
-            && ! $message->isSystem()
+            && ! $message->isServerAuthored()
             && $message->created_at->gte(now()->subMinutes(15))
             && $this->create($user, $message->channel);
     }
@@ -70,7 +70,7 @@ class MessagePolicy
 
     public function setReaction(User $user, Message $message): bool
     {
-        return $user->can('reactions.create') && ! $message->isHidden() && ! $message->isSystem() && $this->create($user, $message->channel);
+        return $user->can('reactions.create') && ! $message->isHidden() && ! $message->isServerAuthored() && $this->create($user, $message->channel);
     }
 
     public function updateOwn(User $user, Message $message): bool

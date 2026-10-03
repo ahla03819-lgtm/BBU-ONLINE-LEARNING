@@ -31,6 +31,7 @@ class LiveKitWebhookController extends Controller
             'participant_sid' => $verified->participantSid,
             'track_source' => $verified->trackSource,
             'track_sid' => $verified->trackSid,
+            'egress_id' => $verified->egress?->egressId,
             'occurred_at' => $verified->occurredAt,
             'payload_sha256' => $verified->payloadSha256,
             'status' => LiveKitWebhookStatus::Pending,

@@ -9,6 +9,7 @@ import {useTranslation} from '../../../i18n/LocaleProvider';
 import {hasNotice, noticeKey, noticeRaw, renderNotice} from '../../../i18n/notice';
 import useMeetingFullscreen from '../../../Hooks/Meetings/useMeetingFullscreen';
 import {screenShareButtonState, screenShareLabelKey, shouldStartScreenCapture} from './screenShareApproval';
+import {MeetingRecordingDialogs, RecordingBadge} from './MeetingRecordingControls';
 
 function DeviceSelect({kind, labelKey, onMessage, expanded = false}) {
     const {t} = useTranslation();
@@ -48,7 +49,7 @@ export function MeetingDeviceSettings({onClose, onMessage}) {
     return <MeetingSidePanel title={t('meetingRoom.controlCenter.deviceSettings')} icon="settings" onClose={onClose}><div className="space-y-4 overflow-y-auto p-4"><p className="text-sm text-slate-600">{t('meetingRoom.controlCenter.deviceSettingsHint')}</p><DeviceSelect expanded kind="videoinput" labelKey="meetingRoom.controlCenter.cameraLabel" onMessage={onMessage}/><DeviceSelect expanded kind="audioinput" labelKey="meetingRoom.controlCenter.microphoneLabel" onMessage={onMessage}/></div></MeetingSidePanel>;
 }
 
-export default function MeetingControlCenter({meeting, activePanel, onPanelChange, signals, waitingCount, screenShareRequestCount = 0, screenShareApproval, raisedCount, view, onViewChange, onCopyLink, copied, hasMeetingLink, mediaIntent, mediaIntentKey, mediaReady, onLeave, onMessage, isFullscreen, exitFullscreen}) {
+export default function MeetingControlCenter({meeting, activePanel, onPanelChange, signals, waitingCount, screenShareRequestCount = 0, screenShareApproval, raisedCount, view, onViewChange, onCopyLink, copied, hasMeetingLink, mediaIntent, mediaIntentKey, mediaReady, onLeave, onMessage, isFullscreen, exitFullscreen, recording}) {
     const {t} = useTranslation();
     const connection = useConnectionState();
     const room = useRoomContext();
@@ -143,7 +144,9 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
         share.buttonProps.onClick(event);
     };
 
-    return <div ref={ref} onKeyDown={keyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPopover(null); }} aria-label={t('meetingRoom.controlCenter.label')} className={`meeting-control-bar relative mx-auto mt-4 flex w-full max-w-full shrink-0 flex-nowrap items-center justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2 shadow-2xl shadow-black/40 sm:gap-3 sm:p-2.5 ${activePanel ? 'meeting-control-bar--panel-open' : ''}`}>
+    return <>
+    {recording?.state && <div className="mx-auto mb-2 flex w-full max-w-full justify-center"><RecordingBadge recording={recording.state} clock={recording.clock}/></div>}
+    <div ref={ref} onKeyDown={keyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPopover(null); }} aria-label={t('meetingRoom.controlCenter.label')} className={`meeting-control-bar relative mx-auto mt-4 flex w-full max-w-full shrink-0 flex-nowrap items-center justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2 shadow-2xl shadow-black/40 sm:gap-3 sm:p-2.5 ${activePanel ? 'meeting-control-bar--panel-open' : ''}`}>
         <Control className="meeting-control-chat" active={activePanel === 'chat'} onClick={() => togglePanel('chat')} aria-label={t('meetingRoom.controlCenter.openChat')} aria-expanded={activePanel === 'chat'}><Icon name="messages" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.chat')}</Control>
         <Control className="meeting-control-people" active={activePanel === 'people'} onClick={() => togglePanel('people')} aria-label={peopleLabel} aria-expanded={activePanel === 'people'}><span className="relative"><Icon name="users" className="h-5.5 w-5.5"/>{waitingCount > 0 && <span className="absolute -right-3 -top-2 rounded-full bg-amber-300 px-1 text-[9px] text-slate-950">{waitingCount > 99 ? '99+' : waitingCount}</span>}</span>{t('meetingRoom.controlCenter.people')}</Control>
         <Control className="meeting-control-utility" active={signals.localHandRaised} disabled={!available} onClick={() => signals.toggleHand().catch((error) => onMessage(noticeRaw(error.message)))} aria-label={t(signals.localHandRaised ? 'meetingRoom.controlCenter.lowerHand' : 'meetingRoom.controlCenter.raiseHand')} aria-pressed={signals.localHandRaised}><Icon name="hand" className="h-5.5 w-5.5"/>{t(signals.localHandRaised ? 'meetingRoom.controlCenter.lower' : 'meetingRoom.controlCenter.raise')}{raisedCount > 0 ? ` (${raisedCount})` : ''}</Control>
@@ -155,6 +158,7 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
         {fullscreenSupported && <Control className="meeting-control-utility" active={isFullscreen} onClick={() => isFullscreen ? exitFullscreen() : enterFullscreen()} aria-label={t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')} aria-pressed={isFullscreen}><Icon name={isFullscreen ? 'minimize' : 'maximize'} className="h-5.5 w-5.5"/>{t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}</Control>}
         {canHost && <div className="meeting-control-secondary hidden lg:block"><Control active={activePanel === 'host'} onClick={() => togglePanel('host')} aria-label={t('meetingRoom.controlCenter.openHostControls')} aria-expanded={activePanel === 'host'}><span className="relative"><Icon name="settings" className="h-5.5 w-5.5"/>{screenShareRequestCount > 0 && <span className="absolute -right-3 -top-2 rounded-full bg-amber-300 px-1 text-[9px] text-slate-950">{screenShareRequestCount > 99 ? '99+' : screenShareRequestCount}</span>}</span>{t('meetingRoom.controlCenter.host')}</Control></div>}
         <Control className="meeting-control-more shrink-0" active={popover === 'more'} onClick={(event) => togglePopover('more', event)} aria-label={t('meetingRoom.controlCenter.moreControls')} aria-expanded={popover === 'more'}><Icon name="more" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.more')}</Control>
+        {recording?.showStop && <Control className="meeting-control-stop-recording shrink-0" danger disabled={recording.stopping} onClick={recording.openStop} aria-label={t('meetingRoom.recording.stopRecording')}><span className="meeting-recording-dot" aria-hidden="true"/>{t(recording.stopping ? 'meetingRoom.recording.stopping' : 'meetingRoom.recording.stop')}</Control>}
         <Control className="meeting-control-leave shrink-0" danger disabled={leaving} onClick={leave} aria-label={t('meetingRoom.controlCenter.leaveMeeting')}><Icon name="logout" className="h-5.5 w-5.5"/>{t(leaving ? 'meetingRoom.controlCenter.leaving' : 'meetingRoom.controlCenter.leave')}</Control>
         {popover && <div ref={menuRef} className="absolute inset-x-0 bottom-[calc(100%+.75rem)] z-30 mx-auto max-h-[60dvh] max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-[#171a23] p-2 shadow-2xl" role="group" aria-label={t(popover === 'view' ? 'meetingRoom.controlCenter.viewOptions' : popover === 'more' ? 'meetingRoom.controlCenter.moreControls' : 'meetingRoom.controlCenter.openReactions')}>
             {popover === 'reactions' && <div className="flex flex-wrap justify-center gap-1">{['👍', '❤️', '👏', '😂', '😮'].map((reaction) => <button key={reaction} type="button" disabled={!available} onClick={() => { signals.sendReaction(reaction).catch((error) => onMessage(noticeRaw(error.message))); closePopover(); }} className="rounded-xl p-2 text-xl transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-violet-400" aria-label={t('meetingRoom.controlCenter.sendReaction', {reaction})}>{reaction}</button>)}</div>}
@@ -167,11 +171,16 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
                 <button type="button" onClick={() => togglePanel('info')} className={menuButton} aria-label={t('meetingRoom.controlCenter.openMeetingInfo')}><Icon name="calendar" className="h-4 w-4"/>{t('meetingRoom.controlCenter.meetingInfo')}</button>
                 <button type="button" onClick={() => setPopover('view')} className={menuButton} aria-label={t('meetingRoom.controlCenter.openView')}><Icon name="eye" className="h-4 w-4"/>{t('meetingRoom.controlCenter.viewOptions')}</button>
                 {canHost && <button type="button" onClick={() => togglePanel('host')} className={menuButton} aria-label={t('meetingRoom.controlCenter.openHostControls')}><Icon name="settings" className="h-4 w-4"/>{t('meetingRoom.controlCenter.hostControls')}</button>}
+                {/* Recording is offered from More, and only when the server says this
+                    viewer may record, so a student never sees the entry at all. */}
+                {recording?.canStart && <button type="button" disabled={!available} onClick={() => { closePopover(); recording.openStart(); }} className={menuButton} aria-label={t('meetingRoom.recording.startRecording')} data-testid="meeting-recording-start-menu"><Icon name="record" className="h-4 w-4"/>{t('meetingRoom.recording.start')}</button>}
                 <button type="button" onClick={() => togglePanel('devices')} className={menuButton}><Icon name="settings" className="h-4 w-4"/>{t('meetingRoom.controlCenter.deviceSettings')}</button>
                 {fullscreenSupported && <button type="button" onClick={() => { isFullscreen ? exitFullscreen() : enterFullscreen(); closePopover(); }} className={`${menuButton} meeting-more-utility`} aria-label={t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}><Icon name={isFullscreen ? 'minimize' : 'maximize'} className="h-4 w-4"/>{t(isFullscreen ? 'meetingRoom.stage.fullscreen.exit' : 'meetingRoom.stage.fullscreen.enter')}</button>}
                 {hasMeetingLink && <button type="button" onClick={onCopyLink} className={menuButton} aria-label={t('meetingRoom.controlCenter.copyMeetingLink')}><Icon name="clipboard" className="h-4 w-4"/>{t('meetingRoom.controlCenter.copyMeetingLink')}</button>}
                 {hasNotice(copied) && <p role="status" className="px-3 py-2 text-xs text-slate-200">{renderNotice(copied, t)}</p>}
             </>}
         </div>}
-    </div>;
+    </div>
+    <MeetingRecordingDialogs recording={recording}/>
+    </>;
 }

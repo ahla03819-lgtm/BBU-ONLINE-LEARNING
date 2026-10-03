@@ -17,15 +17,18 @@ use App\Models\ConversationMember;
 use App\Models\ConversationMessage;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
+use App\Models\MeetingRecording;
 use App\Models\MeetingSeries;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\SchoolClass;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\LiveKit\LiveKitRecordingManager;
 use App\Services\LiveKit\LiveKitRoomManager;
 use App\Services\LiveKit\LiveKitTokenIssuer;
 use App\Services\LiveKit\LiveKitWebhookVerifier;
+use App\Services\LiveKit\SdkLiveKitRecordingManager;
 use App\Services\LiveKit\SdkLiveKitRoomManager;
 use App\Services\LiveKit\SdkLiveKitTokenIssuer;
 use App\Services\LiveKit\SdkLiveKitWebhookVerifier;
@@ -48,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(LiveKitRoomManager::class, SdkLiveKitRoomManager::class);
         $this->app->singleton(LiveKitWebhookVerifier::class, SdkLiveKitWebhookVerifier::class);
         $this->app->singleton(MeetingLifecycleProvider::class, LiveKitMeetingLifecycleProvider::class);
+        $this->app->singleton(LiveKitRecordingManager::class, SdkLiveKitRecordingManager::class);
     }
 
     /**
@@ -69,6 +73,8 @@ class AppServiceProvider extends ServiceProvider
                 || $argument instanceof MeetingSeries
                 || $argument === MeetingParticipant::class
                 || $argument instanceof MeetingParticipant
+                || $argument === MeetingRecording::class
+                || $argument instanceof MeetingRecording
                 || $argument === Assignment::class
                 || $argument instanceof Assignment
                 || $argument === AssignmentSubmission::class
@@ -113,6 +119,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('livekit-webhooks', fn (Request $request) => Limit::perMinute(240)->by($request->ip()));
         RateLimiter::for('meeting-participant-removals', fn (Request $request) => Limit::perMinute(30)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('meeting-screen-share-requests', fn (Request $request) => Limit::perMinute(20)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
+        RateLimiter::for('meeting-recordings', fn (Request $request) => Limit::perMinute(20)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('meeting-lifecycle', fn (Request $request) => Limit::perMinute(10)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('class-join-code', fn (Request $request) => [
             Limit::perMinute(8)->by('user|'.$request->user()->id),
