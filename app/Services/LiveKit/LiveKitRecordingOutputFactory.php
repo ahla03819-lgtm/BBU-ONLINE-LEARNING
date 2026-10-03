@@ -74,9 +74,11 @@ class LiveKitRecordingOutputFactory
     /**
      * Whether a recording could ever be collected with the current configuration.
      *
-     * The two halves have to agree. A provider writing a local path while the
-     * application reads a remote disk means the object is never found, and every
-     * recording quietly times out instead of failing at the moment it starts.
+     * The two halves have to agree, and the provider's half depends on where it runs.
+     * A provider writing a local path while the application reads a bucket means the
+     * object is never found; and a provider writing a local path on a machine we do
+     * not share means the same thing for the same reason. Both quietly accept the
+     * recording and let it time out, so both are refused up front.
      */
     public function isConsistent(): bool
     {
@@ -85,10 +87,21 @@ class LiveKitRecordingOutputFactory
         $diskDriver = (string) (config("filesystems.disks.{$disk}.driver") ?? self::DRIVER_LOCAL);
 
         if ($driver === self::DRIVER_LOCAL) {
-            return $diskDriver === self::DRIVER_LOCAL;
+            // A local path is only collectable if we wrote it ourselves, which means
+            // the provider has to be running on this filesystem and the application
+            // has to read the same local disk.
+            return $this->sharesOurFilesystem() && $diskDriver === self::DRIVER_LOCAL;
         }
 
         return $driver === self::DRIVER_S3 && $this->hasRequiredS3Settings();
+    }
+
+    /**
+     * Whether the operator has asserted that Egress shares this filesystem.
+     */
+    public function sharesOurFilesystem(): bool
+    {
+        return (bool) config('meeting-recordings.output.shared_filesystem');
     }
 
     public function isUsable(): bool

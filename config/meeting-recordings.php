@@ -78,6 +78,19 @@ return [
          */
         'driver' => env('RECORDING_OUTPUT_DRIVER', 'local'),
 
+        /*
+         * An explicit promise that the Egress worker shares this machine's
+         * filesystem, and an assertion that nobody is relying on that silently.
+         *
+         * It is an opt-in because it cannot be inferred: a self-hosted Egress may
+         * legitimately be reachable at a different hostname on the same box, while
+         * a hosted Egress is never co-located no matter what it is called. Left off,
+         * the local driver is refused, because a provider writing a path this
+         * application cannot read produces recordings that are accepted, sit in
+         * Processing, and then time out instead of failing when they are started.
+         */
+        'shared_filesystem' => (bool) env('RECORDING_OUTPUT_SHARED_FILESYSTEM', false),
+
         's3' => [
             'bucket' => env('RECORDING_EGRESS_S3_BUCKET', env('AWS_BUCKET')),
             'region' => env('RECORDING_EGRESS_S3_REGION', env('AWS_DEFAULT_REGION')),

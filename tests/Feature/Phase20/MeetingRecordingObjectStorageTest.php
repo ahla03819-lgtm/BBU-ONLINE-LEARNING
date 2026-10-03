@@ -75,6 +75,7 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
     {
         config([
             'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.output.shared_filesystem' => true,
             // Storage::fake rewrites the disk config to a local driver, so the remote
             // shape has to be declared explicitly for the mismatch to be observable.
             'filesystems.disks.recording-store' => ['driver' => 's3', 'bucket' => 'bbu-recordings'],
@@ -83,6 +84,49 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
         // The provider would write a local path while the application read a bucket,
         // so the object could never be found.
         $this->assertFalse((new LiveKitRecordingOutputFactory)->isUsable());
+    }
+
+    public function test_a_local_driver_is_refused_when_egress_does_not_share_our_filesystem(): void
+    {
+        // A hosted Egress writes to its own machine. A local path it writes is never
+        // readable here, so recording must be refused rather than accepted and left
+        // to time out in Processing.
+        config([
+            'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.disk' => 'local',
+            'meeting-recordings.output.shared_filesystem' => false,
+        ]);
+
+        $factory = new LiveKitRecordingOutputFactory;
+        $this->assertFalse($factory->sharesOurFilesystem());
+        $this->assertFalse($factory->isConsistent());
+        $this->assertFalse($factory->isUsable());
+    }
+
+    public function test_a_local_driver_is_accepted_once_the_shared_filesystem_is_asserted(): void
+    {
+        config([
+            'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.disk' => 'local',
+            'meeting-recordings.output.shared_filesystem' => true,
+        ]);
+
+        $factory = new LiveKitRecordingOutputFactory;
+        $this->assertTrue($factory->sharesOurFilesystem());
+        $this->assertTrue($factory->isUsable());
+    }
+
+    public function test_the_verifier_refuses_a_local_driver_against_hosted_egress(): void
+    {
+        config([
+            'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.disk' => 'local',
+            'meeting-recordings.output.shared_filesystem' => false,
+        ]);
+
+        // The verifier is the thing a deployment runs instead of a teacher finding
+        // out, so it has to fail for this arrangement rather than pass it.
+        $this->artisan('meetings:verify-recording-storage')->assertFailed();
     }
 
     public function test_incomplete_object_storage_configuration_is_refused(): void
@@ -272,7 +316,11 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
     {
         // Local disk, local driver: the shared-filesystem deployment.
         Storage::fake('local');
-        config(['meeting-recordings.disk' => 'local', 'meeting-recordings.output.driver' => 'local']);
+        config([
+            'meeting-recordings.disk' => 'local',
+            'meeting-recordings.output.driver' => 'local',
+            'meeting-recordings.output.shared_filesystem' => true,
+        ]);
 
         [$class, $meeting, $teacher] = $this->scenario();
         $this->recordings->ready();
@@ -290,14 +338,34 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
         $this->assertSame('local', $settled->storage_disk);
     }
 
-    public function test_the_verification_command_reports_a_ready_object_storage_setup(): void
+    public function test_the_verifier_reports_no_storage_problem_for_a_complete_object_storage_setup(): void
     {
-        // A disk the application can actually write is the only remaining unknown.
         config([
+            'meeting-recordings.egress_enabled' => true,
+            // A host that will not resolve, so the check covers the storage verdict
+            // rather than this machine's network.
+            'meeting-recordings.egress_api_url' => 'https://egress.invalid',
             'filesystems.disks.recording-store' => ['driver' => 'local', 'root' => sys_get_temp_dir()],
         ]);
 
-        $this->artisan('meetings:verify-recording-storage')->assertFailed();
+        $this->artisan('meetings:verify-recording-storage')
+            ->expectsOutputToContain('Output driver', false)
+            ->doesntExpectOutputToContain('Object storage output is missing')
+            ->doesntExpectOutputToContain('is not writable')
+            ->doesntExpectOutputToContain('Unknown RECORDING_OUTPUT_DRIVER');
+    }
+
+    public function test_the_verifier_fails_when_object_storage_is_incomplete(): void
+    {
+        config([
+            'meeting-recordings.egress_enabled' => true,
+            'meeting-recordings.egress_api_url' => 'https://egress.invalid',
+            'meeting-recordings.output.s3.bucket' => '',
+            'filesystems.disks.recording-store' => ['driver' => 'local', 'root' => sys_get_temp_dir()],
+        ]);
+
+        $this->artisan('meetings:verify-recording-storage')
+            ->expectsOutputToContain('Object storage output is missing');
     }
 
     private function readyRemoteRecording(\App\Models\User $teacher, \App\Models\Meeting $meeting): MeetingRecording

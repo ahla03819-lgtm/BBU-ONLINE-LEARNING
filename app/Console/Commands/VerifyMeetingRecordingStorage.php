@@ -47,11 +47,21 @@ class VerifyMeetingRecordingStorage extends Command
         if (! in_array($driver, ['local', 's3'], true)) {
             $problems[] = "Unknown RECORDING_OUTPUT_DRIVER [{$driver}]; expected local or s3.";
         }
-        if ($driver === 'local' && $this->isCloudDisk($disk)) {
-            // The provider would write to a filesystem while the application looks
-            // in a bucket, so the object could never be found.
-            $problems[] = 'RECORDING_OUTPUT_DRIVER=local cannot publish to a remote disk. Use s3 on LiveKit Cloud.';
+
+        if ($driver === 'local') {
+            // The provider would write a path on its own machine. That is only ever
+            // collectable if we share its filesystem, which has to be asserted
+            // explicitly rather than assumed from a hostname.
+            $this->report('Shared filesystem', $this->sharedFilesystem());
+            if (! $this->sharedFilesystem()) {
+                $problems[] = 'RECORDING_OUTPUT_DRIVER=local is only usable when the Egress worker shares this filesystem. '
+                    .'Set RECORDING_OUTPUT_SHARED_FILESYSTEM=true for a co-located Egress, or use RECORDING_OUTPUT_DRIVER=s3 '
+                    .'with an object-storage bucket. Hosted Egress, such as LiveKit Cloud, never shares this filesystem.';
+            } elseif ($this->isCloudDisk($disk)) {
+                $problems[] = "RECORDING_OUTPUT_DRIVER=local cannot publish to the remote [{$disk}] disk.";
+            }
         }
+
         if ($driver === 's3') {
             $s3 = (array) config('meeting-recordings.output.s3');
             foreach (['bucket', 'region', 'key', 'secret'] as $required) {
@@ -59,7 +69,7 @@ class VerifyMeetingRecordingStorage extends Command
                     $problems[] = "Object storage output is missing [{$required}].";
                 }
             }
-            $this->report('Bucket', (string) ($s3['bucket'] ?? ''));
+            $this->report('Bucket', ($s3['bucket'] ?? '') !== '' ? 'configured' : 'not set');
             $this->report('Endpoint', ($s3['endpoint'] ?? '') !== '' ? 'custom endpoint set' : 'default (AWS S3)');
             $this->report('Path style', (bool) ($s3['force_path_style'] ?? false));
         }
@@ -131,6 +141,11 @@ class VerifyMeetingRecordingStorage extends Command
     private function isCloudDisk(string $disk): bool
     {
         return (string) (config("filesystems.disks.{$disk}.driver") ?? 'local') !== 'local';
+    }
+
+    private function sharedFilesystem(): bool
+    {
+        return (bool) config('meeting-recordings.output.shared_filesystem');
     }
 
     /**
