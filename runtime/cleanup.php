@@ -43,6 +43,12 @@ $count = function (string $key, int $n) use (&$removed) {
     $removed[$key] = ($removed[$key] ?? 0) + $n;
 };
 
+// whereIn only accepts a flat list of scalars, so every id list is normalised once.
+$ids = static fn ($value): array => array_values(array_filter(
+    is_string($value) ? [] : (array) ($value instanceof \Illuminate\Support\Collection ? $value->all() : $value),
+    static fn ($item) => is_scalar($item) && $item !== '',
+));
+
 // Only ever these two names and this address pattern.
 $userIds = User::query()
     ->where('email', 'like', 'teacher-sreymom-%@bbu.edu.kh')
@@ -57,12 +63,14 @@ $path = $argv[1] ?? (getenv('RUNTIME_MANIFEST') ?: sys_get_temp_dir().'/rt-manif
 $manifest = is_file($path) ? (json_decode((string) file_get_contents($path), true) ?: []) : [];
 
 if ($manifest !== []) {
-    $meetingIds = array_filter([$manifest['meeting_id'] ?? 0]);
-    $participantIds = $manifest['participant_ids'] ?? [];
-    $channelIds = $manifest['channel_ids'] ?? [];
-    $recordingIds = MeetingRecording::query()->whereIn('meeting_id', $meetingIds)->pluck('id');
-    $messageIds = Message::query()->whereIn('channel_id', $channelIds)->pluck('id')
-        ->merge(Message::query()->whereIn('meeting_recording_id', $recordingIds));
+    $meetingIds = $ids([$manifest['meeting_id'] ?? 0]);
+    $participantIds = $ids($manifest['participant_ids'] ?? []);
+    $channelIds = $ids($manifest['channel_ids'] ?? []);
+    $recordingIds = $ids(MeetingRecording::query()->whereIn('meeting_id', $meetingIds)->pluck('id'));
+    $messageIds = $ids(
+        Message::query()->whereIn('channel_id', $channelIds)->pluck('id')
+            ->merge(Message::query()->whereIn('meeting_recording_id', $recordingIds)->pluck('id'))
+    );
 
     $count('messages', MessageReaction::query()->whereIn('message_id', $messageIds)->delete());
     $count('messages', Message::query()->whereIn('id', $messageIds)->delete());
@@ -94,18 +102,17 @@ if ($manifest !== []) {
 // the class name and the two addresses this harness generates.
 // ---------------------------------------------------------------------------
 $classIds = SchoolClass::query()->where('name', 'like', 'Computer Class %')->pluck('id');
-$userIds = User::query()
+$userIds = $ids(User::query()
     ->where('email', 'like', 'teacher-sreymom-%@bbu.edu.kh')
-    ->orWhere('email', 'like', 'student-sotheak-%@bbu.edu.kh')
     ->orWhere('email', 'like', 'student-sopheak-%@bbu.edu.kh')
-    ->pluck('id');
+    ->pluck('id'));
 
-$meetingIds = Meeting::query()->whereIn('school_class_id', $classIds)->pluck('id');
+$meetingIds = $ids(Meeting::query()->whereIn('school_class_id', $classIds)->pluck('id'));
 $subjectIds = ClassSubject::query()->whereIn('school_class_id', $classIds)->pluck('id');
-$channelIds = Channel::query()->whereIn('school_class_id', $classIds)->pluck('id');
-$participantIds = MeetingParticipant::query()->whereIn('meeting_id', $meetingIds)->pluck('id');
-$studentProfileIds = StudentProfile::query()->whereIn('user_id', $userIds)->pluck('id');
-$teacherProfileIds = TeacherProfile::query()->whereIn('user_id', $userIds)->pluck('id');
+$channelIds = $ids(Channel::query()->whereIn('school_class_id', $classIds)->pluck('id'));
+$participantIds = $ids(MeetingParticipant::query()->whereIn('meeting_id', $meetingIds)->pluck('id'));
+$studentProfileIds = $ids(StudentProfile::query()->whereIn('user_id', $userIds)->pluck('id'));
+$teacherProfileIds = $ids(TeacherProfile::query()->whereIn('user_id', $userIds)->pluck('id'));
 
 $count('messages', Message::query()->whereIn('channel_id', $channelIds)->delete());
 $count('read_states', ChannelReadState::query()->whereIn('channel_id', $channelIds)->delete());
