@@ -5,6 +5,7 @@ import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMed
 import {echo} from '../realtime/echo';
 import {createMeetingLeaveTransaction} from './meetingLeaveTransaction';
 import {useMeetingRecording} from '../Hooks/Meetings/useMeetingRecording';
+import {EXPLICIT_LEAVE_CAUSE, recordingEndpointsFor, shouldSignalExplicitLeave} from '../Components/Meetings/LiveKit/meetingRecordingEndpoints';
 
 const PersistentMeetingContext = createContext(null);
 
@@ -84,12 +85,23 @@ export function PersistentMeetingProvider({children}) {
      * meeting's recording state, and it lives here rather than in the room page so
      * the recording survives a full-to-mini switch and a reconnect without ever
      * being re-created.
+     *
+     * The endpoints are derived from the meeting's own identifiers when the session
+     * did not carry them, so a participant who lands directly on the room URL still
+     * polls the recording state and still reports an explicit leave.
      */
+    const endpoints = recordingEndpointsFor({
+        schoolClass: session?.schoolClass,
+        meeting: session?.meeting,
+        recordingUrl: session?.recordingUrl,
+        leaveUrl: session?.leaveUrl,
+    });
+
     const recording = useMeetingRecording({
         meeting: session?.meeting,
         initialRecording: session?.meeting?.recording,
-        recordingUrl: session?.recordingUrl,
-        leaveUrl: session?.leaveUrl,
+        recordingUrl: endpoints.recordingUrl,
+        leaveUrl: endpoints.leaveUrl,
         minDurationMinutes: session?.meeting?.recording_min_duration_minutes,
         maxDurationMinutes: session?.meeting?.recording_max_duration_minutes,
     });
@@ -127,7 +139,14 @@ export function PersistentMeetingProvider({children}) {
         // local teardown but is never awaited into it: leaving must succeed, and
         // must stay as reliable across a refresh or a reconnect as it always was,
         // whatever the server happens to say back.
-        void recording.notifyExplicitLeave();
+        //
+        // Only a deliberate departure is announced. A refresh, a reconnect, a
+        // provider disconnect and a full-to-mini switch all end a client's presence
+        // while the person is still in the meeting, and announcing any of them would
+        // stop a recording the teacher never stopped.
+        if (shouldSignalExplicitLeave(EXPLICIT_LEAVE_CAUSE)) {
+            void recording.notifyExplicitLeave();
+        }
 
         return clearSession({
             returnToLobby: Boolean(current) && window.location.pathname === meetingPath(current.roomUrl),
