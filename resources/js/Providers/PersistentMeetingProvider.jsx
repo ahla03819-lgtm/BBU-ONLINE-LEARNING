@@ -4,12 +4,11 @@ import MeetingRoomExperience from '../Components/Meetings/LiveKit/MeetingRoomExp
 import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMediaIntent';
 import {echo} from '../realtime/echo';
 import {createMeetingLeaveTransaction} from './meetingLeaveTransaction';
+import {meetingPath, shouldNavigateToLobby} from '../Components/Meetings/LiveKit/meetingEndTeardown';
 import {useMeetingRecording} from '../Hooks/Meetings/useMeetingRecording';
 import {EXPLICIT_LEAVE_CAUSE, recordingEndpointsFor, shouldSignalExplicitLeave} from '../Components/Meetings/LiveKit/meetingRecordingEndpoints';
 
 const PersistentMeetingContext = createContext(null);
-
-const meetingPath = (url) => new URL(url, window.location.origin).pathname;
 
 export function PersistentMeetingProvider({children}) {
     const [session, setSession] = useState(null);
@@ -23,6 +22,12 @@ export function PersistentMeetingProvider({children}) {
         const current = sessionRef.current;
         if (!current) return {status: 'cleared'};
         const lobbyUrl = destination ?? current.lobbyUrl;
+        // Decided once, here, together with returnToLobby. cleanup() and
+        // disconnect() are awaited before navigate() runs, and the URL can move
+        // in that window; re-reading it there could cancel a terminal navigation
+        // this client already committed to, releasing the session while it is
+        // still on the room page and leaving that page blank.
+        const currentPath = window.location.pathname;
 
         return leaveTransactionRef.current({
             returnToLobby,
@@ -41,7 +46,7 @@ export function PersistentMeetingProvider({children}) {
             }
             },
             navigate: () => {
-                if (!returnToLobby || window.location.pathname !== meetingPath(current.roomUrl)) return Promise.resolve({status: 'success'});
+                if (!shouldNavigateToLobby({returnToLobby, currentPath, roomUrl: current.roomUrl})) return Promise.resolve({status: 'success'});
 
                 return new Promise((resolve) => {
                     let status = 'finished';
