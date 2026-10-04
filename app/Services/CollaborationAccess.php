@@ -91,7 +91,7 @@ class CollaborationAccess
 
     public function isAdministrator(User $user): bool
     {
-        return ! $user->hasAnyRole(['Teacher', 'Student']);
+        return $user->hasAnyRole(['Super Admin', 'Admin']);
     }
 
     public function isAcademicallyActive(SchoolClass $class): bool

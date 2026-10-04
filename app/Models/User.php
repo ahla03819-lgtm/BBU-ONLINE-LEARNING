@@ -73,7 +73,14 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function avatarUrl(): ?string
     {
+        // A managed path whose file has gone (worktree switch, manual cleanup)
+        // must degrade to the caller's initials fallback instead of emitting a
+        // URL that is guaranteed to fail on every page load.
         if (! $this->ownsManagedAvatarPath($this->avatar_path)) {
+            return null;
+        }
+
+        if (! Storage::disk('public')->exists($this->avatar_path)) {
             return null;
         }
 

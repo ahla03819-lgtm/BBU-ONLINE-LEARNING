@@ -105,7 +105,12 @@ class MeetingTokenTest extends TestCase
     {
         $class = $this->activeClass();
         $student = $this->student($class);
-        $student->update(['avatar_path' => "user-avatars/{$student->id}/profile.webp"]);
+        // The avatar file must exist for avatarUrl() to resolve; a managed path
+        // with no file on disk now correctly degrades to null.
+        Storage::fake('public');
+        $studentAvatar = "user-avatars/{$student->id}/profile.webp";
+        Storage::disk('public')->put($studentAvatar, 'avatar-bytes');
+        $student->update(['avatar_path' => $studentAvatar]);
         $otherStudent = $this->student($class);
         $otherStudent->update(['avatar_path' => "user-avatars/{$otherStudent->id}/private-looking.png"]);
         $meeting = Meeting::factory()->active()->create(['school_class_id' => $class->id]);

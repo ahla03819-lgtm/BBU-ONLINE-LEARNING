@@ -21,6 +21,7 @@ export default function ClassCard({schoolClass, href, tone = 'navy', actionLabel
 
     return <Link href={href || schoolClass.workspaceUrl} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-100/70 focus:outline-none focus:ring-2 focus:ring-sky-600">
         <div className={`relative min-h-28 overflow-hidden bg-gradient-to-br p-5 text-white ${tones[tone]}`}>
+            {schoolClass.coverImageUrl && <img src={schoolClass.coverImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(event) => { event.currentTarget.hidden = true; }}/>} {/* cover */}
             <span className="absolute -right-7 -top-9 h-28 w-28 rounded-full bg-white/15"/>
             <span className="absolute bottom-3 right-4 text-white/80"><Icon name="school" className="h-11 w-11"/></span>
             <p className="relative text-xs font-bold uppercase tracking-wider text-white/80">{gradeLevel?.name || t('classes.classWorkspace')}</p>
