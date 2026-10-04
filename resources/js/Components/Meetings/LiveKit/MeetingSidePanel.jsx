@@ -137,7 +137,14 @@ export function MeetingInfoPanel({meeting, schoolClass, count, meetingLink, onCo
     const date = (value) => value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toLocaleString() : t('common.notSet');
     return <MeetingSidePanel title={t('meetingRoom.panels.meetingInfo')} icon="calendar" onClose={onClose}><div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         <h3 className="break-words text-lg font-bold text-slate-900">{meeting.title}</h3>
-        <dl className="space-y-4 text-sm">{[['meetingRoom.panels.class', `${schoolClass.name}${schoolClass.section ? ` · ${schoolClass.section}` : ''}`], ['meetingRoom.panels.starts', date(meeting.scheduled_start_at)], ['meetingRoom.panels.ends', date(meeting.scheduled_end_at)], ['meetingRoom.panels.status', t(`meetings.status.${meeting.status}`)], ['common.participants', count]].map(([label, value]) => <div key={label}><dt className="text-xs font-semibold text-slate-500">{t(label)}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}</dl>
+        {/* An inverted or partial historical interval is not trustworthy, so the
+            server-owned schedule_available flag decides. No date comparison is
+            performed here, and lifecycle activity never fills these fields. */}
+        {meeting.schedule_available === false ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800" role="status">{t('meetings.scheduleInfo.unavailable')}</p>
+        ) : (
+            <dl className="space-y-4 text-sm">{[['meetingRoom.panels.class', `${schoolClass.name}${schoolClass.section ? ` · ${schoolClass.section}` : ''}`], ['meetingRoom.panels.starts', date(meeting.scheduled_start_at)], ['meetingRoom.panels.ends', date(meeting.scheduled_end_at)], ['meetingRoom.panels.status', t(`meetings.status.${meeting.status}`)], ['common.participants', count]].map(([label, value]) => <div key={label}><dt className="text-xs font-semibold text-slate-500">{t(label)}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}</dl>
+        )}
         {meetingLink && <div><label htmlFor="meeting-invite-link" className="text-xs font-bold text-slate-600">{t('meetingRoom.panels.meetingLink')}</label><input id="meeting-invite-link" readOnly value={meetingLink} onFocus={(event) => event.target.select()} className="mt-2 w-full min-w-0 rounded-xl border border-slate-200 p-3 text-xs focus:outline-none focus:ring-2 focus:ring-sky-600"/><button type="button" onClick={onCopy} aria-label={t('meetingRoom.controlCenter.copyMeetingLink')} className="mt-3 min-h-11 w-full rounded-xl bg-sky-700 px-3 py-2.5 text-sm font-bold text-white hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-600">{t('meetingRoom.controlCenter.copyMeetingLink')}</button><p className="mt-2 text-xs text-slate-500" role="status">{renderNotice(copied, t) || t('meetingRoom.panels.joinPermission')}</p></div>}
     </div></MeetingSidePanel>;
 }

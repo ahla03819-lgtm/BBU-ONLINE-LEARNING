@@ -77,6 +77,36 @@ test('every remaining schedule surface uses the shared flag, not a local check',
     }
 });
 
+test('the LiveKit side panel honours the server flag instead of the raw timestamps', () => {
+    const panel = readFileSync(
+        new URL('../../resources/js/Components/Meetings/LiveKit/MeetingSidePanel.jsx', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(panel, /meeting\.schedule_available === false/,
+        'the side panel must branch on the canonical availability flag');
+
+    // When unavailable, the Starts/Ends values must not be rendered at all.
+    const guard = panel.slice(panel.indexOf('schedule_available === false'));
+    const unavailableBranch = guard.slice(0, guard.indexOf(') : ('));
+    assert.ok(!/scheduled_start_at/.test(unavailableBranch),
+        'the unavailable branch must not render the inverted start');
+    assert.ok(!/scheduled_end_at/.test(unavailableBranch),
+        'the unavailable branch must not render the inverted end');
+    assert.match(unavailableBranch, /meetings\.scheduleInfo\.unavailable/,
+        'the unavailable branch must render the shared translated string');
+
+    // A valid meeting still renders Starts/Ends as before.
+    assert.match(panel, /meetingRoom\.panels\.starts/);
+    assert.match(panel, /meetingRoom\.panels\.ends/);
+
+    // No new date comparison may be introduced in JS.
+    assert.ok(!/scheduled_end_at\s*[<>]/.test(panel),
+        'validity must be decided server-side, not by comparing timestamps in JS');
+    assert.ok(!/actual_start_at|actual_end_at/.test(panel),
+        'actual activity must never fill the scheduled fields');
+});
+
 test('both locales define the new keys', () => {
     const en = readFileSync(new URL('../../resources/js/i18n/en.js', import.meta.url), 'utf8');
     const km = readFileSync(new URL('../../resources/js/i18n/km.js', import.meta.url), 'utf8');
