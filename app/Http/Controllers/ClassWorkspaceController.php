@@ -13,11 +13,31 @@ use App\Services\CourseworkAccess;
 use App\Services\MeetingAccess;
 use App\Services\ResultsAccess;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ClassWorkspaceController extends Controller
 {
+    public function updateCover(\App\Http\Requests\Academics\UpdateSchoolClassCoverRequest $request, SchoolClass $schoolClass): RedirectResponse
+    {
+        $old = $schoolClass->cover_image_path;
+        $path = $request->file('cover')->storeAs("class-covers/{$schoolClass->id}", Str::uuid().'.'.$request->file('cover')->extension(), 'public');
+        try { $schoolClass->update(['cover_image_path' => $path]); } catch (\Throwable $e) { Storage::disk('public')->delete($path); throw $e; }
+        if ($old && str_starts_with($old, "class-covers/{$schoolClass->id}/")) Storage::disk('public')->delete($old);
+        return back()->with('success', 'Class cover updated.');
+    }
+
+    public function destroyCover(Request $request, SchoolClass $schoolClass): RedirectResponse
+    {
+        $this->authorize('update', $schoolClass);
+        $old = $schoolClass->cover_image_path;
+        $schoolClass->update(['cover_image_path' => null]);
+        if ($old && str_starts_with($old, "class-covers/{$schoolClass->id}/")) Storage::disk('public')->delete($old);
+        return back()->with('success', 'Class cover removed.');
+    }
     public function index(Request $request, CollaborationAccess $access): Response
     {
         $user = $request->user();
@@ -35,7 +55,7 @@ class ClassWorkspaceController extends Controller
             ->get();
 
         return Inertia::render('Classes/Index', [
-            'classes' => $classes->map(fn (SchoolClass $schoolClass) => $this->classCard($schoolClass, $this->canViewMembers($user)))->values(),
+            'classes' => $classes->map(fn (SchoolClass $schoolClass) => [...$this->classCard($schoolClass, $this->canViewMembers($user)), 'canManageCover' => $user->can('update', $schoolClass)])->values(),
             'canCreateClass' => $user->can('create', SchoolClass::class),
             'canJoinClass' => $user->can('joinByCode', SchoolClass::class),
             'createClassOptions' => $user->can('create', SchoolClass::class) ? [
@@ -146,6 +166,7 @@ class ClassWorkspaceController extends Controller
             'teacher' => $schoolClass->teacherAssignments->first()?->teacherProfile?->user?->only('id', 'name'),
             'memberCount' => $canViewMembers ? $schoolClass->current_enrollments_count : null,
             'workspaceUrl' => route('classes.show', $schoolClass),
+            'coverImageUrl' => $schoolClass->coverImageUrl(),
         ];
     }
 

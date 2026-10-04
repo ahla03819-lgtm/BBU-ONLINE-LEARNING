@@ -88,7 +88,12 @@ class MeetingParticipantRemovalTest extends TestCase
     public function test_participant_list_exposes_only_safe_public_fields(): void
     {
         [$class, $meeting, $host, $participant] = $this->scenario();
-        $participant->user->update(['avatar_path' => "user-avatars/{$participant->user_id}/profile.jpg"]);
+        // The avatar file must exist for avatarUrl() to resolve; a managed path
+        // with no file on disk now correctly degrades to null.
+        Storage::fake('public');
+        $participantAvatar = "user-avatars/{$participant->user_id}/profile.jpg";
+        Storage::disk('public')->put($participantAvatar, 'avatar-bytes');
+        $participant->user->update(['avatar_path' => $participantAvatar]);
         $response = $this->actingAs($host)->getJson(route('meetings.participants.index', [$class, $meeting]))->assertOk();
         $response->assertJsonPath('participants.0.reference', $participant->public_uuid)
             ->assertJsonPath('participants.0.avatar_url', Storage::disk('public')->url("user-avatars/{$participant->user_id}/profile.jpg"))

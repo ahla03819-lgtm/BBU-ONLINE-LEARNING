@@ -15,6 +15,7 @@ use App\Models\TeacherProfile;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -87,7 +88,12 @@ class ClassWorkspaceTest extends TestCase
         $studentProfile = StudentProfile::factory()->create(['user_id' => $student->id]);
         Enrollment::factory()->create(['student_profile_id' => $studentProfile->id, 'academic_year_id' => $class->academic_year_id, 'school_class_id' => $class->id, 'current_slot' => 1]);
         $classmate = $this->user('Student');
-        $classmate->update(['avatar_path' => "user-avatars/{$classmate->id}/avatar.webp"]);
+        // The avatar file must exist for avatarUrl() to resolve; a managed path
+        // with no file on disk now correctly degrades to null.
+        Storage::fake('public');
+        $classmateAvatar = "user-avatars/{$classmate->id}/avatar.webp";
+        Storage::disk('public')->put($classmateAvatar, 'avatar-bytes');
+        $classmate->update(['avatar_path' => $classmateAvatar]);
         Enrollment::factory()->create(['student_profile_id' => StudentProfile::factory()->create(['user_id' => $classmate->id])->id, 'academic_year_id' => $class->academic_year_id, 'school_class_id' => $class->id, 'current_slot' => 1]);
         $teacher = $this->user('Teacher');
         TeacherClassAssignment::factory()->create(['teacher_profile_id' => TeacherProfile::factory()->create(['user_id' => $teacher->id])->id, 'school_class_id' => $class->id, 'current_slot' => 1]);

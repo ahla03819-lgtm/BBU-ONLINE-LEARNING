@@ -11,12 +11,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['school_class_id', 'class_subject_id', 'name', 'slug', 'description', 'type', 'status', 'default_slot', 'created_by', 'archived_by', 'archived_at'])]
+#[Fillable(['school_class_id', 'class_subject_id', 'name', 'slug', 'description', 'type', 'status', 'default_slot', 'created_by', 'archived_by', 'archived_at', 'image_path'])]
 class Channel extends Model
 {
     /** @use HasFactory<ChannelFactory> */
     use HasFactory;
+
+    protected $hidden = ['image_path'];
 
     protected function casts(): array
     {
@@ -66,5 +69,21 @@ class Channel extends Model
     public function isDefault(): bool
     {
         return $this->default_slot !== null;
+    }
+
+    public function imageUrl(): ?string
+    {
+        // Mirrors SchoolClass::coverImageUrl(): a managed path with no file on
+        // disk resolves to null so the UI shows its fallback icon rather than a
+        // broken image.
+        if ($this->type !== ChannelType::Custom || ! $this->image_path || ! str_starts_with($this->image_path, "channel-images/{$this->id}/")) {
+            return null;
+        }
+
+        if (! Storage::disk('public')->exists($this->image_path)) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->image_path);
     }
 }

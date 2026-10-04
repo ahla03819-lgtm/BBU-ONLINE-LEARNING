@@ -90,6 +90,8 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     Route::get('/classes', [ClassWorkspaceController::class, 'index'])->name('classes.index');
     Route::post('/classes/join', [ClassJoinController::class, 'store'])->middleware('throttle:class-join-code')->name('classes.join');
     Route::get('/classes/{schoolClass}', [ClassWorkspaceController::class, 'show'])->name('classes.show');
+    Route::post('/classes/{schoolClass}/cover', [ClassWorkspaceController::class, 'updateCover'])->middleware('throttle:attachments-upload')->name('classes.cover.update');
+    Route::delete('/classes/{schoolClass}/cover', [ClassWorkspaceController::class, 'destroyCover'])->middleware('throttle:attachments-upload')->name('classes.cover.destroy');
     Route::get('/classes/{schoolClass}/members', [ClassWorkspaceController::class, 'members'])->name('classes.members');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
@@ -228,6 +230,8 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
     });
     Route::post('/collaboration/classes/{schoolClass}/channels', [ChannelController::class, 'store'])->name('collaboration.channels.store');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}', [ChannelController::class, 'update'])->name('collaboration.channels.update');
+    Route::post('/collaboration/classes/{schoolClass}/channels/{channel}/image', [ChannelController::class, 'updateImage'])->middleware('throttle:attachments-upload')->name('collaboration.channels.image.update');
+    Route::delete('/collaboration/classes/{schoolClass}/channels/{channel}/image', [ChannelController::class, 'destroyImage'])->middleware('throttle:attachments-upload')->name('collaboration.channels.image.destroy');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/archive', [ChannelController::class, 'archive'])->name('collaboration.channels.archive');
     Route::patch('/collaboration/classes/{schoolClass}/channels/{channel}/restore', [ChannelController::class, 'restore'])->name('collaboration.channels.restore');
     Route::get('/collaboration/classes/{schoolClass}/channels/{channel}/announcements/create', [AnnouncementController::class, 'create'])->name('collaboration.announcements.create');

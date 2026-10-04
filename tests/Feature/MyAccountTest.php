@@ -192,6 +192,7 @@ class MyAccountTest extends TestCase
         $user->update(['avatar_path' => $path]);
         $disk = \Mockery::mock(\Illuminate\Contracts\Filesystem\Filesystem::class);
         $disk->shouldReceive('delete')->once()->with($path)->andReturnFalse();
+        $disk->shouldReceive('exists')->zeroOrMoreTimes()->with($path)->andReturnTrue();
         $disk->shouldReceive('url')->zeroOrMoreTimes()->with($path)->andReturn('/storage/'.$path);
         Storage::shouldReceive('disk')->with('public')->zeroOrMoreTimes()->andReturn($disk);
 

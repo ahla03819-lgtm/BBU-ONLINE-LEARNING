@@ -13,9 +13,28 @@ use App\Http\Requests\Collaboration\UpdateChannelRequest;
 use App\Models\Channel;
 use App\Models\SchoolClass;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ChannelController extends Controller
 {
+    public function updateImage(\App\Http\Requests\Collaboration\UpdateChannelImageRequest $request, SchoolClass $schoolClass, Channel $channel): RedirectResponse
+    {
+        $this->ensureNested($schoolClass, $channel);
+        $old = $channel->image_path;
+        $path = $request->file('image')->storeAs("channel-images/{$channel->id}", Str::uuid().'.'.$request->file('image')->extension(), 'public');
+        try { $channel->update(['image_path' => $path]); } catch (\Throwable $e) { Storage::disk('public')->delete($path); throw $e; }
+        if ($old && str_starts_with($old, "channel-images/{$channel->id}/")) Storage::disk('public')->delete($old);
+        return back()->with('success', 'Channel image updated.');
+    }
+
+    public function destroyImage(\Illuminate\Http\Request $request, SchoolClass $schoolClass, Channel $channel): RedirectResponse
+    {
+        $this->ensureNested($schoolClass, $channel); $this->authorize('update', $channel);
+        $old = $channel->image_path; $channel->update(['image_path' => null]);
+        if ($old && str_starts_with($old, "channel-images/{$channel->id}/")) Storage::disk('public')->delete($old);
+        return back()->with('success', 'Channel image removed.');
+    }
     public function store(CreateChannelRequest $request, SchoolClass $schoolClass, CreateChannel $action): RedirectResponse
     {
         $channel = $action->handle($schoolClass, $request->validated());

@@ -190,7 +190,12 @@ class MeetingWaitingRoomTest extends TestCase
     public function test_waiting_room_exposes_only_a_safe_requester_avatar_url_to_the_authorized_host(): void
     {
         [$class, $host, $student, $meeting] = $this->meetingContext();
-        $student->update(['avatar_path' => "user-avatars/{$student->id}/profile.png"]);
+        // The avatar file must exist for avatarUrl() to resolve; a managed path
+        // with no file on disk now correctly degrades to null.
+        Storage::fake('public');
+        $studentAvatar = "user-avatars/{$student->id}/profile.png";
+        Storage::disk('public')->put($studentAvatar, 'avatar-bytes');
+        $student->update(['avatar_path' => $studentAvatar]);
         $request = MeetingJoinRequest::factory()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
 
         $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$class, $meeting]))
