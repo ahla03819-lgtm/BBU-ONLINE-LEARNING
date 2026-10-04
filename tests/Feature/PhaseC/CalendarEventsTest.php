@@ -269,6 +269,84 @@ class CalendarEventsTest extends TestCase
         return $user;
     }
 
+    /**
+     * A meeting that has already ended keeps its scheduled calendar occurrence.
+     *
+     * The calendar answers "what was scheduled in this range", so the lifecycle
+     * state of a meeting must not erase the interval it was scheduled into.
+     */
+    public function test_ended_meetings_remain_visible_in_their_scheduled_range(): void
+    {
+        [$class, $subject] = $this->classAndSubject();
+        $teacher = $this->teacher($class, $subject);
+
+        $ended = $this->meeting($class, $subject, $teacher, 'Ended meeting', '2026-10-05 08:00:00', '2026-10-05 09:00:00', [
+            'status' => MeetingStatus::Ended,
+            'actual_start_at' => '2026-10-05 08:05:00',
+            'actual_end_at' => '2026-10-05 08:50:00',
+        ]);
+        $active = $this->meeting($class, $subject, $teacher, 'Active meeting', '2026-10-06 08:00:00', '2026-10-06 09:00:00', [
+            'status' => MeetingStatus::Active,
+        ]);
+        $outside = $this->meeting($class, $subject, $teacher, 'Next month', '2026-11-05 08:00:00', '2026-11-05 09:00:00');
+
+        $ids = collect($this->actingAs($teacher)->getJson(route('calendar.events', [
+            'view' => 'month',
+            'start' => '2026-10-01T00:00:00Z',
+            'end' => '2026-11-01T00:00:00Z',
+        ]))->assertOk()->json('events'))->pluck('id')->all();
+
+        $this->assertContains('meeting:'.$ended->uuid, $ids,
+            'an ended meeting must still appear in the range it was scheduled into');
+        $this->assertContains('meeting:'.$active->uuid, $ids);
+        $this->assertNotContains('meeting:'.$outside->uuid, $ids,
+            'an adjacent out-of-range meeting stays excluded');
+    }
+
+    public function test_ended_meeting_visibility_holds_for_an_administrator_and_a_student(): void
+    {
+        [$class, $subject] = $this->classAndSubject();
+        $teacher = $this->teacher($class, $subject);
+        $student = $this->student($class);
+        $admin = User::factory()->create();
+        $admin->assignRole('Super Admin');
+
+        $ended = $this->meeting($class, $subject, $teacher, 'Ended meeting', '2026-10-05 08:00:00', '2026-10-05 09:00:00', [
+            'status' => MeetingStatus::Ended,
+            'actual_end_at' => '2026-10-05 08:50:00',
+        ]);
+
+        foreach ([$teacher, $admin, $student] as $viewer) {
+            $ids = collect($this->actingAs($viewer)->getJson(route('calendar.events', [
+                'view' => 'month',
+                'start' => '2026-10-01T00:00:00Z',
+                'end' => '2026-11-01T00:00:00Z',
+            ]))->assertOk()->json('events'))->pluck('id')->all();
+
+            $this->assertContains('meeting:'.$ended->uuid, $ids,
+                'an authorized '.($viewer->id === $admin->id ? 'administrator' : 'class member').' must see the ended meeting');
+        }
+    }
+
+    public function test_a_cancelled_meeting_stays_hidden_from_the_calendar(): void
+    {
+        [$class, $subject] = $this->classAndSubject();
+        $teacher = $this->teacher($class, $subject);
+
+        $cancelled = $this->meeting($class, $subject, $teacher, 'Cancelled meeting', '2026-10-05 08:00:00', '2026-10-05 09:00:00', [
+            'status' => MeetingStatus::Cancelled,
+        ]);
+
+        $ids = collect($this->actingAs($teacher)->getJson(route('calendar.events', [
+            'view' => 'month',
+            'start' => '2026-10-01T00:00:00Z',
+            'end' => '2026-11-01T00:00:00Z',
+        ]))->assertOk()->json('events'))->pluck('id')->all();
+
+        $this->assertNotContains('meeting:'.$cancelled->uuid, $ids,
+            'a cancelled meeting is not a calendar occurrence');
+    }
+
     private function teacher(SchoolClass $class, ClassSubject $subject): User
     {
         $user = $this->roleUser('Teacher');

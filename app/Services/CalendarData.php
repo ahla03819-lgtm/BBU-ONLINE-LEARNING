@@ -24,6 +24,11 @@ class CalendarData
                     MeetingStatus::Starting->value,
                     MeetingStatus::Active->value,
                     MeetingStatus::Ending->value,
+                    // A meeting keeps its scheduled calendar occurrence after it
+                    // ends. Excluding Ended here made a class's finished meetings
+                    // vanish from the very range they were scheduled into, which
+                    // is where teachers look back for what happened.
+                    MeetingStatus::Ended->value,
                 ])
                 ->where('scheduled_start_at', '<', $end)
                 ->where(function ($query) use ($start) {
