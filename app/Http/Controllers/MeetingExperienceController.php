@@ -74,8 +74,11 @@ class MeetingExperienceController extends Controller
                 'recording' => $this->recording($meeting, $viewer),
                 'actual_start_at' => $meeting->actual_start_at?->toIso8601String(),
                 'session_started_at' => $meeting->status === MeetingStatus::Active ? $meeting->session_started_at?->toIso8601String() : null,
+                'schedule_available' => $meeting->hasValidScheduledInterval(),
                 'scheduled_start_at' => $meeting->scheduled_start_at?->toIso8601String(),
                 'scheduled_end_at' => $meeting->scheduled_end_at?->toIso8601String(),
+                'actual_start_at' => $meeting->actual_start_at?->toIso8601String(),
+                'actual_end_at' => $meeting->actual_end_at?->toIso8601String(),
                 'invite_url' => route('meetings.lobby', [$schoolClass, $meeting], absolute: false),
             ],
         ];

@@ -15,6 +15,19 @@ use Illuminate\Support\Str;
 #[Fillable(['meeting_series_id', 'series_occurrence_on', 'series_sync_version', 'series_override_at', 'uuid', 'school_class_id', 'class_subject_id', 'created_by', 'host_user_id', 'title', 'description', 'scheduled_start_at', 'scheduled_end_at', 'actual_start_at', 'session_started_at', 'actual_end_at', 'status', 'join_policy', 'livekit_room_name', 'max_participants', 'lifecycle_version', 'start_attempt_uuid', 'last_provider_error'])]
 class Meeting extends Model
 {
+    /**
+     * A scheduled interval is only trustworthy when both endpoints exist and end
+     * after start. Historical rows can hold an inverted or partial interval; those
+     * must never be presented to users as a real schedule, and must never be
+     * reconstructed from lifecycle timestamps.
+     */
+    public function hasValidScheduledInterval(): bool
+    {
+        return $this->scheduled_start_at !== null
+            && $this->scheduled_end_at !== null
+            && $this->scheduled_end_at->gt($this->scheduled_start_at);
+    }
+
     /** @use HasFactory<MeetingFactory> */
     use HasFactory;
 

@@ -249,6 +249,8 @@ export default {
         },
         scheduleInfo: {
             endsPrefix: 'Ends',
+            unavailable: 'Schedule unavailable',
+            actualActivity: 'Actual activity:',
         },
         status: {
             scheduled: 'Scheduled',
