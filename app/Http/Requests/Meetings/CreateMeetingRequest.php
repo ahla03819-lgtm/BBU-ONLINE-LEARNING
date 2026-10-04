@@ -5,11 +5,14 @@ namespace App\Http\Requests\Meetings;
 use App\Models\ClassSubject;
 use App\Models\Meeting;
 use App\Services\MeetingAccess;
+use App\Http\Requests\Concerns\NormalizesAcademicSchedule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class CreateMeetingRequest extends FormRequest
 {
+    use NormalizesAcademicSchedule;
+
     public function authorize(): bool
     {
         $class = $this->route('schoolClass');
@@ -18,6 +21,16 @@ class CreateMeetingRequest extends FormRequest
             : null;
 
         return $this->user()->can('create', [Meeting::class, $class, $subject]);
+    }
+
+    /**
+     * Convert offset-less datetime-local values from the academic calendar
+     * timezone to UTC before validation, so `after:scheduled_start_at` and the
+     * stored instants both use one authoritative timezone.
+     */
+    public function prepareForValidation(): void
+    {
+        $this->normalizeAcademicSchedule(['scheduled_start_at', 'scheduled_end_at']);
     }
 
     public function rules(): array

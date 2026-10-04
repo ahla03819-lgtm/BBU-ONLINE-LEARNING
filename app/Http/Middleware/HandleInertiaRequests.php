@@ -23,6 +23,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'locale' => fn () => Locale::forUser($request->user()),
+            'calendar' => ['timezone' => config('calendar.default_timezone')],
             'auth' => ['user' => $request->user() ? [...$request->user()->only('id', 'name', 'email', 'status'), 'avatar_url' => $request->user()->avatarUrl()] : null, 'roles' => $request->user()?->getRoleNames() ?? [], 'role_label' => $request->user()?->effectiveRole(), 'permissions' => $request->user()?->hasRole('Super Admin') ? Permission::query()->orderBy('name')->pluck('name') : $request->user()?->getAllPermissions()->pluck('name') ?? []],
             'notificationInbox' => [
                 'unread_count' => fn () => $request->user()?->can('notifications.view')

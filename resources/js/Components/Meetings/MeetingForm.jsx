@@ -1,17 +1,17 @@
 import React, {useMemo} from 'react';
-import {useForm} from '@inertiajs/react';
+import {useForm, usePage} from '@inertiajs/react';
 import Icon from '../UI/Icon';
 import SectionCard from '../UI/SectionCard';
 import {useTranslation} from '../../i18n/LocaleProvider';
-
-const localDateTime = value => value ? new Date(value).toISOString().slice(0, 16) : '';
+import {utcInstantToAcademicDateTimeLocal} from './meetingDateTime';
 
 export default function MeetingForm({schoolClass, subjects, hostOptions, isAdministrator, canCreateGeneral, capacity, meeting}) {
     const editing = Boolean(meeting);
     const {t} = useTranslation();
+    const timezone = usePage().props.calendar?.timezone;
     const {data, setData, post, patch, processing, errors} = useForm({
         title: meeting?.title || '', description: meeting?.description || '', class_subject_id: meeting?.class_subject_id || '', host_user_id: meeting?.host_user_id || '',
-        scheduled_start_at: localDateTime(meeting?.scheduled_start_at), scheduled_end_at: localDateTime(meeting?.scheduled_end_at), max_participants: meeting?.max_participants || capacity.default,
+        scheduled_start_at: utcInstantToAcademicDateTimeLocal(meeting?.scheduled_start_at, timezone), scheduled_end_at: utcInstantToAcademicDateTimeLocal(meeting?.scheduled_end_at, timezone), max_participants: meeting?.max_participants || capacity.default,
     });
     const hosts = useMemo(() => hostOptions[String(data.class_subject_id || 'general')] || [], [hostOptions, data.class_subject_id]);
     const submit = event => { event.preventDefault(); const url = `/school-classes/${schoolClass.id}/meetings${editing ? `/${meeting.uuid}` : ''}`; editing ? patch(url) : post(url); };
