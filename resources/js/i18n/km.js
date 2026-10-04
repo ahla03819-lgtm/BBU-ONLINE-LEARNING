@@ -508,6 +508,8 @@ export default {
         },
         scheduleInfo: {
             endsPrefix: 'បញ្ចប់',
+            unavailable: 'មិនអាចបង្ហាញកាលវិភាគបាន',
+            actualActivity: 'សកម្មភាពជាក់ស្តែង៖',
         },
         status: {
             scheduled: 'បានកំណត់កាលវិភាគ',

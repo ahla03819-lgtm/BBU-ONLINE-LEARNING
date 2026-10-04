@@ -75,6 +75,7 @@ class MeetingAttendanceReport
                 'status' => $meeting->status->value,
                 'occurrence_date' => $occurrenceDate,
                 'occurrence_timezone' => $timezone,
+                'schedule_available' => $meeting->hasValidScheduledInterval(),
                 'scheduled_start_at' => $meeting->scheduled_start_at?->toIso8601String(),
                 'scheduled_end_at' => $meeting->scheduled_end_at?->toIso8601String(),
                 'session_started_at' => $meeting->session_started_at?->toIso8601String(),

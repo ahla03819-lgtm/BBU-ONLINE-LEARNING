@@ -28,7 +28,7 @@ export default function Attendance({schoolClass, meeting, rows, summary, export_
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Info label={t('meetings.attendance.classLabel')} value={schoolClass.section ? `${schoolClass.name} ${schoolClass.section}` : schoolClass.name}/>
                     <Info label={t('meetings.attendance.statusLabel')} value={<MeetingStatusBadge status={meeting.status}/>}/>
-                    <Info label={t('meetings.attendance.occurrenceLabel')} value={`${formatDate(meeting.scheduled_start_at, meeting.occurrence_timezone)}${meeting.scheduled_end_at ? ` – ${formatTime(meeting.scheduled_end_at, meeting.occurrence_timezone)}` : ''}`}/>
+                    <Info label={t('meetings.attendance.occurrenceLabel')} value={meeting.schedule_available === false ? t('meetings.scheduleInfo.unavailable') : `${formatDate(meeting.scheduled_start_at, meeting.occurrence_timezone)}${meeting.scheduled_end_at ? ` – ${formatTime(meeting.scheduled_end_at, meeting.occurrence_timezone)}` : ''}`}/>
                     <Info label={t('meetings.attendance.durationLabel')} value={meeting.duration_is_authoritative ? formatDuration(meeting.duration_seconds) : t('meetings.attendance.legacyDuration')}/>
                 </div>
                 {meeting.is_cancelled && <p className="mt-5 flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm leading-6 text-rose-800"><Icon name="x" className="mt-0.5 h-4 w-4 shrink-0"/>{t('meetings.attendance.cancelledNote')}</p>}
