@@ -134,6 +134,14 @@ class RepairHistoricalMeetingLifecycle extends Command
             'lifecycle_version' => $plan['proposed_lifecycle_version'],
             'actual_end_at' => $plan['proposed_end'],
             'last_provider_error' => null,
+            // Written back unchanged on purpose. This column is declared
+            // ON UPDATE CURRENT_TIMESTAMP(), so MySQL replaces it with NOW() on
+            // *any* update to the row, even one that never names it. Naming it
+            // explicitly is the only way to stop that clause firing, and losing
+            // the original schedule here would be worse than the corruption
+            // being repaired. Removing the clause itself is a schema migration
+            // and belongs to its own change.
+            'scheduled_start_at' => $locked->scheduled_start_at,
         ])->save();
 
         if ($plan['repair_type'] === 'audit_restoration') {

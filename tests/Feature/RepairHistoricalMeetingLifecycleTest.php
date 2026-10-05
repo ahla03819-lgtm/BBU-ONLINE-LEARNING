@@ -86,6 +86,26 @@ class RepairHistoricalMeetingLifecycleTest extends TestCase
         $this->assertTrue($updatedAt->equalTo($fresh->updated_at));
     }
 
+    /**
+     * The meetings table declares scheduled_start_at ON UPDATE CURRENT_TIMESTAMP(),
+     * so MySQL replaces it with NOW() on any update to the row. SQLite does not
+     * implement that clause, so this test cannot prove the hazard is gone; it
+     * pins the required behaviour by using a sentinel the repair must hand back
+     * untouched, and the real guard is naming the column on the write plus the
+     * pending migration that drops the clause.
+     */
+    public function test_repair_hands_back_the_schedule_it_found_untouched(): void
+    {
+        $meeting = $this->corruptMeeting(5, 4, '2026-09-19 09:04:46', '2011-02-03 04:05:06', '2031-12-31 23:59:59');
+
+        $this->artisan('meetings:repair-historical-lifecycle', ['--meeting' => [5], '--apply' => true])->assertSuccessful();
+
+        $fresh = $meeting->fresh();
+        $this->assertSame('2011-02-03 04:05:06', $fresh->scheduled_start_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2031-12-31 23:59:59', $fresh->scheduled_end_at?->format('Y-m-d H:i:s'));
+        $this->assertSame(MeetingStatus::Ended, $fresh->status);
+    }
+
     public function test_repair_creates_an_additive_audit_record(): void
     {
         $meeting = $this->corruptMeeting(5, 4);
