@@ -22,6 +22,14 @@ php artisan reverb:start
 php artisan queue:work
 ```
 
+When the temporary Cloudflare Quick Tunnel hostname expires, rotate and resynchronize the local runtime with:
+
+```shell
+./scripts/dev/restart-quick-tunnel.sh
+```
+
+The local-development script stops only this worktree's Quick Tunnel, discovers and verifies the new public URL, updates `APP_URL` and the temporary entry in `REVERB_ALLOWED_ORIGINS`, clears Laravel configuration, and gracefully restarts Reverb. Quick Tunnel hostnames are temporary; no credentials are printed or committed.
+
 The initial deployment target is one Reverb node and does not require Redis. Production must use TLS, a restricted `REVERB_ALLOWED_ORIGINS` value, supervised Reverb and queue workers, and deployment-specific credentials. Redis should be introduced before horizontal Reverb scaling. If realtime delivery is interrupted, clients recover missed messages from the authorized HTTP timeline using message-ID cursors.
 
 Tests: `php artisan test`. Production frontend: `npm run build`.
