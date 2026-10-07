@@ -11,6 +11,10 @@ import MeetingStage from './MeetingStage';
 import {HostControlsPanel, MeetingChatPanel, MeetingInfoPanel, ParticipantsPanel} from './MeetingSidePanel';
 import {authorizedMeetingLink, localCameraTrackClass} from './meetingView';
 import {writeMeetingMediaIntent} from './meetingMediaIntent';
+import {BBUBuddyPanel} from '../AI/BBUBuddyPanel';
+import {CaptionOverlay} from '../AI/CaptionOverlay';
+import {meetingAiPreferencesKey, readMeetingAiPreferences, writeMeetingAiPreferences} from '../AI/useMeetingAiPreferences';
+import {useMeetingAiData} from '../AI/useMeetingAiData';
 import {useTranslation} from '../../../i18n/LocaleProvider';
 import {hasNotice, noticeKey, renderFirstNotice, renderNotice} from '../../../i18n/notice';
 import {clampMiniWindowPosition, dragMiniWindowPosition, shouldStartMiniWindowDrag} from './meetingMiniWindowPosition';
@@ -313,11 +317,32 @@ function MiniMeetingWindow({meeting, schoolClass, elapsedTime, connectionError, 
     </aside>;
 }
 
-function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, recording, onLeave, onEnd, onReturn, mode, mediaMessage, onMediaMessage, connectionError, isFullscreen, exitFullscreen}) {
+function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, recording, onLeave, onEnd, onReturn, mode, mediaMessage, onMediaMessage, connectionError, isFullscreen, exitFullscreen, captionModeProp = 'off', aiPreferencesKey}) {
     const {t} = useTranslation();
     const [panel, setPanel] = useState(null);
     const [view, setView] = useState('gallery');
     const [copied, setCopied] = useState(null);
+    const [buddyOpen, setBuddyOpen] = useState(false);
+    const [buddyState, setBuddyState] = useState('idle');
+    const ai = useMeetingAiData({schoolClass, meeting, language: 'en'});
+    const latestTranscriptSegment = useMemo(() => {
+        const segments = ai.transcript.segments;
+        if (!segments.length) return null;
+        return segments[segments.length - 1];
+    }, [ai.transcript.segments]);
+    const captionOriginalText = latestTranscriptSegment?.original_text ?? null;
+    const captionTranslatedText = latestTranscriptSegment?.translated_text ?? null;
+    const captionTranslationStatus = latestTranscriptSegment ? (latestTranscriptSegment.translated_text ? 'ready' : latestTranscriptSegment.translated_language ? 'pending' : 'unavailable') : null;
+    const captionSpeakerName = latestTranscriptSegment?.speaker_display_name ?? null;
+    // Caption preference is owned here so it survives Full/Mini and fullscreen
+    // transitions. It is read from the dedicated AI preference store on mount
+    // and written back whenever the user changes the mode. It never touches
+    // meetingMediaIntent, so media restore logic cannot clobber it.
+    const [captionMode, setCaptionMode] = useState(() => readMeetingAiPreferences(aiPreferencesKey).captionMode);
+    useEffect(() => {
+        if (!aiPreferencesKey) return;
+        writeMeetingAiPreferences(aiPreferencesKey, {captionMode});
+    }, [aiPreferencesKey, captionMode]);
     const connection = useConnectionState();
     const {localParticipant, isCameraEnabled, isMicrophoneEnabled} = useLocalParticipant();
     const room = useRoomContext();
@@ -327,6 +352,11 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
     const signals = useMeetingEphemeralSignals();
     const elapsedTime = useMeetingElapsedTime(meeting, clock);
     const participantIdentities = useMemo(() => participants.map((participant) => participant.identity).sort().join(','), [participants]);
+    useEffect(() => {
+        if (connection === 'connected') {
+            ai.loadTranscript();
+        }
+    }, [connection, ai.loadTranscript]);
     const endMeeting = useCallback(async () => {
         // A terminal Echo event can begin its own navigation transaction before
         // the End response reaches this callback. Disconnect directly so the
@@ -401,16 +431,17 @@ function RoomContent({meeting, clock, schoolClass, initialMedia, mediaIntent, me
             <header className="relative z-10 flex shrink-0 flex-wrap items-start justify-between gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10"><Icon name="video" className="h-5 w-5"/></span>{t('meetingRoom.stage.liveClass')}</p><p className="mt-1.5 truncate pl-11 text-sm font-medium text-slate-200">{schoolClass.name}{schoolClass.section ? ` · ${schoolClass.section}` : ''}{meeting.subject ? ` · ${meeting.subject.name}` : ''}</p><div className="mt-1.5 flex items-center gap-3 pl-11"><ConnectionStatus notice={connectionError}/><ElapsedTime value={elapsedTime}/></div></div><div className="flex items-center gap-2"><RoomSummary/><StartAudio label={t('meetingRoom.stage.enableAudio')} className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600"/></div></header>
             <ReactionOverlay events={signals.reactionEvents}/>
             {hasNotice(mediaMessage) || hasNotice(moderation.message) ? <div className="relative z-10 mt-3 shrink-0 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100" role="status">{renderFirstNotice([mediaMessage, moderation.message], t)}</div> : null}
-            <div className="relative z-0 flex min-h-0 flex-1 flex-col py-3"><MeetingStage view={view} onViewChange={setView}/></div>
+            <div className="relative z-0 flex min-h-0 flex-1 flex-col py-3"><MeetingStage view={view} onViewChange={setView}/><CaptionOverlay mode={captionMode} originalText={captionOriginalText} translatedText={captionTranslatedText} translationStatus={captionTranslationStatus} speakerName={captionSpeakerName}/></div>
             <RoomAudioRenderer/>
-            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} screenShareRequestCount={moderation.screenShareRequests.length} screenShareApproval={screenShareApproval} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen} recording={recording}/>
+            <MeetingControlCenter meeting={meeting} activePanel={panel} onPanelChange={setPanel} signals={signals} waitingCount={moderation.requests.length} screenShareRequestCount={moderation.screenShareRequests.length} screenShareApproval={screenShareApproval} raisedCount={raisedCount} view={view} onViewChange={setView} onCopyLink={copyMeetingLink} copied={copied} hasMeetingLink={Boolean(meetingLink)} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} mediaReady={mediaReady} onLeave={onLeave} onMessage={onMediaMessage} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen} recording={recording} onOpenBuddy={() => setBuddyOpen((value) => !value)} aiControl={{active: buddyOpen, label: t('meetingRoom.ai.assistant'), ariaLabel: t('meetingRoom.controlCenter.openAiAssistant'), onClick: () => setBuddyOpen((value) => !value)}}/>
         </section>
         {panel && <aside className="flex h-[70vh] min-h-[22rem] shrink-0 flex-col xl:h-full xl:min-h-0 xl:w-[clamp(17rem,24vw,22rem)] xl:pl-4">{panel === 'chat' ? <MeetingChatPanel messages={signals.messages} onClose={() => setPanel(null)} onSend={signals.sendMessage} connected={signals.connected} maxMessageLength={signals.maxMessageLength}/> : panel === 'people' ? <ParticipantsPanel meeting={meeting} onClose={() => setPanel(null)} raisedHands={signals.raisedHands} moderation={moderation}/> : panel === 'host' ? <HostControlsPanel meeting={meeting} moderation={moderation} onClose={() => setPanel(null)} onPeople={() => setPanel('people')} onInfo={() => setPanel('info')}/> : panel === 'info' ? <MeetingInfoPanel meeting={meeting} schoolClass={schoolClass} count={participants.length} meetingLink={meetingLink} onCopy={copyMeetingLink} copied={copied} onClose={() => setPanel(null)}/> : panel === 'devices' ? <MeetingDeviceSettings onClose={() => setPanel(null)} onMessage={onMediaMessage}/> : null}</aside>}
+        {buddyOpen && <aside className="flex h-[70vh] min-h-[22rem] shrink-0 flex-col xl:h-full xl:min-h-0 xl:w-[clamp(17rem,24vw,22rem)] xl:pl-4"><BBUBuddyPanel open={buddyOpen} onClose={() => setBuddyOpen(false)} initialState="idle" onStateChange={setBuddyState} meeting={meeting} schoolClass={schoolClass} canGenerateNotes={meeting.can_generate_ai_notes} canGenerateSummary={meeting.can_generate_ai_summary} notes={ai.notes} summary={ai.summary} onGenerateNotes={ai.generateNotes} onGenerateSummary={ai.generateSummary}/></aside>}
         </div>
     </div></>;
 }
 
-export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, recording, mode = 'full', onReturn, onLeave, onEnd}) {
+export default function MeetingRoomExperience({credentials, meeting, clock, schoolClass, initialMedia, mediaIntent, mediaIntentKey, aiPreferencesKey, recording, mode = 'full', onReturn, onLeave, onEnd}) {
     useMeetingNavigationGuard(meeting.status === 'active' && mode === 'full');
     const [connectionError, setConnectionError] = useState(null);
     const [mediaMessage, setMediaMessage] = useState(null);
@@ -466,6 +497,6 @@ export default function MeetingRoomExperience({credentials, meeting, clock, scho
         onError={() => setConnectionError(noticeKey('meetingRoom.errors.roomJoinFailed'))}
         onDisconnected={() => setConnectionError(noticeKey('meetingRoom.errors.interrupted'))}
         className="edway-live-room overscroll-x-none bg-transparent text-white">
-        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} recording={recording} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} onLeave={handleLeave} onEnd={handleEnd} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
+        <RoomContent meeting={meeting} clock={clock} schoolClass={schoolClass} recording={recording} initialMedia={initialMedia} mediaIntent={mediaIntent} mediaIntentKey={mediaIntentKey} aiPreferencesKey={aiPreferencesKey} onLeave={handleLeave} onEnd={handleEnd} onReturn={onReturn} mode={mode} mediaMessage={mediaMessage} onMediaMessage={setMediaMessage} connectionError={connectionError} isFullscreen={isFullscreen} exitFullscreen={exitFullscreen}/>
     </LiveKitRoom>;
 }

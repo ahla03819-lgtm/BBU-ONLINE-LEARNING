@@ -1,7 +1,8 @@
 import React, {createContext, useCallback, useContext, useEffect, useRef, useState} from 'react';
-import {router} from '@inertiajs/react';
+import {router, usePage} from '@inertiajs/react';
 import MeetingRoomExperience from '../Components/Meetings/LiveKit/MeetingRoomExperience';
 import {clearMeetingMediaIntent} from '../Components/Meetings/LiveKit/meetingMediaIntent';
+import {meetingAiPreferencesKey} from '../Components/Meetings/AI/useMeetingAiPreferences';
 import {echo} from '../realtime/echo';
 import {createMeetingLeaveTransaction} from './meetingLeaveTransaction';
 import {meetingPath, shouldNavigateToLobby} from '../Components/Meetings/LiveKit/meetingEndTeardown';
@@ -11,6 +12,7 @@ import {EXPLICIT_LEAVE_CAUSE, recordingEndpointsFor, shouldSignalExplicitLeave} 
 const PersistentMeetingContext = createContext(null);
 
 export function PersistentMeetingProvider({children}) {
+    const {auth} = usePage().props;
     const [session, setSession] = useState(null);
     const sessionRef = useRef(null);
     const leaveTransactionRef = useRef(null);
@@ -226,7 +228,7 @@ export function PersistentMeetingProvider({children}) {
 
     return <PersistentMeetingContext.Provider value={value}>
         {children}
-        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} recording={recording} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting} onEnd={endMeeting}/>}
+        {session && <MeetingRoomExperience credentials={session.credentials} meeting={session.meeting} clock={session.clock} schoolClass={session.schoolClass} recording={recording} initialMedia={session.initialMedia} mediaIntent={session.mediaIntent} mediaIntentKey={session.mediaIntentKey} aiPreferencesKey={meetingAiPreferencesKey(session.meeting.uuid, auth?.user?.id)} mode={mode} onReturn={returnToMeeting} onLeave={leaveMeeting} onEnd={endMeeting}/>}
     </PersistentMeetingContext.Provider>;
 }
 

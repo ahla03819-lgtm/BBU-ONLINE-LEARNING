@@ -106,4 +106,19 @@ class Meeting extends Model
     {
         return $this->hasMany(MeetingRecording::class);
     }
+
+    public function transcripts(): HasMany
+    {
+        return $this->hasMany(MeetingTranscript::class);
+    }
+
+    public function aiNotes(): HasMany
+    {
+        return $this->hasMany(MeetingAiNote::class);
+    }
+
+    public function aiSummaries(): HasMany
+    {
+        return $this->hasMany(MeetingAiSummary::class);
+    }
 }
