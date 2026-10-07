@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {router, usePage} from '@inertiajs/react';
 import useNotificationRealtime from '../Hooks/useNotificationRealtime';
 import AppSidebar from '../Components/UI/AppSidebar';
@@ -41,6 +41,9 @@ export default function AuthenticatedLayout({ children }) {
     const { t } = useTranslation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+    const mobileMenuButtonRef = useRef(null);
+    const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+    const toggleDesktopSidebar = useCallback(() => setDesktopSidebarOpen((open) => !open), []);
 
     const canViewUsers = auth.permissions.includes('users.view');
     const canViewNotifications = auth.permissions.includes('notifications.view');
@@ -83,12 +86,6 @@ export default function AuthenticatedLayout({ children }) {
         {label: t('nav.groups.communication'), items: [{label: t('nav.items.collaboration'), href: auth.permissions.includes('channels.view') ? '/collaboration' : null, component: 'Collaboration/Index', icon: 'messages'}, {label: t('nav.items.chats'), href: auth.permissions.includes('classes.view') ? '/conversations' : null, component: 'Conversations/Index', icon: 'messages'}, {label: t('nav.items.notifications'), href: canViewNotifications ? '/notifications' : null, component: 'Notifications/Index', icon: 'bell', badge: unreadCount}]},
         {label: t('nav.groups.administration'), items: [{label: t('nav.items.academicSettings'), href: canManageAcademics ? '/academics' : null, component: 'Academics/Index', icon: 'settings'}, {label: t('nav.items.people'), href: canManagePeople ? '/people' : null, component: 'People/Index', icon: 'users'}, {label: t('nav.items.users'), href: canViewUsers ? '/users' : null, component: 'Users/Index', icon: 'users'}]},
     ].map((group) => ({...group, items: group.items.filter((item) => item.href || item.visible)})).filter((group) => group.items.length), [auth.permissions, canManageAcademics, canManagePeople, canManageAttendance, canViewOwnAttendance, canViewOwnResults, canViewResults, canViewNotifications, unreadCount, t]);
-
-    useEffect(() => {
-        const close = (event) => event.key === 'Escape' && setSidebarOpen(false);
-        window.addEventListener('keydown', close);
-        return () => window.removeEventListener('keydown', close);
-    }, []);
 
     useEffect(() => {
         const removeBeforeListener = router.on('before', (event) => {
@@ -149,9 +146,9 @@ export default function AuthenticatedLayout({ children }) {
 
     return (
         <div className="min-h-screen">
-            {!hideAppChrome && <AppSidebar open={sidebarOpen} desktopOpen={desktopSidebarOpen} onClose={() => setSidebarOpen(false)} onDesktopToggle={() => setDesktopSidebarOpen((open) => !open)} navigation={navigation} user={auth.user} roleLabel={auth.role_label}/>}
+            {!hideAppChrome && <AppSidebar open={sidebarOpen} desktopOpen={desktopSidebarOpen} onClose={closeSidebar} onDesktopToggle={toggleDesktopSidebar} navigation={navigation} user={auth.user} roleLabel={auth.role_label} returnFocusRef={mobileMenuButtonRef}/>}
             <div className={`min-h-screen transition-[padding] duration-200 ease-out ${!hideAppChrome && desktopSidebarOpen ? 'lg:pl-56' : 'lg:pl-0'}`}>
-                {!hideAppChrome && <AppTopbar title={title} onMenu={() => setSidebarOpen(true)} onSidebarToggle={() => setDesktopSidebarOpen((open) => !open)} sidebarExpanded={desktopSidebarOpen} notificationUrl={canViewNotifications ? '/notifications' : null} unreadCount={unreadCount} notificationPreview={notificationInbox?.preview || []} user={auth.user}/>}
+                {!hideAppChrome && <AppTopbar title={title} onMenu={() => setSidebarOpen(true)} navigationOpen={sidebarOpen} menuButtonRef={mobileMenuButtonRef} onSidebarToggle={toggleDesktopSidebar} sidebarExpanded={desktopSidebarOpen} notificationUrl={canViewNotifications ? '/notifications' : null} unreadCount={unreadCount} notificationPreview={notificationInbox?.preview || []} user={auth.user}/>}
                 <main className={`mx-auto ${hideAppChrome ? 'max-w-none p-0' : 'max-w-[1440px] p-4 sm:p-5 lg:p-6'}`}>
                     {flash.success && <div role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">{flash.success}</div>}
                     {children}
