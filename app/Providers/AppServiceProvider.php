@@ -3,6 +3,10 @@
 namespace App\Providers;
 
 use App\Contracts\MeetingLifecycleProvider;
+use App\Contracts\LessonNotesProvider;
+use App\Contracts\LessonSummaryProvider;
+use App\Contracts\TranslationProvider;
+use App\Contracts\TranscriptionProvider;
 use App\Models\Assignment;
 use App\Models\AssignmentGrade;
 use App\Models\AssignmentSubmission;
@@ -24,6 +28,10 @@ use App\Models\MessageAttachment;
 use App\Models\SchoolClass;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\AI\NullLessonNotesProvider;
+use App\Services\AI\NullLessonSummaryProvider;
+use App\Services\AI\NullTranscriptionProvider;
+use App\Services\AI\NullTranslationProvider;
 use App\Services\LiveKit\LiveKitRecordingManager;
 use App\Services\LiveKit\LiveKitRoomManager;
 use App\Services\LiveKit\LiveKitTokenIssuer;
@@ -52,6 +60,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(LiveKitWebhookVerifier::class, SdkLiveKitWebhookVerifier::class);
         $this->app->singleton(MeetingLifecycleProvider::class, LiveKitMeetingLifecycleProvider::class);
         $this->app->singleton(LiveKitRecordingManager::class, SdkLiveKitRecordingManager::class);
+        $this->app->singleton(TranscriptionProvider::class, NullTranscriptionProvider::class);
+        $this->app->singleton(TranslationProvider::class, NullTranslationProvider::class);
+        $this->app->singleton(LessonNotesProvider::class, NullLessonNotesProvider::class);
+        $this->app->singleton(LessonSummaryProvider::class, NullLessonSummaryProvider::class);
     }
 
     /**

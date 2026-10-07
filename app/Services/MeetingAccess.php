@@ -214,6 +214,31 @@ class MeetingAccess
             && (! $meeting->classSubject || $this->isActiveClassSubject($meeting->classSubject, $meeting->schoolClass));
     }
 
+    public function canAccessMeetingAi(User $user, Meeting $meeting): bool
+    {
+        return $this->canAccessMeeting($user, $meeting);
+    }
+
+    public function canManageMeetingAi(User $user, Meeting $meeting): bool
+    {
+        if (! $this->canAccessMeeting($user, $meeting)) {
+            return false;
+        }
+
+        if ($this->isAdministrator($user)) {
+            return true;
+        }
+
+        if (! $user->hasRole('Teacher')) {
+            return false;
+        }
+
+        $meeting->loadMissing(['schoolClass', 'classSubject']);
+
+        return $this->isCurrentClassTeacher($user, $meeting->schoolClass)
+            || ($meeting->classSubject && $this->isCurrentSubjectTeacher($user, $meeting->classSubject));
+    }
+
     public function canCreateMeeting(User $user, SchoolClass $schoolClass, ?ClassSubject $classSubject = null): bool
     {
         if (! $this->isEligibleAccount($user) || ! $this->isAcademicallyActive($schoolClass)) {
