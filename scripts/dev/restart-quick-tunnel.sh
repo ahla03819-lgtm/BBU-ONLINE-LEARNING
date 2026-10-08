@@ -7,6 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET_URL="http://127.0.0.1:8090"
 REVERB_HOST="127.0.0.1"
 REVERB_PORT="8080"
+DOH_URL="https://1.1.1.1/dns-query"
 ENV_FILE="$PROJECT_ROOT/.env"
 TUNNEL_LOG="$PROJECT_ROOT/storage/logs/cloudflared-quick-tunnel.log"
 TUNNEL_PID_FILE="$PROJECT_ROOT/storage/logs/cloudflared-quick-tunnel.pid"
@@ -52,6 +53,68 @@ trap cleanup EXIT
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+curl_failure_category() {
+    case "$1" in
+        6) printf '%s' 'DNS resolution failed' ;;
+        7) printf '%s' 'TCP connection failed' ;;
+        28) printf '%s' 'request timed out' ;;
+        35|51|53|58|59|60|64|66|77|80|82|83|90|91) printf '%s' 'TLS validation or negotiation failed' ;;
+        *) printf 'curl transport failed (exit %s)' "$1" ;;
+    esac
+}
+
+verify_doh_support() {
+    curl --help all 2>/dev/null | grep -q -- '--doh-url' \
+        || fail 'Installed curl does not support --doh-url; the tunnel was not rotated.'
+
+    if ! curl --noproxy '*' --silent --show-error --fail --output /dev/null \
+        --connect-timeout 3 --max-time 10 \
+        --header 'accept: application/dns-json' \
+        "$DOH_URL?name=www.cloudflare.com&type=A"; then
+        fail "The IP-literal DoH resolver $DOH_URL is not reachable with trusted TLS; the tunnel was not rotated."
+    fi
+
+    if ! curl --noproxy '*' --doh-url "$DOH_URL" --silent --show-error --fail --output /dev/null \
+        --connect-timeout 3 --max-time 10 \
+        'https://www.cloudflare.com/cdn-cgi/trace'; then
+        fail 'curl could not resolve and connect through the verified DoH resolver; the tunnel was not rotated.'
+    fi
+}
+
+check_public_login() {
+    public_url="$1"
+    request_timeout="$2"
+    curl_error_file="$(mktemp "${TMPDIR:-/tmp}/bbu-quick-tunnel-curl.XXXXXX")" \
+        || fail 'Unable to create a temporary file for the public health check.'
+
+    PUBLIC_HTTP_CODE="000"
+    if PUBLIC_HTTP_CODE="$(curl --noproxy '*' --doh-url "$DOH_URL" \
+        --silent --show-error --output /dev/null --write-out '%{http_code}' \
+        --connect-timeout 3 --max-time "$request_timeout" \
+        "$public_url/login" 2>"$curl_error_file")"; then
+        curl_status=0
+    else
+        curl_status=$?
+    fi
+
+    curl_error="$(tr '\r\n' '  ' < "$curl_error_file" | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//' | cut -c1-300)"
+    rm -f -- "$curl_error_file"
+
+    if [ "$curl_status" -ne 0 ]; then
+        LAST_PUBLIC_HEALTH_ERROR="$(curl_failure_category "$curl_status")"
+        [ -z "$curl_error" ] || LAST_PUBLIC_HEALTH_ERROR="$LAST_PUBLIC_HEALTH_ERROR: $curl_error"
+        return 1
+    fi
+
+    if [ "$PUBLIC_HTTP_CODE" != '200' ]; then
+        LAST_PUBLIC_HEALTH_ERROR="HTTP status ${PUBLIC_HTTP_CODE:-unknown}; expected 200"
+        return 1
+    fi
+
+    LAST_PUBLIC_HEALTH_ERROR='none'
+    return 0
 }
 
 process_cwd() {
@@ -196,6 +259,8 @@ if ! curl --silent --show-error --output /dev/null --connect-timeout 2 --max-tim
     fail "Caddy target $TARGET_URL is unavailable; the tunnel was not rotated."
 fi
 
+verify_doh_support
+
 OLD_APP_URL="$(read_env_value APP_URL)"
 OLD_HOST="$(php -r '$host = parse_url($argv[1], PHP_URL_HOST); if (! is_string($host) || $host === "") { exit(1); } echo $host;' "$OLD_APP_URL")" \
     || fail 'APP_URL is missing or is not a valid URL.'
@@ -229,24 +294,19 @@ done
 NEW_HOST="$(php -r '$url = $argv[1]; $host = parse_url($url, PHP_URL_HOST); if (parse_url($url, PHP_URL_SCHEME) !== "https" || ! is_string($host) || ! preg_match("/^[A-Za-z0-9-]+\\.trycloudflare\\.com$/", $host)) { exit(1); } echo $host;' "$NEW_URL")" \
     || fail 'cloudflared emitted an invalid Quick Tunnel URL.'
 
-attempts=0
-until php -r '$records = dns_get_record($argv[1], DNS_A | DNS_AAAA); exit(is_array($records) && count($records) > 0 ? 0 : 1);' "$NEW_HOST"; do
-    attempts=$((attempts + 1))
-    [ "$attempts" -lt 90 ] || fail "DNS did not resolve $NEW_HOST within the timeout."
-    sleep 1
-done
-
 PUBLIC_HTTP_CODE="000"
+LAST_PUBLIC_HEALTH_ERROR='not attempted'
 attempts=0
 while [ "$attempts" -lt 45 ]; do
-    PUBLIC_HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 3 --max-time 10 "$NEW_URL/login" 2>/dev/null || true)"
-    [ "$PUBLIC_HTTP_CODE" != "000" ] && [ -n "$PUBLIC_HTTP_CODE" ] && break
+    if check_public_login "$NEW_URL" 10; then
+        break
+    fi
     attempts=$((attempts + 1))
     sleep 1
 done
 
-[ "$PUBLIC_HTTP_CODE" != "000" ] && [ -n "$PUBLIC_HTTP_CODE" ] \
-    || fail "The new tunnel did not return an HTTP response for /login; .env was not changed."
+[ "$PUBLIC_HTTP_CODE" = '200' ] \
+    || fail "The new tunnel did not return HTTP 200 for /login; .env was not changed. Last check: $LAST_PUBLIC_HEALTH_ERROR"
 
 NEW_ALLOWED_ORIGINS="$(php -r '
 $raw = $argv[1];
@@ -348,8 +408,8 @@ if [ "$OLD_HOST" != "$NEW_HOST" ]; then
     esac
 fi
 
-PUBLIC_HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 3 --max-time 15 "$NEW_URL/login" 2>/dev/null || true)"
-[ "$PUBLIC_HTTP_CODE" != "000" ] && [ -n "$PUBLIC_HTTP_CODE" ] || fail 'Public /login verification failed after configuration reload.'
+check_public_login "$NEW_URL" 15 \
+    || fail "Public /login verification failed after configuration reload: $LAST_PUBLIC_HEALTH_ERROR"
 say 'Public app: OK'
 
 WS_RESULT="$(node - "$NEW_URL" "$ENV_FILE" <<'NODE'

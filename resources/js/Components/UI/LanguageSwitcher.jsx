@@ -15,7 +15,7 @@ const options = [
  * Writing to the shared account preference, so the choice follows the user to
  * other pages and devices instead of living in one component.
  */
-export default function LanguageSwitcher() {
+export default function LanguageSwitcher({compact = false}) {
     const {locale, setLocale, t} = useTranslation();
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef(null);
@@ -91,13 +91,13 @@ export default function LanguageSwitcher() {
             type="button"
             onClick={() => setOpen((value) => ! value)}
             onKeyDown={onTriggerKeyDown}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-sm font-semibold leading-6 text-slate-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-600"
+            className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white text-sm font-semibold leading-6 text-slate-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-600 ${compact ? 'px-2' : 'px-2.5'}`}
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={`${t('language.openMenu')} — ${t('language.current', {language: t(`language.${active.value}`)})}`}
         >
             <img src={active.flag} alt="" aria-hidden="true" className="h-6 w-6 shrink-0 rounded-full object-cover"/>
-            <span lang={active.value} className="max-w-24 truncate">{active.label}</span>
+            {!compact && <span lang={active.value} className="max-w-24 truncate">{active.label}</span>}
         </button>
         {open && <div
             className="absolute right-0 top-[calc(100%+.55rem)] z-30 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-xl shadow-slate-900/10"

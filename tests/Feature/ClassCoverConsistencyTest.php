@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AcademicYearStatus;
 use App\Enums\SchoolClassStatus;
 use App\Models\AcademicYear;
+use App\Models\Channel;
 use App\Models\GradeLevel;
 use App\Models\SchoolClass;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -37,7 +40,7 @@ class ClassCoverConsistencyTest extends TestCase
 
     private function activeClass(?AcademicYear $year = null): SchoolClass
     {
-        $year ??= AcademicYear::factory()->create(['status' => \App\Enums\AcademicYearStatus::Active, 'active_slot' => 1]);
+        $year ??= AcademicYear::factory()->create(['status' => AcademicYearStatus::Active, 'active_slot' => 1]);
 
         return SchoolClass::factory()->create([
             'academic_year_id' => $year->id,
@@ -46,13 +49,20 @@ class ClassCoverConsistencyTest extends TestCase
         ]);
     }
 
+    private function addCover(SchoolClass $schoolClass): string
+    {
+        $path = "class-covers/{$schoolClass->id}/cover-".uniqid().'.jpg';
+        Storage::disk('public')->put($path, 'binary');
+        $schoolClass->update(['cover_image_path' => $path]);
+
+        return $path;
+    }
+
     public function test_classes_index_exposes_custom_cover_url(): void
     {
         $class = $this->activeClass();
         $admin = $this->user('Super Admin');
-        $path = "class-covers/{$class->id}/".'cover-'.uniqid().'.jpg';
-        Storage::disk('public')->put($path, 'binary');
-        $class->update(['cover_image_path' => $path]);
+        $path = $this->addCover($class);
 
         $this->actingAs($admin)->get(route('classes.index'))
             ->assertOk()
@@ -67,9 +77,7 @@ class ClassCoverConsistencyTest extends TestCase
     {
         $class = $this->activeClass();
         $admin = $this->user('Super Admin');
-        $path = "class-covers/{$class->id}/".'cover-'.uniqid().'.jpg';
-        Storage::disk('public')->put($path, 'binary');
-        $class->update(['cover_image_path' => $path]);
+        $path = $this->addCover($class);
 
         $this->actingAs($admin)->get('/collaboration')
             ->assertOk()
@@ -84,17 +92,15 @@ class ClassCoverConsistencyTest extends TestCase
     {
         $class = $this->activeClass();
         $admin = $this->user('Super Admin');
-        $path = "class-covers/{$class->id}/".'cover-'.uniqid().'.jpg';
-        Storage::disk('public')->put($path, 'binary');
-        $class->update(['cover_image_path' => $path]);
+        $path = $this->addCover($class);
 
         $classesResponse = $this->actingAs($admin)->get(route('classes.index'))->assertOk();
-        $collabResponse = $this->actingAs($admin)->get('/collaboration')->assertOk();
+        $collaborationResponse = $this->actingAs($admin)->get('/collaboration')->assertOk();
 
         $classesResponse->assertInertia(fn (AssertableInertia $page) => $page
             ->where('classes', fn ($classes) => collect($classes)->firstWhere('id', $class->id)['coverImageUrl'] === '/storage/'.$path)
         );
-        $collabResponse->assertInertia(fn (AssertableInertia $page) => $page
+        $collaborationResponse->assertInertia(fn (AssertableInertia $page) => $page
             ->where('classes', fn ($classes) => collect($classes)->firstWhere('id', $class->id)['coverImageUrl'] === '/storage/'.$path)
         );
     }
@@ -117,13 +123,13 @@ class ClassCoverConsistencyTest extends TestCase
             );
     }
 
-    public function test_cover_update_persists_and_is_exposed_on_collaboration(): void
+    public function test_uploaded_cover_is_exposed_on_collaboration(): void
     {
         $class = $this->activeClass();
         $admin = $this->user('Super Admin');
 
         $this->actingAs($admin)->post("/classes/{$class->id}/cover", [
-            'cover' => \Illuminate\Http\UploadedFile::fake()->image('cover.jpg', 40, 40),
+            'cover' => UploadedFile::fake()->image('cover.jpg', 40, 40),
         ])->assertRedirect();
 
         $path = $class->fresh()->cover_image_path;
@@ -136,19 +142,66 @@ class ClassCoverConsistencyTest extends TestCase
             );
     }
 
-    public function test_cover_image_path_is_not_leaked_to_collaboration_payload(): void
+    public function test_removed_cover_returns_to_null_fallback_on_both_pages(): void
     {
         $class = $this->activeClass();
         $admin = $this->user('Super Admin');
-        $path = "class-covers/{$class->id}/".'cover-'.uniqid().'.jpg';
-        Storage::disk('public')->put($path, 'binary');
-        $class->update(['cover_image_path' => $path]);
+        $path = $this->addCover($class);
+
+        $this->actingAs($admin)->delete("/classes/{$class->id}/cover")->assertRedirect();
+
+        $this->assertNull($class->fresh()->cover_image_path);
+        Storage::disk('public')->assertMissing($path);
+
+        $this->actingAs($admin)->get(route('classes.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('classes', fn ($classes) => collect($classes)->firstWhere('id', $class->id)['coverImageUrl'] === null)
+            );
 
         $this->actingAs($admin)->get('/collaboration')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('classes', fn ($classes) => array_key_exists('cover_image_path', collect($classes)->firstWhere('id', $class->id)) === false)
+                ->where('classes', fn ($classes) => collect($classes)->firstWhere('id', $class->id)['coverImageUrl'] === null)
+            );
+    }
+
+    public function test_cover_image_path_is_not_leaked_to_collaboration_payload(): void
+    {
+        $class = $this->activeClass();
+        $admin = $this->user('Super Admin');
+        $path = $this->addCover($class);
+
+        $this->actingAs($admin)->get('/collaboration')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('classes', fn ($classes) => ! array_key_exists('cover_image_path', collect($classes)->firstWhere('id', $class->id)))
                 ->where('classes', fn ($classes) => collect($classes)->firstWhere('id', $class->id)['coverImageUrl'] === '/storage/'.$path)
+            );
+    }
+
+    public function test_collaboration_order_relations_and_channel_counts_are_preserved(): void
+    {
+        $year = AcademicYear::factory()->create(['status' => AcademicYearStatus::Active, 'active_slot' => 1]);
+        $zulu = $this->activeClass($year);
+        $zulu->update(['name' => 'Zulu']);
+        $alpha = $this->activeClass($year);
+        $alpha->update(['name' => 'Alpha']);
+        Channel::factory()->count(2)->create(['school_class_id' => $alpha->id]);
+        $admin = $this->user('Super Admin');
+
+        $this->actingAs($admin)->get('/collaboration')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('classes', 2)
+                ->where('classes.0.id', $alpha->id)
+                ->where('classes.0.name', 'Alpha')
+                ->where('classes.0.channels_count', 2)
+                ->where('classes.0.academic_year.id', $year->id)
+                ->where('classes.0.grade_level.id', $alpha->grade_level_id)
+                ->where('classes.1.id', $zulu->id)
+                ->where('classes.1.name', 'Zulu')
+                ->where('classes.1.channels_count', 0)
             );
     }
 }
