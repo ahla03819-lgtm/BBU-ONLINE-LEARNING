@@ -19,7 +19,12 @@ class CollaborationController extends Controller
         $this->authorize('viewAny', Channel::class);
         $classes = $access->classesFor(auth()->user())->with(['academicYear:id,name,status', 'gradeLevel:id,name'])->withCount(['channels' => fn ($query) => $access->isAdministrator(auth()->user()) ? $query : $query->active()])->orderBy('name')->get();
 
-        return Inertia::render('Collaboration/Index', ['classes' => $classes]);
+        return Inertia::render('Collaboration/Index', [
+            'classes' => $classes->map(fn (SchoolClass $schoolClass) => [
+                ...$schoolClass->toArray(),
+                'coverImageUrl' => $schoolClass->coverImageUrl(),
+            ])->values(),
+        ]);
     }
 
     public function workspace(SchoolClass $schoolClass, CollaborationAccess $access, MeetingAccess $meetingAccess, ?Channel $channel = null): Response
