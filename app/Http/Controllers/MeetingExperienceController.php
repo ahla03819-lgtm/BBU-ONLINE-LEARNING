@@ -63,6 +63,8 @@ class MeetingExperienceController extends Controller
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
                 'can_manage_join_requests' => request()->user()->can('manageJoinRequests', $meeting),
                 'can_start_recording' => $viewer->can('startRecording', $meeting),
+                'can_generate_ai_notes' => $viewer->can('generateAiNotes', $meeting),
+                'can_generate_ai_summary' => $viewer->can('generateAiSummary', $meeting),
                 // The very same bounds the request validates against, so the dialog
                 // can reject an impossible duration before it is ever sent. The
                 // server still validates independently.

@@ -224,8 +224,33 @@ class MeetingPolicy
             && $user->can($meeting->status === MeetingStatus::Starting ? 'meetings.start' : 'meetings.end');
     }
 
+    public function viewTranscript(User $user, Meeting $meeting): bool
+    {
+        return $this->access->canAccessMeetingAi($user, $meeting);
+    }
+
+    public function viewAiNotes(User $user, Meeting $meeting): bool
+    {
+        return $this->access->canAccessMeetingAi($user, $meeting);
+    }
+
+    public function viewAiSummary(User $user, Meeting $meeting): bool
+    {
+        return $this->access->canAccessMeetingAi($user, $meeting);
+    }
+
+    public function generateAiNotes(User $user, Meeting $meeting): bool
+    {
+        return $this->access->canManageMeetingAi($user, $meeting);
+    }
+
+    public function generateAiSummary(User $user, Meeting $meeting): bool
+    {
+        return $this->access->canManageMeetingAi($user, $meeting);
+    }
+
     /**
-     * Recording is a host capability, not a moderation one.
+      * Recording is a host capability, not a moderation one.
      *
      * The permission is the primary gate, so a student cannot reach it at all even
      * though a student may legitimately be able to manage participants. On top of
