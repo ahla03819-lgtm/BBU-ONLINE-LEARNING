@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Phase20;
 
+use App\Actions\Recordings\FinalizeMeetingRecording;
 use App\Actions\Recordings\ReconcileMeetingRecordingState;
-use App\Actions\Recordings\StartMeetingRecording;
 use App\Actions\Recordings\StopMeetingRecording;
 use App\Enums\MeetingRecordingProviderStatus;
 use App\Enums\MeetingRecordingStatus;
@@ -12,8 +12,11 @@ use App\Enums\MeetingStatus;
 use App\Events\MeetingRecordingChanged;
 use App\Jobs\FinalizeMeetingRecordingOutput;
 use App\Jobs\StopMeetingRecordingAtDeadline;
-use App\Models\Meeting;
 use App\Models\MeetingRecording;
+use App\Models\Message;
+use App\Support\MessagePayload;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
@@ -56,7 +59,7 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
         $this->providerCompletes();
         app(StopMeetingRecording::class)->handle($first, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($first);
-        app(\App\Actions\Recordings\FinalizeMeetingRecording::class)->handle($first);
+        app(FinalizeMeetingRecording::class)->handle($first);
 
         $second = $this->startRecording($teacher, $meeting, 5);
 
@@ -110,7 +113,7 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
         [$class, $meeting, $teacher] = $this->scenario();
         $this->startRecording($teacher, $meeting, 12);
 
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->expectException(UniqueConstraintViolationException::class);
         MeetingRecording::query()->create([
             'meeting_id' => $meeting->id,
             'started_by_user_id' => $teacher->id,
@@ -128,7 +131,7 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
         $this->providerCompletes();
         app(StopMeetingRecording::class)->handle($first, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($first);
-        app(\App\Actions\Recordings\FinalizeMeetingRecording::class)->handle($first);
+        app(FinalizeMeetingRecording::class)->handle($first);
 
         $this->assertSame(MeetingRecordingStatus::Ready, $first->fresh()->status);
         $this->assertNull($first->fresh()->active_slot);
@@ -254,17 +257,75 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
         $this->travelBack();
     }
 
-    public function test_a_provider_that_cannot_be_reached_fails_the_recording_without_blocking_the_room(): void
+    public function test_a_provider_that_cannot_be_reached_preserves_the_stopping_state_for_reconciliation(): void
     {
+        Queue::fake();
         [$class, $meeting, $teacher] = $this->scenario();
         $recording = $this->startRecording($teacher, $meeting, 12);
         $this->recordings->unreachable = true;
 
         $stopped = app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
 
-        $this->assertSame(MeetingRecordingStatus::Failed, $stopped->status);
-        $this->assertNull($stopped->active_slot);
-        $this->assertNotNull($stopped->failure_reason);
+        $this->assertSame(MeetingRecordingStatus::Stopping, $stopped->status);
+        $this->assertSame(1, $stopped->active_slot);
+        $this->assertNull($stopped->failure_reason);
+        $this->assertSame(1, Message::query()->where('meeting_recording_id', $recording->id)->count());
+    }
+
+    public function test_provider_duration_seconds_are_stored_without_numeric_overflow(): void
+    {
+        Queue::fake();
+        [$class, $meeting, $teacher] = $this->scenario();
+        $recording = $this->startRecording($teacher, $meeting, 12);
+        $this->recordings->file(64, 4_200_000);
+
+        $stopped = app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
+
+        $this->assertSame(MeetingRecordingStatus::Processing, $stopped->status);
+        $this->assertSame(64, $stopped->duration_seconds);
+        $this->assertDatabaseHas('meeting_recordings', ['id' => $recording->id, 'duration_seconds' => 64]);
+    }
+
+    public function test_reconciliation_recovers_an_uncertain_stop_after_the_provider_reports_complete(): void
+    {
+        Queue::fake();
+        [$class, $meeting, $teacher] = $this->scenario();
+        $recording = $this->startRecording($teacher, $meeting, 12);
+        $this->recordings->stopStatus = MeetingRecordingProviderStatus::Unknown;
+
+        $stopping = app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
+        $this->assertSame(MeetingRecordingStatus::Stopping, $stopping->status);
+
+        $this->recordings->inspectStatus = MeetingRecordingProviderStatus::Complete;
+        $this->recordings->ready();
+        $this->publishProviderOutput($recording);
+        [$ready] = app(FinalizeMeetingRecording::class)->handle($stopping);
+
+        $this->assertSame(MeetingRecordingStatus::Ready, $ready->status);
+        $this->assertSame(720, $ready->duration_seconds);
+        $this->assertSame(1, Message::query()->where('meeting_recording_id', $recording->id)->count());
+    }
+
+    public function test_an_unconfirmed_stop_fails_after_the_bounded_reconciliation_deadline(): void
+    {
+        Queue::fake();
+        [$class, $meeting, $teacher] = $this->scenario();
+        $recording = $this->startRecording($teacher, $meeting, 12);
+        $this->recordings->stopStatus = MeetingRecordingProviderStatus::Unknown;
+        $stopping = app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
+        $stopping->forceFill([
+            'stopped_at' => now()->subMinutes((int) config('meeting-recordings.collection_deadline_minutes') + 1),
+        ])->save();
+        $this->recordings->unreachable = true;
+
+        [$failed, $stillSettling] = app(FinalizeMeetingRecording::class)->handle($stopping);
+
+        $this->assertFalse($stillSettling);
+        $this->assertSame(MeetingRecordingStatus::Failed, $failed->status);
+        $this->assertNull($failed->active_slot);
+        $this->assertSame('The recording provider did not confirm that the capture stopped.', $failed->failure_reason);
+        $this->assertNull(app(MessagePayload::class)
+            ->make(Message::query()->where('meeting_recording_id', $recording->id)->firstOrFail())['recording']['playback_url']);
     }
 
     public function test_a_provider_that_refuses_to_start_fails_the_attempt_and_frees_the_slot(): void
@@ -299,6 +360,18 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
 
         $this->actingAs($teacher)->postJson(route('meetings.recordings.stop', [$class, $meeting->uuid]))->assertOk();
         Event::assertDispatchedTimes(MeetingRecordingChanged::class, 2);
+    }
+
+    public function test_the_realtime_recording_payload_does_not_broadcast_viewer_permissions(): void
+    {
+        [$class, $meeting, $teacher] = $this->scenario();
+        $recording = $this->startRecording($teacher, $meeting, 12);
+
+        $projection = (new MeetingRecordingChanged($recording))->broadcastWith()['recording'];
+
+        $this->assertSame($meeting->uuid, (new MeetingRecordingChanged($recording))->broadcastWith()['meeting_uuid']);
+        $this->assertArrayNotHasKey('can_start', $projection);
+        $this->assertArrayNotHasKey('can_stop', $projection);
     }
 
     public function test_the_status_endpoint_hands_back_the_authoritative_deadline_and_server_clock(): void
@@ -351,7 +424,7 @@ class MeetingRecordingLifecycleTest extends RecordingTestCase
         [$class, $meeting, $teacher] = $this->scenario();
         $meeting->update(['status' => MeetingStatus::Ended]);
 
-        $this->expectException(\Illuminate\Auth\Access\AuthorizationException::class);
+        $this->expectException(AuthorizationException::class);
         $this->startRecording($teacher, $meeting->fresh(), 12);
     }
 

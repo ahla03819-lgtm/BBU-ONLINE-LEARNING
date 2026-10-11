@@ -32,6 +32,10 @@ class FakeLiveKitRecordingManager implements \App\Services\LiveKit\LiveKitRecord
 
     public MeetingRecordingProviderStatus $stopStatus = MeetingRecordingProviderStatus::Complete;
 
+    public MeetingRecordingProviderStatus $inspectStatus = MeetingRecordingProviderStatus::Complete;
+
+    public ?string $inspectError = null;
+
     /** A provider that cannot be reached at all, distinct from one that refused. */
     public bool $unreachable = false;
 
@@ -71,11 +75,12 @@ class FakeLiveKitRecordingManager implements \App\Services\LiveKit\LiveKitRecord
         }
 
         return new ProviderRecordingStatus(
-            MeetingRecordingProviderStatus::Complete,
+            $this->inspectStatus,
             $egressId,
             $this->files,
             CarbonImmutable::parse('2026-10-03T09:00:00+00:00'),
             CarbonImmutable::parse('2026-10-03T09:12:00+00:00'),
+            $this->inspectError,
         );
     }
 
