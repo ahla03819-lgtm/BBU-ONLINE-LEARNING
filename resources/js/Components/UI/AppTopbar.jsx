@@ -8,7 +8,7 @@ import bbuOfficialLogo from '../../assets/bbu-official-logo.png';
 import GlobalSearch from './GlobalSearch';
 import {useTranslation} from '../../i18n/LocaleProvider';
 
-export default function AppTopbar({title, onMenu, navigationOpen, menuButtonRef, onSidebarToggle, sidebarExpanded, notificationUrl, unreadCount, notificationPreview = [], user}) {
+export default function AppTopbar({title, onMenu, navigationOpen, menuButtonRef, desktopShowSidebarButtonRef, onSidebarShow, sidebarExpanded, notificationUrl, unreadCount, notificationPreview = [], user}) {
     const {t} = useTranslation();
     const [menuOpen, setMenuOpen] = useState(false);
     const [activityOpen, setActivityOpen] = useState(false);
@@ -38,7 +38,7 @@ export default function AppTopbar({title, onMenu, navigationOpen, menuButtonRef,
         <div className="flex min-h-14 items-center gap-1 px-2 sm:gap-2 sm:px-4 lg:gap-3 lg:px-5">
             <button ref={menuButtonRef} type="button" onClick={onMenu} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-600 lg:hidden" aria-label={t('nav.labels.openNavigation')} aria-expanded={navigationOpen}><Icon name="menu" className="h-5 w-5"/></button>
             <img src={bbuOfficialLogo} alt="Build Bright University" className="h-8 w-6 shrink-0 object-contain lg:hidden"/>
-            {!sidebarExpanded && <button type="button" onClick={onSidebarToggle} className="hidden rounded-lg p-2 text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-600 lg:inline-flex" aria-label={t('nav.labels.showSidebar')} aria-expanded="false"><Icon name="menu" className="h-4 w-4"/></button>}
+            {!sidebarExpanded && <button ref={desktopShowSidebarButtonRef} type="button" onClick={onSidebarShow} className="hidden rounded-lg p-2 text-sky-700 transition hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-600 lg:inline-flex" aria-label={t('nav.labels.showSidebar')} aria-controls="app-sidebar" aria-expanded={sidebarExpanded}><Icon name="menu" className="h-4 w-4"/></button>}
             <h1 className="min-w-0 flex-1 truncate px-1 text-sm font-bold text-slate-800 lg:hidden">{title}</h1>
             <div className="flex-none lg:max-w-sm lg:flex-1"><GlobalSearch/></div>
             <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 lg:gap-2.5 lg:rounded-xl lg:border lg:border-slate-200 lg:bg-slate-50/75 lg:p-1">

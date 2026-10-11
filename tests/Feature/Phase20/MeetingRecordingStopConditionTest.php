@@ -143,9 +143,11 @@ class MeetingRecordingStopConditionTest extends RecordingTestCase
             ->postJson(route('meetings.end', [$class, $meeting->uuid]))
             ->assertOk();
 
-        // The recording records its own failure; the meeting is not held hostage.
+        // Provider uncertainty is reconciled independently; the meeting is not
+        // held hostage and the single active recording slot stays protected.
         $this->assertSame(MeetingStatus::Ended, $meeting->fresh()->status);
-        $this->assertSame(MeetingRecordingStatus::Failed, $recording->fresh()->status);
+        $this->assertSame(MeetingRecordingStatus::Stopping, $recording->fresh()->status);
+        $this->assertSame(1, $recording->fresh()->active_slot);
         $this->assertSame(1, Message::query()->where('meeting_recording_id', $recording->id)->count());
     }
 

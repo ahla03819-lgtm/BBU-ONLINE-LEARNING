@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Meetings\RecordMeetingLeave;
 use App\Actions\Recordings\StartMeetingRecording;
 use App\Actions\Recordings\StopMeetingRecording;
+use App\Enums\MeetingRecordingStatus;
 use App\Enums\MeetingRecordingStopReason;
 use App\Events\MeetingRecordingChanged;
 use App\Http\Requests\Recordings\StartMeetingRecordingRequest;
@@ -12,12 +13,12 @@ use App\Models\Meeting;
 use App\Models\MeetingRecording;
 use App\Models\SchoolClass;
 use App\Models\User;
-use App\Support\MeetingRecordingProjection;
 use App\Services\AuditLogger;
 use App\Services\Recordings\MeetingRecordingFileStore;
+use App\Support\MeetingRecordingProjection;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -182,7 +183,7 @@ class MeetingRecordingController extends Controller
         return MeetingRecordingProjection::withPermissions(
             $projection,
             $viewer->can('startRecording', $meeting),
-            $recording && MeetingRecording::query()->activeFor($meeting->id)->whereKey($recording->id)->exists()
+            $recording->status === MeetingRecordingStatus::Recording
                 && $viewer->can('stopRecording', [$meeting, $recording]),
         );
     }

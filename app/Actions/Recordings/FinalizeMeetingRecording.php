@@ -44,6 +44,9 @@ class FinalizeMeetingRecording
         }
 
         $settling = $this->settleStop($recording);
+        if ($settling->status === MeetingRecordingStatus::Stopping) {
+            return [$settling, true];
+        }
         if ($settling->status !== MeetingRecordingStatus::Processing) {
             return [$settling, false];
         }
@@ -61,29 +64,53 @@ class FinalizeMeetingRecording
         }
 
         $egressId = $recording->provider_egress_id;
-        $providerStatus = is_string($egressId) && $egressId !== ''
-            ? $this->provider->inspectRecording($egressId)?->status
-            : MeetingRecordingProviderStatus::Complete;
+        $hasEgressId = is_string($egressId) && $egressId !== '';
+        $provider = $hasEgressId
+            ? $this->provider->inspectRecording($egressId)
+            : null;
+        $providerStatus = $hasEgressId ? $provider?->status : MeetingRecordingProviderStatus::Complete;
 
         if ($providerStatus === MeetingRecordingProviderStatus::Failed) {
             return $this->fail($recording, 'The recording provider failed to produce an output file.');
         }
 
-        return DB::transaction(function () use ($recording) {
+        if ($providerStatus !== MeetingRecordingProviderStatus::Complete) {
+            return $this->expireUnconfirmedStop($recording) ?? $recording;
+        }
+
+        return DB::transaction(function () use ($recording, $provider) {
             $locked = MeetingRecording::query()->lockForUpdate()->findOrFail($recording->id);
             if ($locked->status !== MeetingRecordingStatus::Stopping) {
                 return $locked;
             }
 
             $before = $locked->only('status');
+            $duration = collect($provider?->files ?? [])->max('durationSeconds') ?: 0;
             $locked->update([
                 'status' => MeetingRecordingStatus::Processing,
                 'stopped_at' => $locked->stopped_at ?? now(),
+                'duration_seconds' => $duration > 0 ? $duration : $locked->duration_seconds,
             ]);
             $this->audit->log('meeting.recording-processing', $locked, $before, ['recording_id' => $locked->id]);
 
             return $locked;
         });
+    }
+
+    /**
+     * An unreachable provider or an egress still ending remains Stopping until
+     * reconciliation confirms a terminal provider state. The same bounded window
+     * used for output collection prevents that uncertainty from holding the active
+     * slot forever.
+     */
+    private function expireUnconfirmedStop(MeetingRecording $recording): ?MeetingRecording
+    {
+        $deadline = $recording->stopped_at?->copy()->addMinutes((int) config('meeting-recordings.collection_deadline_minutes'));
+        if (! $deadline || $deadline->isFuture()) {
+            return null;
+        }
+
+        return $this->fail($recording, 'The recording provider did not confirm that the capture stopped.');
     }
 
     /**

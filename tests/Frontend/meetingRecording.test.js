@@ -4,6 +4,7 @@ import en from '../../resources/js/i18n/en.js';
 import km from '../../resources/js/i18n/km.js';
 import {
     formatRecordingClock,
+    mergeRecordingBroadcast,
     recordingBadgeSeconds,
     recordingElapsedSeconds,
     recordingLive,
@@ -134,6 +135,32 @@ test('an authorised host sees Stop recording while a capture is live', () => {
     );
 });
 
+test('Stop is only eligible for a server-authorized confirmed recording', () => {
+    const meeting = {can_start_recording: true};
+    const canShowStop = (current) => startRecordingControlState({meeting, recording: current}).kind === 'stop' && Boolean(current?.can_stop);
+
+    assert.equal(canShowStop(recording({status: 'starting', can_stop: true})), false);
+    assert.equal(canShowStop(recording({status: 'recording', can_stop: true})), true);
+    assert.equal(canShowStop(recording({status: 'recording', can_stop: false})), false);
+    assert.equal(canShowStop(recording({status: 'stopping', can_stop: true})), false);
+    assert.equal(canShowStop(recording({status: 'processing', can_stop: true})), false);
+    assert.equal(canShowStop(recording({status: 'ready', can_stop: true})), false);
+    assert.equal(canShowStop(recording({status: 'failed', can_stop: true})), false);
+});
+
+test('a status-only broadcast cannot revoke permissions or revive an older recording state', () => {
+    const current = recording({status: 'processing', can_stop: true, can_start: true});
+
+    assert.deepEqual(
+        mergeRecordingBroadcast(current, {reference: current.reference, status: 'stopping'}),
+        current,
+    );
+    assert.deepEqual(
+        mergeRecordingBroadcast(recording({can_stop: true}), {reference: 'rec-1', status: 'stopping'}),
+        recording({status: 'stopping', can_stop: true}),
+    );
+});
+
 test('a start already in flight shows Starting rather than Start again', () => {
     assert.deepEqual(
         startRecordingControlState({meeting: {can_start_recording: true}, recording: recording({status: 'starting'}), requesting: true}),
@@ -144,6 +171,23 @@ test('a start already in flight shows Starting rather than Start again', () => {
 test('a settling recording shows Stopping and offers no start', () => {
     assert.deepEqual(
         startRecordingControlState({meeting: {can_start_recording: true}, recording: recording({status: 'processing'})}),
+        {kind: 'stopping'},
+    );
+});
+
+test('a terminal recording projection does not hide an authorised new start', () => {
+    const meeting = {can_start_recording: true};
+
+    assert.deepEqual(
+        startRecordingControlState({meeting, recording: recording({status: 'failed'})}),
+        {kind: 'start'},
+    );
+    assert.deepEqual(
+        startRecordingControlState({meeting, recording: recording({status: 'ready'})}),
+        {kind: 'start'},
+    );
+    assert.deepEqual(
+        startRecordingControlState({meeting, recording: recording({status: 'stopping'})}),
         {kind: 'stopping'},
     );
 });

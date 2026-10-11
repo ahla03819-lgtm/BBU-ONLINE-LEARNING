@@ -107,10 +107,41 @@ export function startRecordingControlState({meeting, recording, requesting, busy
 
     if (!canRecord) return {kind: 'hidden'};
     if (busy || requesting) return {kind: 'starting'};
-    if (recordingLive(recording)) return {kind: 'stop', recording};
+    // A provider start has not confirmed capture yet, so it is deliberately not
+    // stoppable. Once the server confirms `recording`, this same classifier owns
+    // both the Start and Stop control state.
+    if (recording?.status === 'starting') return {kind: 'starting'};
+    if (recording?.status === 'recording') return {kind: 'stop', recording};
     if (recordingSettling(recording)) return {kind: 'stopping'};
 
     return {kind: 'start'};
+}
+
+const recordingStatusOrder = {
+    starting: 0,
+    recording: 1,
+    stopping: 2,
+    processing: 3,
+    ready: 4,
+    failed: 4,
+};
+
+/**
+ * Merge a class-wide recording event without treating it as an authorization
+ * response. Broadcasts intentionally omit per-viewer `can_*` fields, so an event
+ * can update the lifecycle state but cannot revoke or grant a browser's control
+ * permission. Polling remains the authoritative per-viewer reconciliation path.
+ */
+export function mergeRecordingBroadcast(current, incoming) {
+    if (!incoming || !current || incoming.reference !== current.reference) return incoming;
+
+    const currentOrder = recordingStatusOrder[current.status] ?? -1;
+    const incomingOrder = recordingStatusOrder[incoming.status] ?? -1;
+    if (incomingOrder < currentOrder) return current;
+
+    const {can_start: _canStart, can_stop: _canStop, ...state} = incoming;
+
+    return {...current, ...state};
 }
 
 /**

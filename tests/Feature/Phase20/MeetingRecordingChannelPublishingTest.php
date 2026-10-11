@@ -6,6 +6,7 @@ use App\Actions\Recordings\FinalizeMeetingRecording;
 use App\Actions\Recordings\StopMeetingRecording;
 use App\Enums\ChannelStatus;
 use App\Enums\ChannelType;
+use App\Enums\MeetingRecordingProviderStatus;
 use App\Enums\MeetingRecordingStatus;
 use App\Enums\MeetingRecordingStopReason;
 use App\Enums\MessageType;
@@ -75,7 +76,7 @@ class MeetingRecordingChannelPublishingTest extends RecordingTestCase
     {
         [$class, $meeting, $teacher] = $this->scenario();
         $recording = $this->startRecording($teacher, $meeting, 12);
-        $this->recordings->unreachable = true;
+        $this->recordings->stopStatus = MeetingRecordingProviderStatus::Failed;
 
         app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
 

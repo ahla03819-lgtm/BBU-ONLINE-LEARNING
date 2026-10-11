@@ -9,7 +9,7 @@ import {useTranslation} from '../../../i18n/LocaleProvider';
 import {hasNotice, noticeKey, noticeRaw, renderNotice} from '../../../i18n/notice';
 import useMeetingFullscreen from '../../../Hooks/Meetings/useMeetingFullscreen';
 import {screenShareButtonState, screenShareLabelKey, shouldStartScreenCapture} from './screenShareApproval';
-import {MeetingRecordingDialogs, RecordingBadge} from './MeetingRecordingControls';
+import {MeetingRecordingDialogs, RecordingBadge, StoppingIndicator, ProcessingIndicator, ReadyNotice, FailedNotice} from './MeetingRecordingControls';
 
 function DeviceSelect({kind, labelKey, onMessage, expanded = false}) {
     const {t} = useTranslation();
@@ -146,6 +146,10 @@ export default function MeetingControlCenter({meeting, activePanel, onPanelChang
 
     return <>
     {recording?.state && <div className="mx-auto mb-2 flex w-full max-w-full justify-center"><RecordingBadge recording={recording.state} clock={recording.clock}/></div>}
+    <StoppingIndicator recording={recording.state}/>
+    <ProcessingIndicator recording={recording.state}/>
+    <ReadyNotice notice={recording.notice}/>
+    <FailedNotice notice={recording.notice}/>
     <div ref={ref} onKeyDown={keyDown} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPopover(null); }} aria-label={t('meetingRoom.controlCenter.label')} className={`meeting-control-bar relative mx-auto mt-4 flex w-full max-w-full shrink-0 flex-nowrap items-center justify-center gap-2 rounded-2xl border border-white/[.08] bg-[#10131c]/95 p-2 shadow-2xl shadow-black/40 sm:gap-3 sm:p-2.5 ${activePanel ? 'meeting-control-bar--panel-open' : ''}`}>
         <Control className="meeting-control-chat" active={activePanel === 'chat'} onClick={() => togglePanel('chat')} aria-label={t('meetingRoom.controlCenter.openChat')} aria-expanded={activePanel === 'chat'}><Icon name="messages" className="h-5.5 w-5.5"/>{t('meetingRoom.controlCenter.chat')}</Control>
         <Control className="meeting-control-people" active={activePanel === 'people'} onClick={() => togglePanel('people')} aria-label={peopleLabel} aria-expanded={activePanel === 'people'}><span className="relative"><Icon name="users" className="h-5.5 w-5.5"/>{waitingCount > 0 && <span className="absolute -right-3 -top-2 rounded-full bg-amber-300 px-1 text-[9px] text-slate-950">{waitingCount > 99 ? '99+' : waitingCount}</span>}</span>{t('meetingRoom.controlCenter.people')}</Control>

@@ -2,12 +2,19 @@
 
 namespace Tests\Feature\Phase20;
 
+use App\Actions\Recordings\FinalizeMeetingRecording;
 use App\Actions\Recordings\StopMeetingRecording;
 use App\Enums\MeetingRecordingStatus;
 use App\Enums\MeetingRecordingStopReason;
 use App\Enums\MeetingStatus;
 use App\Jobs\FinalizeMeetingRecordingOutput;
+use App\Models\ClassSubject;
+use App\Models\Meeting;
+use App\Models\MeetingRecording;
+use App\Models\TeacherClassSubjectAssignment;
+use App\Models\TeacherProfile;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
@@ -41,7 +48,7 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
             ->assertForbidden();
 
         $this->assertCount(0, $this->recordings->starts);
-        $this->assertSame(0, \App\Models\MeetingRecording::query()->count());
+        $this->assertSame(0, MeetingRecording::query()->count());
     }
 
     public function test_a_teacher_assigned_to_another_class_cannot_start_a_recording(): void
@@ -58,13 +65,13 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
     public function test_a_teacher_eligible_for_the_subject_but_not_the_assigned_host_cannot_start_a_recording(): void
     {
         [$class, $meeting, $teacher] = $this->scenario();
-        $subject = \App\Models\ClassSubject::factory()->create(['school_class_id' => $class->id]);
+        $subject = ClassSubject::factory()->create(['school_class_id' => $class->id]);
         $meeting->update(['class_subject_id' => $subject->id]);
         // A subject teacher is an eligible host in general, but recording is
         // reserved for the meeting's assigned host.
         $subjectTeacher = $this->roleUser('Teacher');
-        $profile = \App\Models\TeacherProfile::factory()->create(['user_id' => $subjectTeacher->id]);
-        \App\Models\TeacherClassSubjectAssignment::factory()->create([
+        $profile = TeacherProfile::factory()->create(['user_id' => $subjectTeacher->id]);
+        TeacherClassSubjectAssignment::factory()->create([
             'teacher_profile_id' => $profile->id,
             'class_subject_id' => $subject->id,
         ]);
@@ -84,8 +91,43 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
             ->postJson(route('meetings.recordings.stop', [$class, $meeting->uuid]))
             ->assertForbidden();
 
-        $this->assertSame(MeetingRecordingStatus::Recording, \App\Models\MeetingRecording::query()->first()->status);
+        $this->assertSame(MeetingRecordingStatus::Recording, MeetingRecording::query()->first()->status);
         $this->assertCount(0, $this->recordings->stops);
+    }
+
+    public function test_settling_recordings_are_never_projected_as_stoppable(): void
+    {
+        [$class, $meeting, $teacher] = $this->scenario();
+        $recording = $this->startRecording($teacher, $meeting, 12);
+
+        $expected = [
+            MeetingRecordingStatus::Starting->value => false,
+            MeetingRecordingStatus::Recording->value => true,
+            MeetingRecordingStatus::Stopping->value => false,
+            MeetingRecordingStatus::Processing->value => false,
+            MeetingRecordingStatus::Ready->value => false,
+            MeetingRecordingStatus::Failed->value => false,
+        ];
+
+        foreach ($expected as $value => $canStop) {
+            $status = MeetingRecordingStatus::from($value);
+            $recording->forceFill(['status' => $status])->save();
+
+            $this->actingAs($teacher)
+                ->getJson(route('meetings.recordings.current', [$class, $meeting->uuid]))
+                ->assertOk()
+                ->assertJsonPath('recording.status', $status->value)
+                ->assertJsonPath('recording.can_stop', $canStop);
+
+            $this->actingAs($teacher)
+                ->get(route('meetings.room', [$class, $meeting->uuid]))
+                ->assertOk()
+                ->assertInertia(fn ($page) => in_array($status, [MeetingRecordingStatus::Ready, MeetingRecordingStatus::Failed], true)
+                    ? $page->where('meeting.recording', null)
+                    : $page
+                        ->where('meeting.recording.status', $status->value)
+                        ->where('meeting.recording.can_stop', $canStop));
+        }
     }
 
     public function test_a_teacher_assigned_to_another_class_cannot_stop_a_recording(): void
@@ -117,7 +159,7 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
         $this->providerCompletes();
         app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($recording);
-        app(\App\Actions\Recordings\FinalizeMeetingRecording::class)->handle($recording);
+        app(FinalizeMeetingRecording::class)->handle($recording);
 
         $response = $this->actingAs($student)
             ->get(route('meetings.recordings.play', [$class, $meeting->uuid, $recording->fresh()]))
@@ -138,7 +180,7 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
         $this->providerCompletes();
         app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($recording);
-        app(\App\Actions\Recordings\FinalizeMeetingRecording::class)->handle($recording);
+        app(FinalizeMeetingRecording::class)->handle($recording);
 
         $this->actingAs($outsiderStudent)
             ->get(route('meetings.recordings.play', [$class, $meeting->uuid, $recording->fresh()]))
@@ -179,9 +221,9 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
         $this->providerCompletes();
         app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($recording);
-        app(\App\Actions\Recordings\FinalizeMeetingRecording::class)->handle($recording);
+        app(FinalizeMeetingRecording::class)->handle($recording);
 
-        $otherMeeting = \App\Models\Meeting::factory()->active()->create([
+        $otherMeeting = Meeting::factory()->active()->create([
             'school_class_id' => $class->id,
             'host_user_id' => $teacher->id,
         ]);
@@ -234,6 +276,17 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
             ->assertInertia(fn ($page) => $page->where('meeting.can_start_recording', true));
     }
 
+    public function test_a_super_admin_sees_the_start_control_in_the_room_page(): void
+    {
+        [$class, $meeting] = $this->scenario();
+        $superAdmin = $this->roleUser('Super Admin');
+
+        $this->actingAs($superAdmin)
+            ->get(route('meetings.room', [$class, $meeting->uuid]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('meeting.can_start_recording', true));
+    }
+
     public function test_the_recording_permission_is_granted_to_teachers_and_administrators_but_not_students(): void
     {
         $teacher = $this->roleUser('Teacher');
@@ -257,7 +310,7 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
         $this->assertFalse($super->can('play', $recording));
 
         $this->expectException(AuthorizationException::class);
-        app(\Illuminate\Contracts\Auth\Access\Gate::class)->forUser($super)->authorize('play', $recording);
+        app(Gate::class)->forUser($super)->authorize('play', $recording);
     }
 
     public function test_a_removed_participant_cannot_reach_the_recording_state(): void
@@ -309,7 +362,7 @@ class MeetingRecordingAuthorizationTest extends RecordingTestCase
         app(StopMeetingRecording::class)->handle($recording, MeetingRecordingStopReason::Manual, $teacher);
         $this->publishProviderOutput($recording);
 
-        (new FinalizeMeetingRecordingOutput($recording->id))->handle(app(\App\Actions\Recordings\FinalizeMeetingRecording::class));
+        (new FinalizeMeetingRecordingOutput($recording->id))->handle(app(FinalizeMeetingRecording::class));
 
         $this->assertSame(MeetingRecordingStatus::Ready, $recording->fresh()->status);
         $this->assertSame('video/mp4', $recording->fresh()->mime_type);

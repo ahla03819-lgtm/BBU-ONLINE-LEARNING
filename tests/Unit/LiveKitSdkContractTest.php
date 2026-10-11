@@ -73,6 +73,30 @@ class LiveKitSdkContractTest extends TestCase
         app(SdkLiveKitWebhookVerifier::class)->verify($body.' ', 'Bearer '.$authorization);
     }
 
+    public function test_webhook_adapter_maps_egress_nanosecond_timestamps(): void
+    {
+        config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);
+        $body = json_encode([
+            'event' => 'egress_ended',
+            'id' => 'egress-event-uuid',
+            'createdAt' => 1_788_000_000,
+            'egressInfo' => [
+                'egressId' => 'EG_test',
+                'status' => 3,
+                'startedAt' => '1759653321987654321',
+                'endedAt' => '1759653381999999999',
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $authorization = (new AccessToken('test-key', 'test-secret-that-is-at-least-32-bytes'))
+            ->setGrant(new VideoGrant)->setSha256(base64_encode(hash('sha256', $body, true)))->toJwt();
+
+        $verified = app(SdkLiveKitWebhookVerifier::class)->verify($body, 'Bearer '.$authorization);
+
+        $this->assertSame('EG_test', $verified->egress?->egressId);
+        $this->assertSame('2025-10-05T08:35:21+00:00', $verified->egress?->startedAt?->toIso8601String());
+        $this->assertSame('2025-10-05T08:36:21+00:00', $verified->egress?->endedAt?->toIso8601String());
+    }
+
     public function test_token_adapter_limits_screen_share_to_explicit_publish_sources(): void
     {
         config(['livekit.api_key' => 'test-key', 'livekit.api_secret' => 'test-secret-that-is-at-least-32-bytes']);

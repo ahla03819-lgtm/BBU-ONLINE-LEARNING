@@ -1,4 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {mergeRecordingBroadcast, startRecordingControlState} from '../../Components/Meetings/LiveKit/meetingRecordingState';
+import {noticeKey} from '../../i18n/notice';
 
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
@@ -46,14 +48,22 @@ export function useMeetingRecording({meeting, initialRecording, recordingUrl, le
     // Bumped on every open so a reopened dialog can reset its own fields even when
     // it is the same dialog it was last time.
     const [dialogToken, setDialogToken] = useState(0);
+    // A transient, nonblocking notice for terminal and settling states. It is kept
+    // in state so it stays locale-reactive, and it is deduped against the status
+    // that produced it so a poll and a broadcast reporting the same state cannot
+    // each fire a duplicate toast.
+    const [notice, setNotice] = useState(null);
     const mounted = useRef(true);
     const [clock, setClock] = useState(() => ({serverNowAt: initialRecording?.server_now_at, receivedAt: performance.now()}));
+    // The status the current notice was built from. A ref is enough: it only ever
+    // needs to be read and written inside the dedupe effect, never across renders.
+    const noticeStatus = useRef(initialRecording?.status ?? null);
 
     useEffect(() => () => {
         mounted.current = false;
     }, []);
 
-    const adopt = useCallback((payload) => {
+    const adopt = useCallback((payload, {fromBroadcast = false} = {}) => {
         if (!mounted.current || !payload) return;
         if (payload.server_now_at) {
             // Anchor the countdown on the server clock that accompanied this state,
@@ -61,12 +71,39 @@ export function useMeetingRecording({meeting, initialRecording, recordingUrl, le
             // It is state, not a ref, because the badge re-renders against it.
             setClock({serverNowAt: payload.server_now_at, receivedAt: performance.now()});
         }
-        setRecording(payload.recording ?? null);
+        setRecording((current) => fromBroadcast
+            ? mergeRecordingBroadcast(current, payload.recording ?? null)
+            : (payload.recording ?? null));
     }, []);
 
     useEffect(() => {
         setClock({serverNowAt: initialRecording?.server_now_at, receivedAt: performance.now()});
     }, [initialRecording?.server_now_at]);
+
+    /**
+     * Publish a transient notice for a terminal or settling state, deduped so the
+     * same status reported by the poll and by the broadcast does not produce two
+     * toasts. Settling states clear any previous notice rather than showing one,
+     * because the badge already carries the Stopping/Processing readout.
+     */
+    useEffect(() => {
+        const status = recording?.status ?? null;
+
+        if (status === noticeStatus.current) return;
+        noticeStatus.current = status;
+
+        if (status === 'ready') {
+            setNotice(noticeKey('meetingRoom.recording.readyNotice'));
+            return;
+        }
+        if (status === 'failed') {
+            setNotice(noticeKey('meetingRoom.recording.failedNotice'));
+            return;
+        }
+        // Stopping, processing, starting, recording and null all carry their own
+        // inline badge, so a transient notice would only duplicate them.
+        setNotice(null);
+    }, [recording?.status]);
 
     const refresh = useCallback(async () => {
         try {
@@ -135,6 +172,9 @@ export function useMeetingRecording({meeting, initialRecording, recordingUrl, le
         }
     }, [leaveUrl]);
 
+    const controlState = startRecordingControlState({meeting, recording, requesting});
+    const applyBroadcast = useCallback((payload) => adopt(payload, {fromBroadcast: true}), [adopt]);
+
     return {
         state: recording,
         clock,
@@ -142,17 +182,23 @@ export function useMeetingRecording({meeting, initialRecording, recordingUrl, le
         stopping,
         dialog,
         dialogToken,
+        notice,
         openStart: () => openDialog('start'),
         openStop: () => openDialog('stop'),
         closeDialog,
-        canStart: Boolean(meeting?.can_start_recording) && !recording,
-        showStop: Boolean(recording?.can_stop),
+        // A terminal projection may arrive from the recording event or the status
+        // poll after its active row has been released. It is historical state, not
+        // an active capture, so it must not hide an otherwise authorised new start.
+        canStart: controlState.kind === 'start',
+        // The shared lifecycle classifier blocks Starting and every settling state;
+        // can_stop is the server's per-viewer policy projection for a live capture.
+        showStop: controlState.kind === 'stop' && Boolean(recording?.can_stop),
         minDurationMinutes,
         maxDurationMinutes,
         start,
         stop,
         refresh,
-        applyBroadcast: adopt,
+        applyBroadcast,
         notifyExplicitLeave,
     };
 }

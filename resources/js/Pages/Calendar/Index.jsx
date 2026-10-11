@@ -106,6 +106,12 @@ export default function Calendar({ timezone = 'UTC' }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [selectedDay, setSelectedDay] = useState(() => {
+        const today = todayIn(timezone);
+
+        return `${today.year}-${pad(today.month)}-${pad(today.day)}`;
+    });
+    const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -145,6 +151,22 @@ export default function Calendar({ timezone = 'UTC' }) {
 
         return () => controller.abort();
     }, [viewedMonth, timezone]);
+
+    useEffect(() => {
+        if (!isMobile) return;
+        const today = todayIn(timezone);
+        const todayKey = `${today.year}-${pad(today.month)}-${pad(today.day)}`;
+        setSelectedDay(todayKey);
+    }, [isMobile, timezone]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const media = window.matchMedia('(max-width: 767px)');
+        setIsMobile(media.matches);
+        const update = (event) => setIsMobile(event.matches);
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
 
     const days = useMemo(() => calendarDays(viewedMonth), [viewedMonth]);
     const eventsByDay = useMemo(() => events.reduce((grouped, event) => {
@@ -228,11 +250,11 @@ export default function Calendar({ timezone = 'UTC' }) {
                     <p className="text-sm text-slate-500">There are no events scheduled for this month.</p>
                 )}
 
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="min-w-[700px]">
+                <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="min-w-0">
                         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
                             {WEEKDAYS.map((weekday) => (
-                                <div key={weekday} className="px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                <div key={weekday} className="px-1 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 sm:px-2 sm:py-3 sm:text-xs">
                                     {weekday}
                                 </div>
                             ))}
@@ -245,51 +267,88 @@ export default function Calendar({ timezone = 'UTC' }) {
                                 const hiddenCount = dayEvents.length - visibleEvents.length;
                                 const outsideMonth = day.month !== viewedMonth.month;
                                 const isToday = day.key === todayKey;
+                                const isSelected = day.key === selectedDay;
 
                                 return (
-                                    <section
+                                    <button
+                                        type="button"
                                         key={day.key}
-                                        className={`min-h-32 border-b border-r border-slate-200 p-2 last:border-r-0 sm:min-h-36 ${outsideMonth ? 'bg-slate-50 text-slate-400' : 'bg-white text-slate-800'}`}
+                                        onClick={() => setSelectedDay(day.key)}
+                                        className={`min-h-20 border-b border-r border-slate-200 p-1 last:border-r-0 sm:min-h-32 ${outsideMonth ? 'bg-slate-50 text-slate-400' : 'bg-white text-slate-800'} ${isSelected ? 'ring-2 ring-inset ring-sky-500' : ''}`}
                                         aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' }).format(day.date)}
                                     >
                                         <time
                                             dateTime={day.key}
                                             aria-current={isToday ? 'date' : undefined}
-                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${isToday ? 'bg-sky-700 text-white ring-2 ring-sky-200' : ''}`}
+                                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold sm:h-7 sm:w-7 sm:text-sm ${isToday ? 'bg-sky-700 text-white ring-2 ring-sky-200' : ''}`}
                                         >
                                             {day.day}
                                         </time>
 
-                                        <div className="mt-2 space-y-1">
+                                        <div className="mt-1 space-y-0.5 sm:mt-2 sm:space-y-1">
                                             {visibleEvents.map((event) => {
                                                 const isMeeting = event.type === 'meeting';
 
                                                 return (
-                                                    <a
+                                                    <span
                                                         key={event.id}
-                                                        href={event.url}
-                                                        className={`block rounded-md border-l-4 px-2 py-1.5 text-xs transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-sky-500 ${isMeeting ? 'border-indigo-500 bg-indigo-50 text-indigo-900' : 'border-amber-500 bg-amber-50 text-amber-950'}`}
+                                                        className={`block rounded-md border-l-2 px-1 py-0.5 text-[10px] leading-tight sm:px-2 sm:py-1.5 sm:text-xs ${isMeeting ? 'border-indigo-500 bg-indigo-50 text-indigo-900' : 'border-amber-500 bg-amber-50 text-amber-950'}`}
                                                     >
                                                         <span className="block truncate font-semibold">{event.title}</span>
-                                                        <span className="block text-[11px] opacity-80">
-                                                            {isMeeting ? 'Meeting' : 'Due'} · {eventTime(event.starts_at, timezone)}
-                                                        </span>
-                                                    </a>
+                                                    </span>
                                                 );
                                             })}
 
                                             {hiddenCount > 0 && (
-                                                <p className="px-2 py-1 text-xs font-medium text-slate-600">
+                                                <p className="px-1 py-0.5 text-[10px] font-medium text-slate-600 sm:px-2 sm:py-1 sm:text-xs">
                                                     +{hiddenCount} more
                                                 </p>
                                             )}
                                         </div>
-                                    </section>
+                                    </button>
                                 );
                             })}
                         </div>
                     </div>
                 </div>
+
+                {isMobile && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' }).format(utcDate(...selectedDay.split('-').map(Number)))}
+                        </p>
+                        <div className="mt-3 space-y-2">
+                            {(() => {
+                                const selectedEvents = eventsByDay[selectedDay] || [];
+
+                                if (selectedEvents.length === 0) {
+                                                            return (
+                                                                <p className="text-sm text-slate-500">
+                                                                    No events on this date.
+                                                                </p>
+                                                            );
+                                                        }
+
+                                                        return selectedEvents.map((event) => {
+                                                            const isMeeting = event.type === 'meeting';
+
+                                                            return (
+                                                                <a
+                                                                    key={event.id}
+                                                                    href={event.url}
+                                                                    className={`block rounded-lg border-l-4 px-3 py-2.5 text-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-sky-500 ${isMeeting ? 'border-indigo-500 bg-indigo-50 text-indigo-900' : 'border-amber-500 bg-amber-50 text-amber-950'}`}
+                                                                >
+                                                                    <span className="block font-semibold">{event.title}</span>
+                                                                    <span className="block text-xs opacity-80">
+                                                                        {isMeeting ? 'Meeting' : 'Due'} · {eventTime(event.starts_at, timezone)}
+                                                                    </span>
+                                                                </a>
+                                                            );
+                                                        });
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        )}
             </div>
         </AuthenticatedLayout>
     );

@@ -113,7 +113,8 @@ class MeetingExperienceController extends Controller
         return MeetingRecordingProjection::withPermissions(
             MeetingRecordingProjection::make($recording),
             $viewer->can('startRecording', $meeting),
-            $viewer->can('stopRecording', [$meeting, $recording]),
+            $recording->status === MeetingRecordingStatus::Recording
+                && $viewer->can('stopRecording', [$meeting, $recording]),
         );
     }
 }

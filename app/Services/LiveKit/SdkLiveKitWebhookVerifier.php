@@ -39,15 +39,13 @@ final class SdkLiveKitWebhookVerifier implements LiveKitWebhookVerifier
         if ($egressId === '') {
             return null;
         }
-        $startedAt = (int) $info->getStartedAt();
-        $endedAt = (int) $info->getEndedAt();
 
         return new VerifiedEgress(
             $egressId,
             EgressInfoMapper::status($info),
             EgressInfoMapper::files($info),
-            $startedAt > 0 ? CarbonImmutable::createFromTimestamp($startedAt) : null,
-            $endedAt > 0 ? CarbonImmutable::createFromTimestamp($endedAt) : null,
+            EgressInfoMapper::timestamp($info->getStartedAt()),
+            EgressInfoMapper::timestamp($info->getEndedAt()),
             $info->getError() ?: null,
         );
     }
