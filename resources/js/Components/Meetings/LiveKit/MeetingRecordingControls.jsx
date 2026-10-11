@@ -1,6 +1,7 @@
 import React, {useEffect, useId, useMemo, useRef, useState} from 'react';
 import {useTranslation} from '../../../i18n/LocaleProvider';
-import {formatRecordingClock, recordingBadgeSeconds, recordingLive, validateCustomDuration} from './meetingRecordingState';
+import {formatRecordingClock, recordingBadgeSeconds, recordingLive, recordingSettling, validateCustomDuration} from './meetingRecordingState';
+import {hasNotice, renderNotice} from '../../../i18n/notice';
 
 const PRESET_MINUTES = [5, 10, 12, 30];
 
@@ -14,7 +15,7 @@ const PRESET_MINUTES = [5, 10, 12, 30];
  * Nothing here decides when a recording stops. The badge counts down to the stored
  * deadline; the server is what acts on it.
  */
-export function RecordingBadge({recording, clock}) {
+function RecordingBadge({recording, clock}) {
     const {t} = useTranslation();
     const [now, setNow] = useState(() => performance.now());
 
@@ -37,7 +38,7 @@ export function RecordingBadge({recording, clock}) {
     const seconds = live ? recordingBadgeSeconds(recording, clock, now) : null;
 
     return <div
-        className={`meeting-recording-badge meeting-recording-badge--${settling ? 'settling' : 'live'}`}
+        className={`meeting-recording-badge meeting-recording-badge--${settling ? 'settling' : 'live'} ${!live ? 'recording-settling' : ''}`}
         role="status"
         aria-live="polite"
         data-testid="meeting-recording-badge">
@@ -55,7 +56,7 @@ export function RecordingBadge({recording, clock}) {
  * dialog, the button that opened it and the state it submits all read from one
  * place, and the control bar can stay a pure presentation of that API.
  */
-export function MeetingRecordingDialogs({recording}) {
+function MeetingRecordingDialogs({recording}) {
     if (!recording?.dialog) return null;
 
     return recording.dialog === 'start'
@@ -164,6 +165,67 @@ function StopRecordingDialog({recording}) {
     </Dialog>;
 }
 
+function StoppingIndicator({recording}) {
+    const {t} = useTranslation();
+
+    if (!recordingSettling(recording)) return null;
+
+    return <div className="meeting-recording-stopping fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50" role="status" aria-live="polite">
+        <div className="bg-[#171a23] rounded-2xl border border-white/10 p-6 shadow-2xl max-w-sm mx-4">
+            <div className="flex items-center gap-3 mb-3">
+                <span className="meeting-recording-dot meeting-recording-dot--settling" aria-hidden="true"/>
+                <h3 className="text-base font-semibold text-white">{t('meetingRoom.recording.stopping')}</h3>
+            </div>
+            <p className="text-sm text-slate-300">{t('meetingRoom.recording.stoppingHint')}</p>
+        </div>
+    </div>;
+}
+
+function ProcessingIndicator({recording}) {
+    const {t} = useTranslation();
+
+    // The recording may be null on the very first paint: the room page seeds the
+    // state from the server, but the projection can still be absent, and a poll or
+    // a broadcast may clear it. Reading `.status` off null is what crashes the room,
+    // so guard the read here rather than at the call site, where every consumer would
+    // have to repeat the check.
+    if (!recording || recording.status !== 'processing') return null;
+
+    return <div className="meeting-recording-processing fixed inset-0 z-30 flex items-center justify-center bg-slate-950/30" role="status" aria-live="polite">
+        <div className="bg-[#171a23] rounded-2xl border border-white/10 p-6 shadow-2xl max-w-sm mx-4">
+            <div className="flex items-center gap-3 mb-3">
+                <span className="meeting-recording-dot meeting-recording-dot--settling" aria-hidden="true"/>
+                <h3 className="text-base font-semibold text-white">{t('meetingRoom.recording.processing')}</h3>
+            </div>
+            <p className="text-sm text-slate-300">{t('meetingRoom.recording.processingHint')}</p>
+        </div>
+    </div>;
+}
+
+function ReadyNotice({notice}) {
+    const {t} = useTranslation();
+
+    if (!notice) return null;
+
+    return <div className="meeting-recording-ready-notice fixed top-4 right-4 z-50" role="status" aria-live="polite">
+        <div className="bg-green-600/90 backdrop-blur-sm rounded-lg border border-green-400/30 p-3 shadow-lg max-w-xs">
+            <p className="text-sm font-medium text-white">{renderNotice(notice, (key, params) => key ? t(key, params) : '')}</p>
+        </div>
+    </div>;
+}
+
+function FailedNotice({notice}) {
+    const {t} = useTranslation();
+
+    if (!notice) return null;
+
+    return <div className="meeting-recording-failed-notice fixed top-4 right-4 z-50" role="status" aria-live="polite">
+        <div className="bg-rose-600/90 backdrop-blur-sm rounded-lg border border-rose-400/30 p-3 shadow-lg max-w-xs">
+            <p className="text-sm font-medium text-white">{renderNotice(notice, (key, params) => key ? t(key, params) : '')}</p>
+        </div>
+    </div>;
+}
+
 function Dialog({labelledBy, children}) {
     return <div className="meeting-recording-dialog fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
         <div role="dialog" aria-modal="true" aria-labelledby={labelledBy} className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171a23] p-5 shadow-2xl">
@@ -171,3 +233,5 @@ function Dialog({labelledBy, children}) {
         </div>
     </div>;
 }
+
+export {RecordingBadge, MeetingRecordingDialogs, StoppingIndicator, ProcessingIndicator, ReadyNotice, FailedNotice};
