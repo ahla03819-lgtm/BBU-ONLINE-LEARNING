@@ -26,9 +26,9 @@ use Illuminate\Support\Facades\DB;
  *    asked to stop exactly once" a property of the code rather than of timing;
  *  - the channel card is created inside that same transition, so a racing second
  *    caller finds the recording already Stopping and does nothing at all;
- *  - a provider stop that cannot be completed still closes the recording, still
- *    publishes a card that explains the failure, and never leaves the meeting
- *    lifecycle waiting on it.
+ *  - a provider stop whose outcome is uncertain keeps the recording in Stopping
+ *    for the existing bounded reconciliation path instead of inventing a terminal
+ *    failure; the meeting lifecycle itself never waits on that reconciliation.
  */
 class StopMeetingRecording
 {
@@ -100,22 +100,6 @@ class StopMeetingRecording
 
     private function settle(MeetingRecording $recording, LiveKitRecordingOutcome $outcome): MeetingRecording
     {
-        if ($outcome->status === MeetingRecordingProviderStatus::Unknown) {
-            return DB::transaction(function () use ($recording) {
-                $locked = MeetingRecording::query()->lockForUpdate()->findOrFail($recording->id);
-                $locked->update([
-                    'status' => MeetingRecordingStatus::Failed,
-                    'active_slot' => null,
-                    'ready_at' => now(),
-                    'failure_reason' => 'The recording provider could not be asked to stop the capture.',
-                ]);
-                $this->audit->log('meeting.recording-provider-failed', $locked, [], ['recording_id' => $locked->id, 'stop_reason' => $locked->stop_reason?->value]);
-                $this->publisher->refresh($locked);
-
-                return $locked;
-            });
-        }
-
         if ($outcome->status === MeetingRecordingProviderStatus::Failed) {
             return DB::transaction(function () use ($recording, $outcome) {
                 $locked = MeetingRecording::query()->lockForUpdate()->findOrFail($recording->id);
@@ -131,6 +115,13 @@ class StopMeetingRecording
 
                 return $locked;
             });
+        }
+
+        if ($outcome->status !== MeetingRecordingProviderStatus::Complete) {
+            // A rejected or unreachable stop does not prove the egress failed. Keep
+            // the single-flight Stopping latch until the webhook or the scheduled
+            // reconciliation sweep can inspect the provider authoritatively.
+            return $recording->fresh();
         }
 
         $settled = DB::transaction(function () use ($recording, $outcome) {

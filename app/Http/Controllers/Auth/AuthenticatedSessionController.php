@@ -35,7 +35,7 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
         $request->user()->forceFill(['last_login_at' => now(), 'last_login_ip' => $request->ip()])->save();
 
-        return redirect()->intended(route('dashboard'));
+        return $this->redirectToIntended($request);
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -45,5 +45,53 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    /**
+     * Consume the guest URL only when it remains on this application's host.
+     *
+     * A session created before proxy scheme detection was fixed can contain the
+     * same current host over HTTP. Upgrade only that narrow, already-safe case;
+     * never rewrite or follow a foreign absolute URL from session state.
+     */
+    private function redirectToIntended(Request $request): RedirectResponse
+    {
+        $intended = $request->session()->get('url.intended');
+        $safe = $this->safeIntendedUrl($request, $intended);
+
+        if ($safe === null) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('dashboard');
+        }
+
+        if ($safe !== $intended) {
+            $request->session()->put('url.intended', $safe);
+        }
+
+        return redirect()->intended(route('dashboard'));
+    }
+
+    private function safeIntendedUrl(Request $request, mixed $intended): ?string
+    {
+        if (! is_string($intended) || $intended === '') {
+            return null;
+        }
+
+        $url = parse_url($intended);
+        if ($url === false
+            || ! isset($url['scheme'], $url['host'])
+            || ! in_array(strtolower($url['scheme']), ['http', 'https'], true)
+            || isset($url['user'], $url['pass'])
+            || strcasecmp($url['host'], $request->getHost()) !== 0
+            || (isset($url['port']) && (int) $url['port'] !== (int) $request->getPort())) {
+            return null;
+        }
+
+        if ($request->isSecure() && strtolower($url['scheme']) === 'http') {
+            return preg_replace('/\Ahttp:/i', 'https:', $intended);
+        }
+
+        return $intended;
     }
 }

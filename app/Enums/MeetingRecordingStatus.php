@@ -44,7 +44,7 @@ enum MeetingRecordingStatus: string
         return in_array($this, [self::Starting, self::Recording], true);
     }
 
-    /** Stopping or Processing: the provider is already finished and only collection remains. */
+    /** Stopping or Processing: capture shutdown or output collection is still settling. */
     public function isSettling(): bool
     {
         return in_array($this, [self::Stopping, self::Processing], true);

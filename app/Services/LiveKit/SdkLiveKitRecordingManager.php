@@ -4,7 +4,6 @@ namespace App\Services\LiveKit;
 
 use Agence104\LiveKit\EgressServiceClient;
 use App\Enums\MeetingRecordingProviderStatus;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
@@ -65,9 +64,12 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
         }
 
         try {
+            $info = $this->client()->stopEgress($egressId);
+
             return new LiveKitRecordingOutcome(
-                MeetingRecordingProviderStatus::Complete,
-                EgressInfoMapper::files($this->client()->stopEgress($egressId)),
+                EgressInfoMapper::status($info),
+                EgressInfoMapper::files($info),
+                $info->getError() ?: null,
             );
         } catch (Error $error) {
             if ($error->getErrorCode() === ErrorCode::NotFound) {
@@ -75,6 +77,18 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
                 // stop was asking for. Whatever output the provider did manage to
                 // write is recovered separately by inspecting the egress.
                 return new LiveKitRecordingOutcome(MeetingRecordingProviderStatus::Complete);
+            }
+
+            if ($error->getErrorCode() === ErrorCode::FailedPrecondition) {
+                // FailedPrecondition describes the rejected stop operation, not the
+                // egress lifecycle. It commonly means the egress already stopped or
+                // failed, so re-read the authoritative state before deciding.
+                $this->logFailure('stop_recording', $error);
+                $status = $this->inspectRecording($egressId);
+
+                return $status
+                    ? new LiveKitRecordingOutcome($status->status, $status->files, $status->error)
+                    : new LiveKitRecordingOutcome(MeetingRecordingProviderStatus::Unknown);
             }
             $this->logFailure('stop_recording', $error);
 
@@ -100,15 +114,13 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
                 return null;
             }
             $info = $items[0];
-            $startedAt = (int) $info->getStartedAt();
-            $endedAt = (int) $info->getEndedAt();
 
             return new LiveKitRecordingStatus(
                 EgressInfoMapper::status($info),
                 $egressId,
                 EgressInfoMapper::files($info),
-                $startedAt > 0 ? CarbonImmutable::createFromTimestamp($startedAt) : null,
-                $endedAt > 0 ? CarbonImmutable::createFromTimestamp($endedAt) : null,
+                EgressInfoMapper::timestamp($info->getStartedAt()),
+                EgressInfoMapper::timestamp($info->getEndedAt()),
                 $info->getError() ?: null,
             );
         } catch (Throwable $error) {
@@ -122,7 +134,7 @@ final class SdkLiveKitRecordingManager implements LiveKitRecordingManager
     {
         if ($error instanceof Error && in_array($error->getErrorCode(), [
             ErrorCode::InvalidArgument, ErrorCode::PermissionDenied,
-            ErrorCode::Unauthenticated, ErrorCode::FailedPrecondition,
+            ErrorCode::Unauthenticated,
         ], true)) {
             return MeetingRecordingProviderStatus::Failed;
         }
