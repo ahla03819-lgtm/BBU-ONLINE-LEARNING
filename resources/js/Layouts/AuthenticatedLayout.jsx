@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {router, usePage} from '@inertiajs/react';
 import useNotificationRealtime from '../Hooks/useNotificationRealtime';
 import AppSidebar from '../Components/UI/AppSidebar';
@@ -10,6 +10,7 @@ import {usePersistentMeeting} from '../Providers/PersistentMeetingProvider';
 import {usePersistentConversationCall} from '../Providers/PersistentConversationCallProvider';
 import {useTranslation} from '../i18n/LocaleProvider';
 import {useFullscreenContext} from '../Providers/FullscreenProvider';
+import {focusVisibleElement} from '../Components/UI/sidebarFocus';
 
 const pageTitles = {
     'MyAccount/Show': 'account.title',
@@ -42,8 +43,31 @@ export default function AuthenticatedLayout({ children }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
     const mobileMenuButtonRef = useRef(null);
+    const desktopShowSidebarButtonRef = useRef(null);
+    const desktopHideSidebarButtonRef = useRef(null);
+    const mainRef = useRef(null);
+    const pendingDesktopSidebarFocusRef = useRef(null);
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
-    const toggleDesktopSidebar = useCallback(() => setDesktopSidebarOpen((open) => !open), []);
+    const closeDesktopSidebar = useCallback(() => {
+        pendingDesktopSidebarFocusRef.current = 'show';
+        setDesktopSidebarOpen(false);
+    }, []);
+    const openDesktopSidebar = useCallback(() => {
+        pendingDesktopSidebarFocusRef.current = 'hide';
+        setDesktopSidebarOpen(true);
+    }, []);
+
+    useLayoutEffect(() => {
+        const target = pendingDesktopSidebarFocusRef.current === 'show'
+            ? desktopShowSidebarButtonRef.current
+            : pendingDesktopSidebarFocusRef.current === 'hide'
+                ? desktopHideSidebarButtonRef.current
+                : null;
+
+        if (target && focusVisibleElement(target)) {
+            pendingDesktopSidebarFocusRef.current = null;
+        }
+    }, [desktopSidebarOpen]);
 
     const canViewUsers = auth.permissions.includes('users.view');
     const canViewNotifications = auth.permissions.includes('notifications.view');
@@ -146,10 +170,10 @@ export default function AuthenticatedLayout({ children }) {
 
     return (
         <div className="min-h-screen">
-            {!hideAppChrome && <AppSidebar open={sidebarOpen} desktopOpen={desktopSidebarOpen} onClose={closeSidebar} onDesktopToggle={toggleDesktopSidebar} navigation={navigation} user={auth.user} roleLabel={auth.role_label} returnFocusRef={mobileMenuButtonRef}/>}
+            {!hideAppChrome && <AppSidebar open={sidebarOpen} desktopOpen={desktopSidebarOpen} onClose={closeSidebar} onDesktopHide={closeDesktopSidebar} navigation={navigation} user={auth.user} roleLabel={auth.role_label} returnFocusRef={mobileMenuButtonRef} focusFallbackRef={mainRef} desktopHideButtonRef={desktopHideSidebarButtonRef}/>}
             <div className={`min-h-screen transition-[padding] duration-200 ease-out ${!hideAppChrome && desktopSidebarOpen ? 'lg:pl-56' : 'lg:pl-0'}`}>
-                {!hideAppChrome && <AppTopbar title={title} onMenu={() => setSidebarOpen(true)} navigationOpen={sidebarOpen} menuButtonRef={mobileMenuButtonRef} onSidebarToggle={toggleDesktopSidebar} sidebarExpanded={desktopSidebarOpen} notificationUrl={canViewNotifications ? '/notifications' : null} unreadCount={unreadCount} notificationPreview={notificationInbox?.preview || []} user={auth.user}/>}
-                <main className={`mx-auto ${hideAppChrome ? 'max-w-none p-0' : 'max-w-[1440px] p-4 sm:p-5 lg:p-6'}`}>
+                {!hideAppChrome && <AppTopbar title={title} onMenu={() => setSidebarOpen(true)} navigationOpen={sidebarOpen} menuButtonRef={mobileMenuButtonRef} desktopShowSidebarButtonRef={desktopShowSidebarButtonRef} onSidebarShow={openDesktopSidebar} sidebarExpanded={desktopSidebarOpen} notificationUrl={canViewNotifications ? '/notifications' : null} unreadCount={unreadCount} notificationPreview={notificationInbox?.preview || []} user={auth.user}/>}
+                <main ref={mainRef} tabIndex="-1" className={`mx-auto ${hideAppChrome ? 'max-w-none p-0' : 'max-w-[1440px] p-4 sm:p-5 lg:p-6'}`}>
                     {flash.success && <div role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">{flash.success}</div>}
                     {children}
                 </main>
