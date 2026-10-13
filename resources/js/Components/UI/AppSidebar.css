@@ -1,0 +1,99 @@
+.bbu-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-left: 0.25rem;
+}
+
+.bbu-brand-logo {
+    height: 3rem;
+    width: 2.5rem;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+.bbu-brand-text {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.bbu-brand-bbu {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25 !important;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.bbu-brand-online {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.25 !important;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.bbu-sidebar-toggle {
+    margin-left: auto;
+    display: none;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    color: #0369a1;
+    transition: background-color 0.15s;
+}
+
+.bbu-sidebar-toggle:hover {
+    background-color: #e0f2fe;
+}
+
+.bbu-sidebar-toggle:focus,
+.bbu-mobile-close:focus {
+    outline: 2px solid #0284c7;
+    outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+    .bbu-sidebar-toggle {
+        display: inline-flex;
+    }
+}
+
+.bbu-mobile-close {
+    margin-left: auto;
+    display: inline-flex;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    font-size: 1.25rem;
+    color: #64748b;
+    transition: background-color 0.15s;
+}
+
+.bbu-mobile-close:hover {
+    background-color: #e0f2fe;
+}
+
+@media (min-width: 1024px) {
+    .bbu-mobile-close {
+        display: none;
+    }
+}
+
+html[lang='km'] .bbu-brand-bbu,
+html[lang='km'] .bbu-brand-online {
+    line-height: 1.25 !important;
+    font-family: 'Times New Roman', Times, serif;
+}
