@@ -74,7 +74,7 @@ test('Room positioning distinguishes browser fullscreen from normal app chrome',
     const source = readSource('Components/Meetings/LiveKit/MeetingRoomExperience.jsx');
     // Fullscreen is a self-contained viewport-height column; the app-chrome
     // variant keeps the topbar/sidebar offsets and scrolls.
-    assert.match(source, /isFullscreen \? 'inset-0 h-\[100dvh\] overflow-hidden p-0' : 'inset-x-0 bottom-0 top-14 overflow-y-auto p-3 sm:p-4 lg:left-56 lg:p-6'/);
+    assert.match(source, /isFullscreen \? 'inset-0 h-\[100dvh\] overflow-hidden p-0' : 'inset-x-0 bottom-0 top-14 overflow-y-auto p-3 sm:p-4 lg:left-72 lg:p-6'/);
     assert.doesNotMatch(source, /className=\{`fixed inset-0/);
     assert.doesNotMatch(source, /xl:grid-cols-\[minmax\(0,1fr\)_22rem\]/);
 });
