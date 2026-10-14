@@ -171,7 +171,7 @@ export default function AuthenticatedLayout({ children }) {
     return (
         <div className="min-h-screen">
             {!hideAppChrome && <AppSidebar open={sidebarOpen} desktopOpen={desktopSidebarOpen} onClose={closeSidebar} onDesktopHide={closeDesktopSidebar} navigation={navigation} user={auth.user} roleLabel={auth.role_label} returnFocusRef={mobileMenuButtonRef} focusFallbackRef={mainRef} desktopHideButtonRef={desktopHideSidebarButtonRef}/>}
-            <div className={`min-h-screen transition-[padding] duration-200 ease-out ${!hideAppChrome && desktopSidebarOpen ? 'lg:pl-56' : 'lg:pl-0'}`}>
+            <div className={`min-h-screen transition-[padding] duration-200 ease-out ${!hideAppChrome && desktopSidebarOpen ? 'lg:pl-72' : 'lg:pl-0'}`}>
                 {!hideAppChrome && <AppTopbar title={title} onMenu={() => setSidebarOpen(true)} navigationOpen={sidebarOpen} menuButtonRef={mobileMenuButtonRef} desktopShowSidebarButtonRef={desktopShowSidebarButtonRef} onSidebarShow={openDesktopSidebar} sidebarExpanded={desktopSidebarOpen} notificationUrl={canViewNotifications ? '/notifications' : null} unreadCount={unreadCount} notificationPreview={notificationInbox?.preview || []} user={auth.user}/>}
                 <main ref={mainRef} tabIndex="-1" className={`mx-auto ${hideAppChrome ? 'max-w-none p-0' : 'max-w-[1440px] p-4 sm:p-5 lg:p-6'}`}>
                     {flash.success && <div role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">{flash.success}</div>}
