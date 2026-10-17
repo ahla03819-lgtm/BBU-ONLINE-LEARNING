@@ -63,6 +63,7 @@ class MessageController extends Controller
     public function update(UpdateMessageRequest $request, SchoolClass $schoolClass, Channel $channel, Message $message, UpdateMessage $action): JsonResponse
     {
         $this->ensureMessage($schoolClass, $channel, $message);
+        $this->authorize('update', $message);
 
         return response()->json(['message' => MessagePayload::make($action->handle($message, $request->validated('body')), $request->user())]);
     }
@@ -70,6 +71,7 @@ class MessageController extends Controller
     public function hide(HideMessageRequest $request, SchoolClass $schoolClass, Channel $channel, Message $message, HideMessage $action): JsonResponse
     {
         $this->ensureMessage($schoolClass, $channel, $message);
+        $this->authorize('hide', $message);
 
         return response()->json(['message' => MessagePayload::make($action->handle($message, $request->user()), $request->user())]);
     }
