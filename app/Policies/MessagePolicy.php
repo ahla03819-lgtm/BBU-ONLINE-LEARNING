@@ -70,7 +70,7 @@ class MessagePolicy
 
     public function setReaction(User $user, Message $message): bool
     {
-        return $user->can('reactions.create') && ! $message->isHidden() && ! $message->isServerAuthored() && $this->create($user, $message->channel);
+        return $user->can('reactions.create') && ! $message->isHidden() && $this->create($user, $message->channel) && ! $message->isServer();
     }
 
     public function updateOwn(User $user, Message $message): bool
@@ -80,6 +80,6 @@ class MessagePolicy
 
     public function deleteOwn(User $user, Message $message): bool
     {
-        return $user->can('reactions.delete-own') && $this->setReaction($user, $message);
+        return $user->can('reactions.delete-own') && $this->create($user, $message->channel);
     }
 }
