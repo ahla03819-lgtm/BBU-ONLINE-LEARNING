@@ -70,7 +70,7 @@ class MessagePolicy
 
     public function setReaction(User $user, Message $message): bool
     {
-        return $user->can('reactions.create') && ! $message->isHidden() && $this->create($user, $message->channel) && ! $message->isServer();
+        return $user->can('reactions.create') && ! $message->isHidden() && $this->create($user, $message->channel) && ! $message->isSystem();
     }
 
     public function updateOwn(User $user, Message $message): bool
