@@ -2,14 +2,22 @@
 
 ## Purpose
 
-`tests/Feature/DatabaseQueueScreenShareWebhookRegressionTest.php` preserves the
-worker-backed webhook regression that was previously verified in a disposable
-Guest-F2.1 Candidate Revision 03 runtime. It supplements, and does not replace,
-the synchronous test in `tests/Feature/Phase7/MeetingScreenShareApprovalTest.php`.
+`tests/Isolated/DatabaseQueue/DatabaseQueueScreenShareWebhookRegressionTest.php`
+preserves the worker-backed webhook regression that was previously verified in a
+disposable Guest-F2.1 Candidate Revision 03 runtime. It supplements, and does
+not replace, the synchronous test in
+`tests/Feature/Phase7/MeetingScreenShareApprovalTest.php`.
+
+It intentionally sits outside `tests/Feature`: the default PHPUnit suite and
+CI run `php artisan test`, which recursively collects that directory with an
+in-memory SQLite/synchronous-queue configuration. This regression instead
+requires a dedicated disposable MariaDB schema with database queue/cache.
+Run it only through `phpunit.database-queue.xml`.
 
 Origin checksum: `62bc33e62e06abd71883e5f790e57cdd3a4c6a577519be45a23dcb6d9f134d3b`.
-The preserved test must remain byte-identical to that origin unless a separately
-reviewed test change is made.
+The two regression cases and their assertions are preserved from that origin.
+The only test-infrastructure addition is a pre-bootstrap sentinel that refuses
+direct/default-config invocation before Laravel can access a database.
 
 ## Coverage
 
@@ -48,9 +56,28 @@ The PHPUnit configuration forces testing, database queue/cache, null broadcast,
 and the dedicated `webhook-regression` queue. It contains no hostname, port,
 database name, username, or password.
 
+Use a fresh schema for every run. Before running PHPUnit, apply forward-only
+migrations only to that schema. The isolated class also requires the
+`BBU_DBQ_TEST_CONFIG=1` sentinel supplied by this configuration; direct/default
+invocation fails before Laravel bootstraps.
+
 After the run, stop and remove only the specifically named disposable database
 container created for this test. Do not target shared database containers,
 application queue workers, schedulers, or other development services.
+
+## Discovery verification
+
+The default suite must not list this class:
+
+```text
+php vendor/bin/phpunit --configuration=phpunit.xml --list-tests
+```
+
+The dedicated configuration must list exactly its two methods:
+
+```text
+php vendor/bin/phpunit --configuration=phpunit.database-queue.xml --list-tests
+```
 
 ## Evidence and limitations
 

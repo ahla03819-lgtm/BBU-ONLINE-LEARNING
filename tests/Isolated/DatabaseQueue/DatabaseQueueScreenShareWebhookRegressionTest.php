@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Isolated\DatabaseQueue;
 
 use Agence104\LiveKit\AccessToken;
 use Agence104\LiveKit\VideoGrant;
@@ -31,6 +31,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Livekit\TrackSource;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -43,6 +44,13 @@ class DatabaseQueueScreenShareWebhookRegressionTest extends TestCase
 
     protected function setUp(): void
     {
+        // This class requires the dedicated PHPUnit configuration and must not
+        // boot Laravel or access any database when invoked through the default
+        // suite (or directly without that configuration).
+        if (getenv('BBU_DBQ_TEST_CONFIG') !== '1') {
+            throw new LogicException('Run this isolated regression with phpunit.database-queue.xml.');
+        }
+
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         config([
