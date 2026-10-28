@@ -12,4 +12,5 @@ Schedule::command('announcements:publish-due')->everyMinute()->withoutOverlappin
 Schedule::command('meetings:reconcile-webhooks')->everyMinute()->withoutOverlapping();
 Schedule::command('meetings:reconcile-recordings')->everyMinute()->withoutOverlapping();
 Schedule::command('meetings:reconcile-lifecycle')->everyMinute()->withoutOverlapping();
+Schedule::command('guest-meetings:reconcile')->everyMinute()->withoutOverlapping();
 Schedule::command('meetings:replenish-series')->daily()->withoutOverlapping();

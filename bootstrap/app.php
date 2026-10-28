@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureGuestMeetingSession;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ProtectGuestInvitationResponse;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -26,7 +28,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [HandleInertiaRequests::class, SecurityHeaders::class]);
         $middleware->validateCsrfTokens(except: ['integrations/livekit/webhook']);
-        $middleware->alias(['account.active' => EnsureAccountIsActive::class, 'password.change-required' => RequirePasswordChange::class]);
+        $middleware->alias([
+            'account.active' => EnsureAccountIsActive::class,
+            'guest.meeting-session' => EnsureGuestMeetingSession::class,
+            'guest.invitation-response' => ProtectGuestInvitationResponse::class,
+            'password.change-required' => RequirePasswordChange::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

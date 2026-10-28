@@ -25,6 +25,14 @@ use App\Http\Controllers\CourseworkController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\GuestMeetingInvitationController;
+use App\Http\Controllers\GuestMeetingExitController;
+use App\Http\Controllers\GuestMeetingLeaveController;
+use App\Http\Controllers\GuestMeetingRoomController;
+use App\Http\Controllers\GuestMeetingRequestController;
+use App\Http\Controllers\GuestMeetingSessionController;
+use App\Http\Controllers\GuestMeetingTokenController;
+use App\Http\Controllers\GuestMeetingWaitingRoomController;
 use App\Http\Controllers\LiveKitWebhookController;
 use App\Http\Controllers\MeetingAiController;
 use App\Http\Controllers\MeetingAttendanceController;
@@ -53,6 +61,19 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/integrations/livekit/webhook', LiveKitWebhookController::class)
     ->middleware('throttle:livekit-webhooks')->name('integrations.livekit.webhook');
+
+Route::prefix('meetings/guest')->name('guest.')->middleware('guest.invitation-response')->group(function () {
+    Route::get('/exited', [GuestMeetingExitController::class, 'show'])->name('exit');
+    Route::get('/{token}', [GuestMeetingSessionController::class, 'show'])->where('token', '[A-Fa-f0-9]{64}')->middleware('throttle:guest-invitation-public')->name('invitations.show');
+    Route::post('/{token}/sessions', [GuestMeetingSessionController::class, 'store'])->where('token', '[A-Fa-f0-9]{64}')->middleware('throttle:guest-session-create')->name('sessions.store');
+    Route::get('/sessions/{guestSession}', [GuestMeetingSessionController::class, 'status'])->middleware('guest.meeting-session:poll')->whereUuid('guestSession')->name('sessions.show');
+    Route::get('/sessions/{guestSession}/waiting', [GuestMeetingWaitingRoomController::class, 'show'])->middleware('guest.meeting-session:state')->whereUuid('guestSession')->name('sessions.waiting');
+    Route::get('/sessions/{guestSession}/waiting-status', [GuestMeetingWaitingRoomController::class, 'status'])->middleware('guest.meeting-session:poll-state')->whereUuid('guestSession')->name('sessions.waiting-status');
+    Route::delete('/sessions/{guestSession}', [GuestMeetingWaitingRoomController::class, 'destroy'])->middleware('guest.meeting-session:state')->whereUuid('guestSession')->name('sessions.destroy');
+    Route::post('/sessions/{guestSession}/leave', [GuestMeetingLeaveController::class, 'store'])->middleware('guest.meeting-session:state')->whereUuid('guestSession')->name('sessions.leave');
+    Route::get('/sessions/{guestSession}/room', [GuestMeetingRoomController::class, 'show'])->middleware('guest.meeting-session')->whereUuid('guestSession')->name('sessions.room');
+    Route::post('/sessions/{guestSession}/token', [GuestMeetingTokenController::class, 'store'])->middleware(['guest.meeting-session', 'throttle:guest-meeting-tokens'])->whereUuid('guestSession')->name('sessions.token');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -190,6 +211,10 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
         Route::get('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/revisions/{revision}/attachments/{attachment}/preview', [AssignmentSubmissionAttachmentController::class, 'preview'])->middleware('throttle:attachments-download')->name('coursework.attachments.preview');
         Route::delete('/school-classes/{schoolClass}/class-subjects/{classSubject}/assignments/{assignment}/submissions/{submission}/revisions/{revision}/attachments/{attachment}', [AssignmentSubmissionAttachmentController::class, 'destroy'])->name('coursework.attachments.destroy');
         Route::post('/school-classes/{schoolClass}/meeting-series', [MeetingSeriesController::class, 'store'])->name('meeting-series.store');
+        Route::post('/school-classes/{schoolClass}/meetings/{meeting:uuid}/guest-invitations', [GuestMeetingInvitationController::class, 'store'])->middleware('throttle:guest-invitation-manage')->name('guest-invitations.store');
+        Route::get('/school-classes/{schoolClass}/meetings/{meeting:uuid}/guest-invitations/{guestInvitation:public_id}', [GuestMeetingInvitationController::class, 'show'])->middleware('throttle:guest-invitation-manage')->name('guest-invitations.show');
+        Route::delete('/school-classes/{schoolClass}/meetings/{meeting:uuid}/guest-invitations/{guestInvitation:public_id}', [GuestMeetingInvitationController::class, 'destroy'])->middleware('throttle:guest-invitation-manage')->name('guest-invitations.destroy');
+        Route::post('/school-classes/{schoolClass}/meetings/{meeting:uuid}/guest-invitations/{guestInvitation:public_id}/rotate', [GuestMeetingInvitationController::class, 'rotate'])->middleware('throttle:guest-invitation-manage')->name('guest-invitations.rotate');
         Route::patch('/school-classes/{schoolClass}/meeting-series/{meetingSeries}', [MeetingSeriesController::class, 'update'])->name('meeting-series.update');
         Route::post('/school-classes/{schoolClass}/meeting-series/{meetingSeries}/split', [MeetingSeriesController::class, 'split'])->name('meeting-series.split');
         Route::post('/school-classes/{schoolClass}/meeting-series/{meetingSeries}/cancel', [MeetingSeriesController::class, 'cancel'])->name('meeting-series.cancel');
@@ -215,6 +240,8 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
         Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room', [MeetingWaitingRoomController::class, 'destroy'])->name('meetings.waiting-room.destroy');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests', [MeetingJoinRequestController::class, 'index'])->name('meetings.join-requests.index');
         Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/waiting-room/requests/{joinRequest:public_uuid}', [MeetingJoinRequestController::class, 'update'])->middleware('throttle:meeting-participant-removals')->name('meetings.join-requests.update');
+        Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/guest-requests', [GuestMeetingRequestController::class, 'index'])->name('meetings.guest-requests.index');
+        Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/guest-requests/{guestSession:public_uuid}', [GuestMeetingRequestController::class, 'update'])->middleware('throttle:meeting-participant-removals')->name('meetings.guest-requests.update');
         Route::get('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants', [MeetingParticipantController::class, 'index'])->name('meetings.participants.index');
         Route::patch('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}/mute', [MeetingParticipantController::class, 'mute'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.mute');
         Route::delete('/collaboration/classes/{schoolClass}/meetings/{meeting:uuid}/participants/{participant:public_uuid}', [MeetingParticipantController::class, 'destroy'])->middleware('throttle:meeting-participant-removals')->name('meetings.participants.destroy');

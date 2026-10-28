@@ -97,6 +97,16 @@ class Meeting extends Model
         return $this->hasMany(MeetingJoinRequest::class);
     }
 
+    public function guestInvitations(): HasMany
+    {
+        return $this->hasMany(GuestMeetingInvitation::class);
+    }
+
+    public function guestSessions(): HasMany
+    {
+        return $this->hasMany(GuestMeetingSession::class);
+    }
+
     public function screenShareRequests(): HasMany
     {
         return $this->hasMany(MeetingScreenShareRequest::class);
