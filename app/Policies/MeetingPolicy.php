@@ -122,6 +122,17 @@ class MeetingPolicy
             && $this->access->isAssignedEligibleHost($user, $meeting);
     }
 
+    /**
+     * Guest invitations are deliberately narrower than ordinary meeting management:
+     * only the assigned eligible host (or the explicit Super Admin override in
+     * MeetingAccess) may create, inspect, revoke, or rotate them.
+     */
+    public function manageGuestInvitations(User $user, Meeting $meeting): bool
+    {
+        return $user->can('meetings.host')
+            && $this->access->isAssignedEligibleHost($user, $meeting);
+    }
+
     public function screenShare(User $user, Meeting $meeting): bool
     {
         return $user->can('meetings.screen-share')
@@ -250,7 +261,7 @@ class MeetingPolicy
     }
 
     /**
-      * Recording is a host capability, not a moderation one.
+     * Recording is a host capability, not a moderation one.
      *
      * The permission is the primary gate, so a student cannot reach it at all even
      * though a student may legitimately be able to manage participants. On top of

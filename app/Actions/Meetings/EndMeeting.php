@@ -16,6 +16,7 @@ use App\Models\Meeting;
 use App\Models\MeetingRecording;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\GuestMeetings\GuestMeetingSessionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,7 @@ class EndMeeting
         private MeetingLifecycleProvider $provider,
         private StopMeetingRecording $recordings,
         private AuditLogger $audit,
+        private GuestMeetingSessionService $guestSessions,
     ) {}
 
     public function handle(User $actor, Meeting $meeting): Meeting
@@ -49,6 +51,9 @@ class EndMeeting
                 'lifecycle_version' => $locked->lifecycle_version + 1,
                 'last_provider_error' => null,
             ]);
+            // Persist guest revocation before deleting the room. Provider
+            // failure must never restore the ability to issue a guest token.
+            $this->guestSessions->invalidateForMeeting($locked->id);
             $locked->screenShareRequests()->whereNotNull('active_slot')->get()->each(function ($request) {
                 $request->update(['status' => MeetingScreenShareRequestStatus::Expired, 'active_slot' => null, 'completed_at' => now()]);
                 MeetingScreenShareRequestChanged::dispatch($request);

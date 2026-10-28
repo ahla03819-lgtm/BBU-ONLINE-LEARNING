@@ -23,8 +23,11 @@ test('Lobby Join click requests fullscreen BEFORE asynchronous join work', () =>
     const source = readSource('Pages/Meetings/Lobby.jsx');
     assert.match(source, /enterFullscreen\(\)/);
     assert.match(source, /setJoining\(true\);\s*setError\(null\);/);
-    const fullscreenIdx = source.indexOf('const fullscreenResult = await enterFullscreen()');
-    const fetchIdx = source.indexOf('const response = await fetch');
+    const issueTokenStart = source.indexOf('const issueToken = async');
+    const issueTokenEnd = source.indexOf('const join = async', issueTokenStart);
+    const issueToken = source.slice(issueTokenStart, issueTokenEnd);
+    const fullscreenIdx = issueToken.indexOf('const fullscreenResult = await enterFullscreen()');
+    const fetchIdx = issueToken.indexOf('const response = await fetch');
     assert(fullscreenIdx < fetchIdx, 'fullscreen requested before token fetch (async join work)');
 });
 
@@ -83,8 +86,11 @@ test('Fullscreen request rejection does not stop the meeting join flow', () => {
     const source = readSource('Pages/Meetings/Lobby.jsx');
     assert.match(source, /if \(!fullscreenResult\.ok && fullscreenResult\.reason !== 'unsupported'\)/);
     assert.match(source, /Fullscreen was denied but we continue joining anyway/);
-    const fetchIdx = source.indexOf('const response = await fetch');
-    const fullscreenIdx = source.indexOf('const fullscreenResult = await enterFullscreen()');
+    const issueTokenStart = source.indexOf('const issueToken = async');
+    const issueTokenEnd = source.indexOf('const join = async', issueTokenStart);
+    const issueToken = source.slice(issueTokenStart, issueTokenEnd);
+    const fetchIdx = issueToken.indexOf('const response = await fetch');
+    const fullscreenIdx = issueToken.indexOf('const fullscreenResult = await enterFullscreen()');
     assert(fullscreenIdx < fetchIdx, 'fullscreen requested before token fetch');
     assert.match(source, /} catch \(problem\)/, 'join continues even if fullscreen fails');
 });

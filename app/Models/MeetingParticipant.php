@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 #[Fillable(['public_uuid', 'meeting_id', 'user_id', 'livekit_identity', 'display_name_snapshot', 'role', 'join_reserved_until', 'first_joined_at', 'last_left_at', 'removed_at', 'removed_by', 'removal_reason'])]
@@ -59,5 +60,11 @@ class MeetingParticipant extends Model
     public function screenShareRequests(): HasMany
     {
         return $this->hasMany(MeetingScreenShareRequest::class);
+    }
+
+    /** The nullable guest-session linkage never represents a Laravel User. */
+    public function guestMeetingSession(): HasOne
+    {
+        return $this->hasOne(GuestMeetingSession::class, 'meeting_participant_id');
     }
 }

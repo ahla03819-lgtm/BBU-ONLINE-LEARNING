@@ -62,6 +62,7 @@ class MeetingExperienceController extends Controller
                 'can_end' => request()->user()->can('end', $meeting),
                 'can_manage_participants' => request()->user()->can('removeParticipant', [$meeting]),
                 'can_manage_join_requests' => request()->user()->can('manageJoinRequests', $meeting),
+                'can_manage_guest_requests' => request()->user()->can('manageGuestInvitations', $meeting),
                 'can_start_recording' => $viewer->can('startRecording', $meeting),
                 'can_generate_ai_notes' => $viewer->can('generateAiNotes', $meeting),
                 'can_generate_ai_summary' => $viewer->can('generateAiSummary', $meeting),

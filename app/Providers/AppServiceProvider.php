@@ -2,11 +2,11 @@
 
 namespace App\Providers;
 
-use App\Contracts\MeetingLifecycleProvider;
 use App\Contracts\LessonNotesProvider;
 use App\Contracts\LessonSummaryProvider;
-use App\Contracts\TranslationProvider;
+use App\Contracts\MeetingLifecycleProvider;
 use App\Contracts\TranscriptionProvider;
+use App\Contracts\TranslationProvider;
 use App\Models\Assignment;
 use App\Models\AssignmentGrade;
 use App\Models\AssignmentSubmission;
@@ -133,6 +133,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('meeting-screen-share-requests', fn (Request $request) => Limit::perMinute(20)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('meeting-recordings', fn (Request $request) => Limit::perMinute(20)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('meeting-lifecycle', fn (Request $request) => Limit::perMinute(10)->by($request->user()->id.'|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
+        RateLimiter::for('guest-invitation-public', fn (Request $request) => Limit::perMinute(20)->by('invite|'.hash('sha256', (string) $request->route('token')).'|ip|'.$request->ip()));
+        RateLimiter::for('guest-session-create', fn (Request $request) => Limit::perMinute(5)->by('invite|'.hash('sha256', (string) $request->route('token')).'|ip|'.$request->ip()));
+        RateLimiter::for('guest-meeting-tokens', fn (Request $request) => [
+            Limit::perMinute(12)->by('guest-token|'.data_get($request->route('guestSession'), 'public_uuid', $request->route('guestSession')).'|ip|'.$request->ip()),
+            Limit::perMinute(30)->by('guest-token-ip|'.$request->ip()),
+        ]);
+        RateLimiter::for('guest-invitation-manage', fn (Request $request) => Limit::perMinute(20)->by('user|'.$request->user()->id.'|meeting|'.data_get($request->route('meeting'), 'id', $request->route('meeting'))));
         RateLimiter::for('class-join-code', fn (Request $request) => [
             Limit::perMinute(8)->by('user|'.$request->user()->id),
             Limit::perMinute(20)->by('ip|'.$request->ip()),
