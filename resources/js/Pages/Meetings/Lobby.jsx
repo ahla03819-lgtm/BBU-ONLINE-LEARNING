@@ -28,7 +28,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
     const [deciding, setDeciding] = useState(null);
     const [guestRequests, setGuestRequests] = useState([]);
     const [guestDeciding, setGuestDeciding] = useState(null);
-    const [guestInvitation, setGuestInvitation] = useState(null);
+    const [guestInvitations, setGuestInvitations] = useState([]);
     const [guestInvitationBusy, setGuestInvitationBusy] = useState(false);
     const media = useMediaPreview();
     const sounds = useAppSounds();
@@ -111,6 +111,19 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
         refresh();
         const interval = window.setInterval(refresh, 5000);
         return () => { cancelled = true; window.clearInterval(interval); };
+    }, [meeting.status, meeting.can_manage_guest_requests, schoolClass.id, meeting.uuid]);
+
+    useEffect(() => {
+        if (['ending', 'ended', 'cancelled'].includes(meeting.status) || !meeting.can_manage_guest_requests) return;
+        let cancelled = false;
+        const refresh = async () => {
+            const response = await fetch(`/school-classes/${schoolClass.id}/meetings/${meeting.uuid}/guest-invitations`, {headers: {Accept: 'application/json'}});
+            if (!response.ok || cancelled) return;
+            const data = await response.json();
+            if (!cancelled) setGuestInvitations(data.invitations || []);
+        };
+        refresh();
+        return () => { cancelled = true; };
     }, [meeting.status, meeting.can_manage_guest_requests, schoolClass.id, meeting.uuid]);
 
     const issueToken = async () => {
@@ -232,19 +245,19 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
             const response = await fetch(`/school-classes/${schoolClass.id}/meetings/${meeting.uuid}/guest-invitations`, {method: 'POST', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || '');
-            setGuestInvitation({...data.invitation, inviteUrl: data.invite_url});
+            setGuestInvitations((items) => [{...data.invitation, inviteUrl: data.invite_url}, ...items.filter((item) => item.public_id !== data.invitation.public_id)]);
         } catch (problem) { setError(noticeRaw(problem.message) || noticeKey('guestMeeting.host.invitationFailed')); }
         finally { setGuestInvitationBusy(false); }
     };
-    const revokeGuestInvitation = async () => {
-        if (!guestInvitation || guestInvitationBusy) return;
+    const revokeGuestInvitation = async (publicId) => {
+        if (guestInvitationBusy) return;
         setGuestInvitationBusy(true); setError(null);
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         try {
-            const response = await fetch(`/school-classes/${schoolClass.id}/meetings/${meeting.uuid}/guest-invitations/${guestInvitation.public_id}`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
+            const response = await fetch(`/school-classes/${schoolClass.id}/meetings/${meeting.uuid}/guest-invitations/${publicId}`, {method: 'DELETE', headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json'}});
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || '');
-            setGuestInvitation((current) => ({...current, ...data.invitation}));
+            setGuestInvitations((items) => items.map((item) => item.public_id === publicId ? {...item, ...data.invitation} : item));
         } catch (problem) { setError(noticeRaw(problem.message) || noticeKey('guestMeeting.host.invitationFailed')); }
         finally { setGuestInvitationBusy(false); }
     };
@@ -268,7 +281,7 @@ export default function Lobby({schoolClass, meeting: initialMeeting, resumeSessi
                                     : t('meetingRoom.lobby.waitingForActive')}</button></>}</SectionCard>
             </div>
             {meeting.can_manage_join_requests && <HostRequests requests={pendingRequests} deciding={deciding} onDecide={decide}/>}
-            {meeting.can_manage_guest_requests && <GuestInvitation invitation={guestInvitation} busy={guestInvitationBusy} onCreate={createGuestInvitation} onRevoke={revokeGuestInvitation}/>}
+            {meeting.can_manage_guest_requests && <GuestInvitations invitations={guestInvitations} busy={guestInvitationBusy} onCreate={createGuestInvitation} onRevoke={revokeGuestInvitation}/>}
             {meeting.can_manage_guest_requests && <GuestRequests requests={guestRequests} deciding={guestDeciding} onDecide={decideGuest}/>}
         </div>
     </Layout>;
@@ -287,11 +300,11 @@ function WaitingRoom({request, onCancel}) {
 
     return <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-5 text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm"><Icon name="clock" className="h-7 w-7 animate-pulse"/></span><p className="mt-4 font-semibold text-slate-900">{t('meetingRoom.waitingRoom.hostApprovalPending')}</p><p className="mt-2 text-sm leading-6 text-slate-600">{t('meetingRoom.waitingRoom.hostApprovalHint')}</p><button className="btn-secondary mt-5" onClick={onCancel}>{t('meetingRoom.waitingRoom.cancelRequest')}</button></div>;
 }
-function GuestInvitation({invitation, busy, onCreate, onRevoke}) {
+function GuestInvitations({invitations, busy, onCreate, onRevoke}) {
     const {t} = useTranslation();
-    const copy = async () => { if (invitation?.inviteUrl && navigator.clipboard?.writeText) await navigator.clipboard.writeText(invitation.inviteUrl); };
-    const expired = invitation?.expires_at && new Date(invitation.expires_at) <= new Date();
-    return <SectionCard className="p-6" title={t('guestMeeting.host.invitationTitle')} description={t('guestMeeting.host.invitationDescription')}><div className="mt-4 flex flex-wrap gap-3"><button className="btn px-4 py-2" disabled={busy} onClick={onCreate}>{busy ? t('common.loading') : t('guestMeeting.host.createInvitation')}</button>{invitation?.inviteUrl && <button className="btn-secondary px-4 py-2" disabled={busy} onClick={copy}>{t('guestMeeting.host.copyInvitation')}</button>}{invitation && !invitation.revoked_at && <button className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50" disabled={busy} onClick={onRevoke}>{t('guestMeeting.host.revokeInvitation')}</button>}</div>{invitation && <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 p-4 text-sm text-slate-700"><p>{invitation.revoked_at ? t('guestMeeting.host.invitationRevoked') : expired ? t('guestMeeting.host.invitationExpired') : t('guestMeeting.host.invitationAvailable')}</p><p className="mt-1 text-xs text-slate-500">{t('guestMeeting.host.invitationExpires', {date: new Date(invitation.expires_at).toLocaleString()})}</p></div>}</SectionCard>;
+    const copy = async (invitation) => { if (invitation.inviteUrl && navigator.clipboard?.writeText) await navigator.clipboard.writeText(invitation.inviteUrl); };
+    const status = (invitation) => invitation.status === 'revoked' ? t('guestMeeting.host.invitationRevoked') : invitation.status === 'expired' ? t('guestMeeting.host.invitationExpired') : t('guestMeeting.host.invitationAvailable');
+    return <SectionCard className="p-6" title={t('guestMeeting.host.invitationTitle')} description={t('guestMeeting.host.invitationDescription')}><div className="mt-4"><button className="btn px-4 py-2" disabled={busy} onClick={onCreate}>{busy ? t('common.loading') : t('guestMeeting.host.createInvitation')}</button></div>{invitations.length > 0 && <div className="mt-4 grid gap-3">{invitations.map((invitation) => <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 text-sm text-slate-700" key={invitation.public_id}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-slate-900">{t('guestMeeting.host.invitationLabel', {reference: invitation.public_id.slice(-8)})}</p><p className="mt-1">{status(invitation)}</p><p className="mt-1 text-xs text-slate-500">{t('guestMeeting.host.invitationCreated', {date: new Date(invitation.created_at).toLocaleString()})}</p><p className="mt-1 text-xs text-slate-500">{t('guestMeeting.host.invitationExpires', {date: new Date(invitation.expires_at).toLocaleString()})}</p></div><div className="flex flex-wrap gap-3">{invitation.inviteUrl && <button className="btn-secondary px-4 py-2" disabled={busy} onClick={() => copy(invitation)}>{t('guestMeeting.host.copyInvitation')}</button>}{invitation.status !== 'revoked' && <button className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50" disabled={busy} onClick={() => onRevoke(invitation.public_id)}>{t('guestMeeting.host.revokeInvitation')}</button>}</div></div></div>)}</div>}</SectionCard>;
 }
 function HostRequests({requests, deciding, onDecide}) {
     const {t} = useTranslation();

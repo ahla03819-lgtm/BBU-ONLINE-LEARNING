@@ -58,6 +58,51 @@ class GuestMeetingInvitationFoundationTest extends TestCase
         $this->assertTrue(Route::has('guest.sessions.token'));
     }
 
+    public function test_host_can_list_and_revoke_multiple_invitation_metadata_after_a_lobby_refresh_without_exposing_secrets(): void
+    {
+        [$class, $host, , $meeting] = $this->meetingContext(MeetingStatus::Scheduled);
+
+        $first = $this->actingAs($host)->postJson(route('guest-invitations.store', [$class, $meeting]))->assertCreated();
+        $second = $this->actingAs($host)->postJson(route('guest-invitations.store', [$class, $meeting]))->assertCreated();
+        $firstInvitation = GuestMeetingInvitation::query()->where('token_hash', hash('sha256', $this->tokenFrom($first->json('invite_url'))))->firstOrFail();
+        $secondInvitation = GuestMeetingInvitation::query()->where('token_hash', hash('sha256', $this->tokenFrom($second->json('invite_url'))))->firstOrFail();
+        $createdAt = now()->startOfSecond();
+        $firstInvitation->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->save();
+        $secondInvitation->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->save();
+        $this->assertSame(1, $firstInvitation->version);
+        $this->assertSame($firstInvitation->version, $secondInvitation->version);
+        $this->assertNotSame($firstInvitation->public_id, $secondInvitation->public_id);
+
+        $listing = $this->actingAs($host)->getJson(route('guest-invitations.index', [$class, $meeting]));
+        $listing->assertOk()
+            ->assertJsonCount(2, 'invitations')
+            ->assertJsonFragment(['public_id' => $firstInvitation->public_id, 'created_at' => $createdAt->toIso8601String(), 'status' => 'available'])
+            ->assertJsonFragment(['public_id' => $secondInvitation->public_id, 'created_at' => $createdAt->toIso8601String(), 'status' => 'available'])
+            ->assertJsonMissingPath('invitations.0.token')
+            ->assertJsonMissingPath('invitations.0.token_hash')
+            ->assertDontSee($this->tokenFrom($first->json('invite_url')))
+            ->assertDontSee($this->tokenFrom($second->json('invite_url')));
+        $this->assertDatabaseCount('guest_meeting_invitations', 2);
+
+        $this->actingAs($host)
+            ->deleteJson(route('guest-invitations.destroy', [$class, $meeting, $firstInvitation]))
+            ->assertOk()
+            ->assertJsonPath('invitation.public_id', $firstInvitation->public_id)
+            ->assertJsonPath('invitation.status', 'revoked');
+
+        $this->getJson(route('guest.invitations.show', ['token' => $this->tokenFrom($first->json('invite_url'))]))->assertNotFound();
+        $this->postJson(route('guest.sessions.store', ['token' => $this->tokenFrom($first->json('invite_url'))]), ['display_name' => 'Late Guest'])
+            ->assertNotFound();
+        $this->assertDatabaseCount('guest_meeting_sessions', 0);
+        $this->postJson(route('guest.sessions.store', ['token' => $this->tokenFrom($second->json('invite_url'))]), ['display_name' => 'Other Guest'])
+            ->assertCreated();
+        $this->actingAs($host)->getJson(route('guest-invitations.index', [$class, $meeting]))
+            ->assertOk()
+            ->assertJsonCount(2, 'invitations')
+            ->assertJsonFragment(['public_id' => $firstInvitation->public_id, 'status' => 'revoked'])
+            ->assertJsonFragment(['public_id' => $secondInvitation->public_id, 'status' => 'available']);
+    }
+
     public function test_valid_public_invitation_is_non_cacheable_and_invalid_get_creates_no_session(): void
     {
         [, $host, , $meeting] = $this->meetingContext(MeetingStatus::Scheduled);
@@ -100,17 +145,24 @@ class GuestMeetingInvitationFoundationTest extends TestCase
         $unrelated->assignRole('Teacher');
         $otherClass = SchoolClass::factory()->create(['academic_year_id' => $class->academic_year_id, 'status' => 'active']);
         $issued = app(GuestMeetingInvitationService::class)->create($host, $meeting);
+        $index = route('guest-invitations.index', [$class, $meeting]);
         $show = route('guest-invitations.show', [$class, $meeting, $issued->invitation]);
         $rotate = route('guest-invitations.rotate', [$class, $meeting, $issued->invitation]);
         $guest = app(GuestMeetingSessionService::class)->create($issued->invitation, 'Guest One');
 
         $this->postJson(route('guest-invitations.store', [$class, $meeting]))->assertUnauthorized();
+        $this->getJson($index)->assertUnauthorized();
         $this->withCredentials()->withCookie(config('guest-meetings.cookie_name'), $guest->credential)->getJson($show)->assertUnauthorized();
+        $this->withCredentials()->withCookie(config('guest-meetings.cookie_name'), $guest->credential)->getJson($index)->assertUnauthorized();
         $this->actingAs($student)->postJson(route('guest-invitations.store', [$class, $meeting]))->assertForbidden();
+        $this->actingAs($student)->getJson($index)->assertForbidden();
         $this->actingAs($student)->deleteJson($show)->assertForbidden();
         $this->actingAs($unrelated)->postJson($rotate)->assertForbidden();
+        $this->actingAs($unrelated)->getJson($index)->assertForbidden();
         $this->actingAs($host)->postJson(route('guest-invitations.store', [$otherClass, $meeting]))->assertNotFound();
+        $this->actingAs($host)->getJson(route('guest-invitations.index', [$otherClass, $meeting]))->assertNotFound();
         $this->actingAs($host)->getJson($show)->assertOk();
+        $this->actingAs($host)->getJson($index)->assertOk();
         $this->actingAs($host)->postJson($rotate)->assertOk();
 
         $revocable = app(GuestMeetingInvitationService::class)->create($host, $meeting);
