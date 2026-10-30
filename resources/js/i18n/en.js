@@ -1753,7 +1753,7 @@ export default {
             reject: 'Reject',
             invitationTitle: 'Guest invitation', invitationDescription: 'Create a time-limited link for an external guest. The link is shown only when it is created.',
             createInvitation: 'Create invitation', copyInvitation: 'Copy link', revokeInvitation: 'Revoke link',
-            invitationAvailable: 'This invitation is available.', invitationRevoked: 'This invitation has been revoked.', invitationExpired: 'This invitation has expired.', invitationExpires: 'Expires {date}.', invitationFailed: 'The guest invitation could not be updated.',
+            invitationLabel: 'Invitation {reference}', invitationCreated: 'Created {date}.', invitationAvailable: 'This invitation is available.', invitationRevoked: 'This invitation has been revoked.', invitationExpired: 'This invitation has expired.', invitationExpires: 'Expires {date}.', invitationFailed: 'The guest invitation could not be updated.',
         },
     },
 

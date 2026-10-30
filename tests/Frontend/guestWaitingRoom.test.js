@@ -3,6 +3,8 @@ import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {guestAccessTerminalStatuses, guestTerminalStatuses, startGuestStatusPolling} from '../../resources/js/Pages/GuestMeetings/guestWaitingRoomPolling.js';
+import en from '../../resources/js/i18n/en.js';
+import km from '../../resources/js/i18n/km.js';
 
 const root = resolve(process.cwd(), 'resources/js');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
@@ -50,9 +52,27 @@ test('host guest request list keeps guests separate from authenticated waiting r
     assert.match(lobby, /guest-requests/);
     assert.match(lobby, /GuestRequests/);
     assert.match(lobby, /'rejected'/);
-    assert.match(lobby, /GuestInvitation/);
+    assert.match(lobby, /GuestInvitations/);
     assert.match(lobby, /guest-invitations/);
     assert.match(lobby, /invite_url/);
+});
+
+test('guest invitation metadata hydrates after refresh without retaining invitation secrets', () => {
+    const lobby = read('Pages/Meetings/Lobby.jsx');
+
+    assert.match(lobby, /setGuestInvitations\(data\.invitations \|\| \[\]\)/);
+    assert.match(lobby, /invitations\.map\(\(invitation\)/);
+    assert.match(lobby, /invitation\.public_id/);
+    assert.match(lobby, /invitation\.public_id\.slice\(-8\)/);
+    assert.match(lobby, /invitation\.created_at/);
+    assert.match(lobby, /onRevoke\(invitation\.public_id\)/);
+    assert.match(lobby, /invitation\.status/);
+    assert.match(lobby, /invitation\.inviteUrl/);
+    assert.doesNotMatch(lobby, /token_hash/);
+    assert.equal(en.guestMeeting.host.invitationLabel, 'Invitation {reference}');
+    assert.equal(en.guestMeeting.host.invitationCreated, 'Created {date}.');
+    assert.match(km.guestMeeting.host.invitationLabel, /[\u1780-\u17FF]/);
+    assert.match(km.guestMeeting.host.invitationCreated, /[\u1780-\u17FF]/);
 });
 
 test('guest request polling does not move fullscreen before the authenticated token flow', () => {
