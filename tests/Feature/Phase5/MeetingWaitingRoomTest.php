@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\LiveKit\LiveKitTokenIssuer;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Fakes\FakeLiveKitTokenIssuer;
@@ -185,6 +186,38 @@ class MeetingWaitingRoomTest extends TestCase
         $this->actingAs($host)->patchJson(route('meetings.join-requests.update', [$class, $meeting, $first]), ['decision' => 'admitted'])->assertOk();
         $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$class, $meeting]))->assertOk()
             ->assertJsonCount(1, 'requests')->assertJsonPath('requests.0.reference', $second->public_uuid);
+    }
+
+    public function test_active_verified_super_admin_can_poll_another_teachers_waiting_room_but_ineligible_super_admins_cannot(): void
+    {
+        [$class, $host, $student, $meeting] = $this->meetingContext();
+        MeetingJoinRequest::factory()->create(['meeting_id' => $meeting->id, 'requester_user_id' => $student->id]);
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('Super Admin');
+
+        $this->assertTrue(Gate::forUser($superAdmin)->allows('manageJoinRequests', $meeting));
+        $this->actingAs($superAdmin)->getJson(route('meetings.join-requests.index', [$class, $meeting]))
+            ->assertOk()->assertJsonCount(1, 'requests');
+
+        $inactive = User::factory()->create(['status' => 'inactive']);
+        $inactive->assignRole('Super Admin');
+        $this->assertFalse(Gate::forUser($inactive)->allows('manageJoinRequests', $meeting));
+
+        $unverified = User::factory()->unverified()->create();
+        $unverified->assignRole('Super Admin');
+        $this->assertFalse(Gate::forUser($unverified)->allows('manageJoinRequests', $meeting));
+    }
+
+    public function test_waiting_room_request_list_keeps_authentication_lifecycle_and_class_scope_protection(): void
+    {
+        [$class, $host, $student, $meeting] = $this->meetingContext();
+        $otherClass = SchoolClass::factory()->create(['academic_year_id' => $class->academic_year_id, 'status' => SchoolClassStatus::Active]);
+
+        $this->getJson(route('meetings.join-requests.index', [$class, $meeting]))->assertUnauthorized();
+        $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$otherClass, $meeting]))->assertNotFound();
+
+        $meeting->update(['status' => MeetingStatus::Ended]);
+        $this->actingAs($host)->getJson(route('meetings.join-requests.index', [$class, $meeting]))->assertForbidden();
     }
 
     public function test_waiting_room_exposes_only_a_safe_requester_avatar_url_to_the_authorized_host(): void

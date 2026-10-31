@@ -65,9 +65,17 @@ class LiveKitRecordingOutputFactory
 
     /**
      * Whether the provider will upload the object rather than write a local path.
+     *
+     * Local development mode forces a local path: the provider writes onto a
+     * filesystem this application shares with it, which is the only arrangement
+     * that works when Egress runs on the same machine.
      */
     public function usesObjectStorage(): bool
     {
+        if ($this->isLocalDevMode()) {
+            return false;
+        }
+
         return (string) config('meeting-recordings.output.driver') === self::DRIVER_S3;
     }
 
@@ -83,7 +91,7 @@ class LiveKitRecordingOutputFactory
     public function isConsistent(): bool
     {
         $driver = (string) config('meeting-recordings.output.driver');
-        $disk = (string) config('meeting-recordings.disk');
+        $disk = $this->activeDisk();
         $diskDriver = (string) (config("filesystems.disks.{$disk}.driver") ?? self::DRIVER_LOCAL);
 
         if ($driver === self::DRIVER_LOCAL) {
@@ -101,16 +109,59 @@ class LiveKitRecordingOutputFactory
      */
     public function sharesOurFilesystem(): bool
     {
+        // Local development mode implies a co-located Egress: the provider writes
+        // a relative path onto a filesystem this application shares with it.
+        if ($this->isLocalDevMode()) {
+            return true;
+        }
+
         return (bool) config('meeting-recordings.output.shared_filesystem');
+    }
+
+    /**
+     * The recording disk in effect for the next recording.
+     *
+     * In local development mode every new recording is routed to the private
+     * `recording-local` disk regardless of the configured `disk`, so the provider
+     * output and the application's read target always agree.
+     */
+    public function activeDisk(): string
+    {
+        if ($this->isLocalDevMode()) {
+            return (string) config('meeting-recordings.dev.disk', 'recording-local');
+        }
+
+        return (string) config('meeting-recordings.disk');
+    }
+
+    /**
+     * Whether local development recording-storage mode is enabled.
+     */
+    public function isLocalDevMode(): bool
+    {
+        return (string) config('meeting-recordings.dev.mode') === self::DRIVER_LOCAL;
     }
 
     public function isUsable(): bool
     {
         $driver = (string) config('meeting-recordings.output.driver');
 
+        if ($this->isLocalDevMode()) {
+            // Local development mode forces a local driver onto a private local disk
+            // on this host, so the two halves always agree.
+            return $this->hasLocalDevDisk();
+        }
+
         return in_array($driver, [self::DRIVER_LOCAL, self::DRIVER_S3], true)
             && ($driver !== self::DRIVER_S3 || $this->hasRequiredS3Settings())
             && ($driver !== self::DRIVER_LOCAL || $this->isConsistent());
+    }
+
+    private function hasLocalDevDisk(): bool
+    {
+        $disk = (string) config('meeting-recordings.dev.disk', 'recording-local');
+
+        return (string) (config("filesystems.disks.{$disk}.driver") ?? '') === self::DRIVER_LOCAL;
     }
 
     private function hasRequiredS3Settings(): bool

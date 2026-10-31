@@ -13,6 +13,7 @@ use App\Services\LiveKit\LiveKitRecordingOutputFactory;
 use App\Services\Recordings\MeetingRecordingFileStore;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToCheckFileExistence;
 use Livekit\EncodedFileType;
 use Mockery;
 
@@ -264,6 +265,22 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
         $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
     }
 
+    public function test_a_storage_preflight_failure_returns_service_unavailable_without_a_500(): void
+    {
+        [$class, $meeting, $teacher, $student] = $this->scenario();
+        $recording = $this->readyRemoteRecording($teacher, $meeting);
+        config(['filesystems.disks.recording-store' => ['driver' => 's3', 'bucket' => 'bbu-recordings']]);
+
+        $this->app->instance(MeetingRecordingFileStore::class, $this->preSigningFileStore(
+            null,
+            new UnableToCheckFileExistence('Object-store preflight unavailable.'),
+        ));
+
+        $this->actingAs($student)
+            ->get(route('meetings.recordings.play', [$class, $meeting->uuid, $recording]))
+            ->assertStatus(503);
+    }
+
     public function test_the_channel_card_never_contains_a_permanent_storage_url(): void
     {
         [$class, $meeting, $teacher] = $this->scenario();
@@ -385,10 +402,9 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
      * A file store whose disk can, or cannot, pre-sign, so both playback branches are
      * exercised against the real controller.
      */
-    private function preSigningFileStore(?string $url): MeetingRecordingFileStore
+    private function preSigningFileStore(?string $url, bool|\Throwable $exists = true): MeetingRecordingFileStore
     {
         $disk = Mockery::mock(Filesystem::class);
-        $disk->shouldReceive('exists')->andReturnTrue();
         $disk->shouldReceive('size')->andReturn(4_200_000);
         $disk->shouldReceive('download')->andReturn(response()->stream(function () {
             echo 'mp4';
@@ -399,9 +415,17 @@ class MeetingRecordingObjectStorageTest extends RecordingTestCase
         ]));
 
         if ($url === null) {
+            if ($exists instanceof \Throwable) {
+                $disk->shouldReceive('exists')->andThrow($exists);
+            } else {
+                $disk->shouldReceive('exists')->andReturn($exists);
+            }
             // A disk with no signed-URL support throws, which must fall back to a stream.
             $disk->shouldReceive('temporaryUrl')->andThrow(new \RuntimeException('This driver does not support creating temporary URLs.'));
         } else {
+            // Remote reads use the signed URL after authorization and must not issue
+            // a second HEAD request that some S3-compatible providers reject.
+            $disk->shouldNotReceive('exists');
             $disk->shouldReceive('temporaryUrl')->andReturn($url);
         }
 

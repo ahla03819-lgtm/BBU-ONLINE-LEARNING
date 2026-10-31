@@ -44,6 +44,31 @@ class VerifyMeetingRecordingStorage extends Command
         $this->report('Laravel disk', $disk);
         $this->report('Path prefix', (string) config('meeting-recordings.path_prefix'));
 
+        if ((string) config('meeting-recordings.dev.mode') === 'local') {
+            $this->report('Local dev mode', 'on');
+            $devDisk = (string) config('meeting-recordings.dev.disk', 'recording-local');
+            $this->report('Dev disk', $devDisk);
+            $this->report('Dev disk driver', (string) (config("filesystems.disks.{$devDisk}.driver") ?? 'not set'));
+
+            if ((string) (config("filesystems.disks.{$devDisk}.driver") ?? '') !== 'local') {
+                $problems[] = "RECORDING_DEV_DISK [{$devDisk}] is not a local disk.";
+            }
+
+            if (! $this->isWritable($devDisk)) {
+                $problems[] = "The [{$devDisk}] dev disk is not writable from this host.";
+            }
+
+            $this->newLine();
+            $this->line('Backblaze B2 (untouched by local dev mode)');
+            $this->report('B2 disk', (string) config('meeting-recordings.disk'));
+            $this->report('B2 driver', (string) (config('filesystems.disks.'.config('meeting-recordings.disk').'.driver') ?? 'not set'));
+
+            $this->newLine();
+            $this->info('Local dev mode is active. New recordings go to the private dev disk; existing B2 recordings are unaffected.');
+
+            return self::SUCCESS;
+        }
+
         if (! in_array($driver, ['local', 's3'], true)) {
             $problems[] = "Unknown RECORDING_OUTPUT_DRIVER [{$driver}]; expected local or s3.";
         }
@@ -141,6 +166,18 @@ class VerifyMeetingRecordingStorage extends Command
     private function isCloudDisk(string $disk): bool
     {
         return (string) (config("filesystems.disks.{$disk}.driver") ?? 'local') !== 'local';
+    }
+
+    private function isWritable(string $disk): bool
+    {
+        $probe = trim((string) config('meeting-recordings.path_prefix'), '/').'/.verify-'.getmypid();
+
+        try {
+            return (bool) Storage::disk($disk)->put($probe, 'verify')
+                && Storage::disk($disk)->delete($probe);
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function sharedFilesystem(): bool

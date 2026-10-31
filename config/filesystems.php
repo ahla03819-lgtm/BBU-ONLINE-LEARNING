@@ -38,6 +38,27 @@ return [
             'report' => false,
         ],
 
+        /*
+        | Recording-local development disk
+        |---------------------------------------------------------------------------
+        | A private local disk used only when RECORDING_DISK=recording-local.
+        |
+        | It lives outside the web-accessible public directory, stores no
+        | symbolic link, and is never served directly. Playback for recordings
+        | on this disk streams through the authorized MeetingRecordingController
+        | play route, exactly like the existing private local disk.
+        |
+        | This disk is opt-in and does not affect Backblaze B2 or any other
+        | configured recording destination.
+        */
+        'recording-local' => [
+            'driver' => 'local',
+            'root' => storage_path('app/recording-local'),
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
