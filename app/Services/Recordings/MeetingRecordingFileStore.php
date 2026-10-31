@@ -51,6 +51,52 @@ class MeetingRecordingFileStore
     }
 
     /**
+     * The disk a recording lives on.
+     *
+     * A recording that already has a stored disk keeps it, so existing Backblaze B2
+     * recordings are never re-resolved when the environment's default disk changes.
+     * A recording without one yet takes the disk that will be used for the next
+     * capture, which is the local development disk in local-dev mode and the
+     * configured recording disk everywhere else.
+     */
+    public function diskName(?MeetingRecording $recording = null): string
+    {
+        if ($recording !== null && is_string($recording->storage_disk) && $recording->storage_disk !== '') {
+            return $recording->storage_disk;
+        }
+
+        if ($recording !== null && is_string($recording->provider_output_path) && $recording->provider_output_path !== '') {
+            // A row that already asked the provider for an output path was created
+            // under a specific disk. Re-derive it from the recording's own stored
+            // identity rather than trusting the column, so a stale default cannot
+            // silently move a recording to a different destination.
+            return $this->diskForNewRecording();
+        }
+
+        return $this->diskForNewRecording();
+    }
+
+    /**
+     * The disk a brand-new recording will be captured onto.
+     */
+    public function diskForNewRecording(): string
+    {
+        if ($this->isLocalDevMode()) {
+            return (string) config('meeting-recordings.dev.disk', 'recording-local');
+        }
+
+        return (string) config('meeting-recordings.disk');
+    }
+
+    /**
+     * Whether local development recording-storage mode is enabled.
+     */
+    public function isLocalDevMode(): bool
+    {
+        return (string) config('meeting-recordings.dev.mode') === 'local';
+    }
+
+    /**
      * Whether the provider's finished output is readable on the configured disk.
      *
      * A remote store that cannot be reached reports false, which keeps the recording
@@ -63,7 +109,7 @@ class MeetingRecordingFileStore
             return false;
         }
 
-        return $this->disk()->exists($recording->provider_output_path);
+        return $this->disk($recording)->exists($recording->provider_output_path);
     }
 
     /**
@@ -87,11 +133,11 @@ class MeetingRecordingFileStore
             : $recordedAt;
 
         return [
-            'storage_disk' => $this->diskName(),
+            'storage_disk' => $this->diskName($recording),
             'storage_path' => $recording->provider_output_path,
             'mime_type' => (string) config('meeting-recordings.mime_type'),
             'original_name' => $recording->public_uuid.'.'.config('meeting-recordings.file_type'),
-            'size_bytes' => max(0, (int) $this->disk()->size($recording->provider_output_path)),
+            'size_bytes' => max(0, (int) $this->disk($recording)->size($recording->provider_output_path)),
             'duration_seconds' => max(0, $duration),
         ];
     }
@@ -117,7 +163,7 @@ class MeetingRecordingFileStore
         }
 
         try {
-            $url = $this->disk()->temporaryUrl(
+            $url = $this->disk($recording)->temporaryUrl(
                 $recording->storage_path,
                 now()->addSeconds((int) config('meeting-recordings.playback_url_ttl', 300)),
                 ['ResponseContentDisposition' => 'inline'],
@@ -134,19 +180,14 @@ class MeetingRecordingFileStore
     /**
      * Whether this recording's disk is remote storage that can pre-sign reads.
      */
-    public function preSigningApplies(): bool
+    public function preSigningApplies(?MeetingRecording $recording = null): bool
     {
-        return (string) (config('filesystems.disks.'.$this->diskName().'.driver') ?? 'local') !== 'local';
+        return (string) (config('filesystems.disks.'.$this->diskName($recording).'.driver') ?? 'local') !== 'local';
     }
 
-    public function diskName(): string
+    public function disk(?MeetingRecording $recording = null): Filesystem
     {
-        return (string) config('meeting-recordings.disk');
-    }
-
-    public function disk(): Filesystem
-    {
-        return Storage::disk($this->diskName());
+        return Storage::disk($this->diskName($recording));
     }
 
     private function hasPath(MeetingRecording $recording): bool
@@ -159,6 +200,6 @@ class MeetingRecordingFileStore
         return $recording->status === MeetingRecordingStatus::Ready
             && is_string($recording->storage_path)
             && $recording->storage_path !== ''
-            && $recording->storage_disk === $this->diskName();
+            && $recording->storage_disk === $this->diskName($recording);
     }
 }

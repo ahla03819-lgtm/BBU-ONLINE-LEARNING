@@ -19,6 +19,7 @@ use App\Support\MeetingRecordingProjection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use League\Flysystem\UnableToCheckFileExistence;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -148,19 +149,33 @@ class MeetingRecordingController extends Controller
         abort_unless($meeting->school_class_id === $schoolClass->id, 404);
         abort_unless($recording->meeting_id === $meeting->id, 404);
 
+        if ($recording->trashed()) {
+            abort(404, 'Recording unavailable.');
+        }
         $this->authorize('play', $recording);
 
-        $disk = $files->disk();
-        abort_unless($disk->exists($recording->storage_path), 404, 'Recording unavailable.');
+        if ($url = $files->temporaryUrl($recording)) {
+            $audit->log('meeting.recording-played', $recording, [], [
+                'meeting_id' => $meeting->id,
+                'user_id' => $request->user()->id,
+            ]);
+
+            return redirect()->away($url);
+        }
+
+        $disk = $files->disk($recording);
+        try {
+            $available = $disk->exists($recording->storage_path);
+        } catch (UnableToCheckFileExistence) {
+            abort(503, 'Recording storage is temporarily unavailable.');
+        }
+
+        abort_unless($available, 404, 'Recording unavailable.');
 
         $audit->log('meeting.recording-played', $recording, [], [
             'meeting_id' => $meeting->id,
             'user_id' => $request->user()->id,
         ]);
-
-        if ($url = $files->temporaryUrl($recording)) {
-            return redirect()->away($url);
-        }
 
         return $disk->download(
             $recording->storage_path,

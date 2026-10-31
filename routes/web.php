@@ -42,6 +42,7 @@ use App\Http\Controllers\MeetingJoinRequestController;
 use App\Http\Controllers\MeetingLifecycleController;
 use App\Http\Controllers\MeetingParticipantController;
 use App\Http\Controllers\MeetingRecordingController;
+use App\Http\Controllers\RecordingTrashController;
 use App\Http\Controllers\MeetingScreenShareRequestController;
 use App\Http\Controllers\MeetingSeriesController;
 use App\Http\Controllers\MeetingTokenController;
@@ -287,5 +288,11 @@ Route::middleware(['auth', 'account.active', 'verified', 'password.change-requir
         Route::put('/collaboration/classes/{schoolClass}/channels/{channel}/messages/{message}/reaction', [MessageReactionController::class, 'update'])->middleware('throttle:reactions')->name('collaboration.reactions.update');
         Route::delete('/collaboration/classes/{schoolClass}/channels/{channel}/messages/{message}/reaction', [MessageReactionController::class, 'destroy'])->middleware('throttle:reactions')->name('collaboration.reactions.destroy');
         Route::put('/collaboration/classes/{schoolClass}/channels/{channel}/read-state', [ChannelReadStateController::class, 'update'])->middleware('throttle:messages-read')->name('collaboration.read-state.update');
+    });
+    Route::prefix('recordings')->name('recordings.')->group(function () {
+        Route::get('/trash', [RecordingTrashController::class, 'index'])->name('trash.index');
+        Route::post('/{recording}/delete', [RecordingTrashController::class, 'destroy'])->name('destroy');
+        Route::post('/{recording}/restore', [RecordingTrashController::class, 'restore'])->name('restore');
+        Route::post('/{recording}/purge', [RecordingTrashController::class, 'purge'])->name('purge');
     });
 });

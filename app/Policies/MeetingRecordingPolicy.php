@@ -31,8 +31,77 @@ class MeetingRecordingPolicy
      */
     public function play(User $user, MeetingRecording $recording): bool
     {
+        if ($recording->trashed()) {
+            return false;
+        }
+
         return $recording->status === MeetingRecordingStatus::Ready
             && $recording->isWatchable()
             && $this->view($user, $recording);
+    }
+
+    public function delete(User $user, MeetingRecording $recording): bool
+    {
+        $recording->loadMissing('meeting');
+
+        if ($recording->trashed()) {
+            return false;
+        }
+
+        return $user->can('recordings.delete')
+            && $recording->meeting !== null
+            && $this->access->canAccessMeeting($user, $recording->meeting);
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return $user->can('recordings.delete') && $this->access->isEligibleAccount($user);
+    }
+
+    public function restore(User $user, MeetingRecording $recording): bool
+    {
+        $recording->loadMissing('meeting');
+
+        return $recording->trashed()
+            && $user->can('recordings.restore')
+            && $recording->meeting !== null
+            && $this->access->canAccessMeeting($user, $recording->meeting);
+    }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->can('recordings.restore') && $this->canManageTrash($user);
+    }
+
+    public function purge(User $user, MeetingRecording $recording): bool
+    {
+        $recording->loadMissing('meeting');
+
+        // Must be in trash first for manual purge
+        if (! $recording->trashed()) {
+            return false;
+        }
+
+        // Only administrators with explicit purge capability
+        return $this->purgeAny($user)
+            && $recording->meeting !== null
+            && $this->access->canAccessMeeting($user, $recording->meeting);
+    }
+
+    public function purgeAny(User $user): bool
+    {
+        return $user->can('recordings.purge') && $this->access->isAdministrator($user);
+    }
+
+    public function viewTrash(User $user): bool
+    {
+        return $this->canManageTrash($user)
+            && ($user->can('recordings.restore') || $this->purgeAny($user));
+    }
+
+    private function canManageTrash(User $user): bool
+    {
+        return $this->access->isEligibleAccount($user)
+            && ($this->access->isAdministrator($user) || $user->hasRole('Teacher'));
     }
 }

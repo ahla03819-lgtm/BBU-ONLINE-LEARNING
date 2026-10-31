@@ -62,8 +62,17 @@ return [
     | store, otherwise the application will look for a file the provider never put
     | where it expects.
     |
+    | `dev.mode` is an opt-in local-development recording-storage mode. When set
+    | to `local`, new recordings are routed to the private `recording-local` disk
+    | regardless of the `disk` value, and the provider is told to write a local
+    | path onto a filesystem this application shares with it. Backblaze B2 and
+    | every other configured destination are left untouched.
     */
     'disk' => env('RECORDING_DISK', 'local'),
+    'dev' => [
+        'mode' => env('RECORDING_DEV_MODE', 'off'),
+        'disk' => env('RECORDING_DEV_DISK', 'recording-local'),
+    ],
     'path_prefix' => env('RECORDING_PREFIX', 'meeting-recordings'),
     'file_type' => 'mp4',
     'mime_type' => 'video/mp4',
